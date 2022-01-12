@@ -1,0 +1,12 @@
+.idea/
+*.swp
+bin/
+y.go
+*.output
+**/.DS_Store
+.vscode
+*.iml
+tags
+coverage.txt
+vendor/
+main
