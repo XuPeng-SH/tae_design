@@ -18,13 +18,12 @@ import (
 	"sync"
 	"sync/atomic"
 	"tae/pkg/buffer/base"
-	"tae/pkg/common"
 )
 
 type nodeManager struct {
 	sync.RWMutex
 	sizeLimiter
-	nodes           map[common.ID]base.INode
+	nodes           map[uint64]base.INode
 	evicter         base.IEvictHolder
 	unregistertimes int64
 	loadtimes       int64
@@ -37,7 +36,7 @@ func NewNodeManager(maxsize uint64, evicter base.IEvictHolder) *nodeManager {
 	}
 	mgr := &nodeManager{
 		sizeLimiter: *newSizeLimiter(maxsize),
-		nodes:       make(map[common.ID]base.INode),
+		nodes:       make(map[uint64]base.INode),
 		evicter:     evicter,
 	}
 	return mgr
@@ -52,7 +51,7 @@ func (mgr *nodeManager) String() string {
 	for _, node := range mgr.nodes {
 		id := node.GetID()
 		node.RLock()
-		s = fmt.Sprintf("%s\n\t%s | %s | Size: %d ", s, id.BlockString(), base.NodeStateString(mgr.nodes[node.GetID()].GetState()), mgr.nodes[node.GetID()].Size())
+		s = fmt.Sprintf("%s\n\t%d | %s | Size: %d ", s, id, base.NodeStateString(mgr.nodes[node.GetID()].GetState()), mgr.nodes[node.GetID()].Size())
 		if node.GetState() == base.NODE_LOADED {
 			loaded++
 		}
@@ -75,7 +74,7 @@ func (mgr *nodeManager) RegisterNode(node base.INode) {
 	defer mgr.Unlock()
 	_, ok := mgr.nodes[id]
 	if ok {
-		panic(fmt.Sprintf("Duplicate node: %s", id.BlockString()))
+		panic(fmt.Sprintf("Duplicate node: %d", id))
 	}
 	mgr.nodes[id] = node
 	return

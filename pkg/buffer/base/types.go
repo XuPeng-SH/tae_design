@@ -51,7 +51,7 @@ func NodeStateString(state NodeState) string {
 
 type INodeHandle interface {
 	io.Closer
-	GetID() common.ID
+	GetID() uint64
 	GetNode() INode
 }
 
@@ -61,7 +61,7 @@ type INode interface {
 	common.IRef
 	RLock()
 	RUnlock()
-	GetID() common.ID
+	GetID() uint64
 	Unload()
 	Unloadable() bool
 	IsLoaded() bool

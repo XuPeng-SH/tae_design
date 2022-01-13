@@ -26,16 +26,16 @@ type testNodeHandle struct {
 }
 
 func (h *testNodeHandle) load() {
-	h.t.Logf("Load %s", h.id.BlockString())
+	h.t.Logf("Load %d", h.id)
 }
 func (h *testNodeHandle) unload() {
-	h.t.Logf("Unload %s", h.id.BlockString())
+	h.t.Logf("Unload %d", h.id)
 }
 func (h *testNodeHandle) destory() {
-	h.t.Logf("Destroy %s", h.id.BlockString())
+	h.t.Logf("Destroy %d", h.id)
 }
 
-func newTestNodeHandle(mgr *nodeManager, id common.ID, size uint64, t *testing.T) *testNodeHandle {
+func newTestNodeHandle(mgr *nodeManager, id, size uint64, t *testing.T) *testNodeHandle {
 	n := &testNodeHandle{
 		t: t,
 	}
@@ -50,11 +50,10 @@ func TestHandle(t *testing.T) {
 	maxsize := uint64(100)
 	evicter := NewSimpleEvictHolder()
 	mgr := NewNodeManager(maxsize, evicter)
-	baseId := common.ID{}
-	id1 := baseId.NextBlock()
-	id2 := baseId.NextBlock()
-	id3 := baseId.NextBlock()
-	id4 := baseId.NextBlock()
+	id1 := common.NextGlobalSeqNum()
+	id2 := common.NextGlobalSeqNum()
+	id3 := common.NextGlobalSeqNum()
+	id4 := common.NextGlobalSeqNum()
 	sz1, sz2, sz3, sz4 := uint64(30), uint64(30), uint64(50), uint64(80)
 	n1 := newTestNodeHandle(mgr, id1, sz1, t)
 	n2 := newTestNodeHandle(mgr, id2, sz2, t)
