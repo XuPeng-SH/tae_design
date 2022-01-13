@@ -8,12 +8,13 @@ const (
 	NodeRows = 4096
 )
 
-//    P0    P1    P2
-// |-----|-----|-----|
-
 type PartNode struct {
 	// common.ISLLNode
 	Pos int
+}
+
+func (pn *PartNode) NextPos() int {
+	return pn.Pos + 1
 }
 
 type Block struct {
@@ -116,7 +117,7 @@ func (it *BlockIt) Next() {
 		nextPos = it.BaseNode.NextPos()
 		it.BaseNode = nil
 	} else {
-		nextPos = it.VersionNode.Pos + 1
+		nextPos = it.VersionNode.NextPos()
 		it.VersionNode = nil
 	}
 	if nextPos > it.Host.MaxPos() {
