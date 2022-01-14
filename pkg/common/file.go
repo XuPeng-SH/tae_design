@@ -30,6 +30,7 @@ type FileInfo interface {
 	Size() int64
 	OriginSize() int64
 	CompressAlgo() int
+	Rows() uint64
 }
 
 // IVFile is the general in-memory representation of resources like
@@ -46,20 +47,24 @@ type IVFile interface {
 
 type baseFileInfo struct {
 	size int64
+	rows uint64
 }
 
+func (i *baseFileInfo) Rows() uint64      { return i.rows }
 func (i *baseFileInfo) Name() string      { return "" }
 func (i *baseFileInfo) Size() int64       { return i.size }
 func (i *baseFileInfo) OriginSize() int64 { return i.size }
 func (i *baseFileInfo) CompressAlgo() int { return 0 }
 
 type compressedFileInfo struct {
-	size int64
+	size  int64
 	osize int64
+	rows  uint64
 }
 
 func (i *compressedFileInfo) Name() string      { return "" }
 func (i *compressedFileInfo) Size() int64       { return i.size }
+func (i *compressedFileInfo) Rows() uint64      { return i.rows }
 func (i *compressedFileInfo) OriginSize() int64 { return i.osize }
 func (i *compressedFileInfo) CompressAlgo() int { return 1 }
 
@@ -69,17 +74,18 @@ type baseMemFile struct {
 	stat baseFileInfo
 }
 
-func NewMemFile(size int64) IVFile {
+func NewMemFile(size int64, rows uint64) IVFile {
 	return &baseMemFile{
 		stat: baseFileInfo{
 			size: size,
+			rows: rows,
 		},
 	}
 }
 
 func (f *baseMemFile) Ref()                             {}
 func (f *baseMemFile) Unref()                           {}
-func (f *baseMemFile) RefCount() int64                  {return 0}
+func (f *baseMemFile) RefCount() int64                  { return 0 }
 func (f *baseMemFile) Read(p []byte) (n int, err error) { return n, err }
 func (f *baseMemFile) Stat() FileInfo                   { return &f.stat }
 func (f *baseMemFile) GetFileType() FileType            { return MemFile }
@@ -110,9 +116,10 @@ func (f *mockCompressedFile) GetFileType() FileType {
 	return MemFile
 }
 
-func MockCompressedFile(size int64, osize int64) IVFile {
+func MockCompressedFile(size int64, osize int64, rows uint64) IVFile {
 	return &mockCompressedFile{stat: compressedFileInfo{
 		size:  size,
 		osize: osize,
+		rows:  rows,
 	}}
 }

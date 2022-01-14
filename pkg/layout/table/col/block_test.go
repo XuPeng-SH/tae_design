@@ -1,6 +1,7 @@
 package col
 
 import (
+	"tae/pkg/common"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -10,11 +11,13 @@ func TestBlock(t *testing.T) {
 	block := &Block{
 		Nodes: make(map[int]*PartNode),
 	}
-	maxPos := 10
-	block.Rows = NodeRows * maxPos
-	assert.Equal(t, maxPos-1, block.MaxPos())
-	block.Rows += NodeRows / 2
-	assert.Equal(t, maxPos, block.MaxPos())
+	maxPos := uint64(10)
+	file := common.NewMemFile(0, NodeRows*maxPos)
+	block.File = file
+	assert.Equal(t, int(maxPos-1), block.MaxPos())
+	file = common.NewMemFile(0, NodeRows*maxPos+NodeRows/2)
+	block.File = file
+	assert.Equal(t, int(maxPos), block.MaxPos())
 	assert.False(t, block.HasChange())
 
 	it := block.NewIt()

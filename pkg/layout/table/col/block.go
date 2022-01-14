@@ -2,10 +2,11 @@ package col
 
 import (
 	"sync"
+	"tae/pkg/common"
 )
 
 const (
-	NodeRows = 4096
+	NodeRows uint64 = 4096
 )
 
 type PartNode struct {
@@ -20,7 +21,15 @@ func (pn *PartNode) NextPos() int {
 type Block struct {
 	sync.RWMutex
 	Nodes map[int]*PartNode
-	Rows  int
+	File  common.IVFile
+}
+
+func NewBlock(file common.IVFile) *Block {
+	block := &Block{
+		Nodes: make(map[int]*PartNode),
+		File:  file,
+	}
+	return block
 }
 
 func (block *Block) AddNode(pos int) bool {
@@ -37,10 +46,11 @@ func (block *Block) AddNode(pos int) bool {
 }
 
 func (block *Block) MaxPos() int {
-	if block.Rows <= NodeRows {
+	rows := block.File.Stat().Rows()
+	if rows <= NodeRows {
 		return 0
 	}
-	return (block.Rows - 1) / NodeRows
+	return int((rows - 1) / NodeRows)
 }
 
 func (block *Block) HasChangeLocked() bool {

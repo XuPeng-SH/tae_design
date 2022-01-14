@@ -21,7 +21,7 @@ import (
 )
 
 func TestFile(t *testing.T) {
-	mf := NewMemFile(0)
+	mf := NewMemFile(0, 0)
 	stat := mf.Stat()
 	assert.Equal(t, stat.Size(), int64(0))
 	assert.Equal(t, stat.Name(), "")
