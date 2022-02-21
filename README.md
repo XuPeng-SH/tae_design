@@ -97,6 +97,7 @@ There are currently four buffer managers for different purposes in **TAE**
 
 ## LogStore
 An embedded log-structured data store. It is used as the underlying driver of **Catalog** and **WAL**.
+
 **TODO**
 
 ## WAL
@@ -118,6 +119,18 @@ In **TAE**, a **Table** is a **Column Family** while a **Database** is **Column 
 **TAE** supports multiple **Databases**, that is, one **TAE** instance can work with multiple **Log Spaces**. Our **MatrixOne** DBMS is built upon multi-raft and each node only needs one **TAE** engine, and each raft group corresponds to a **Database**. It is complicated and what makes it more complicated is the engine shares the external **WAL** with **Raft** log.
 
 ## Multi-Version Concurrency Control (MVCC)
+In **TAE**, a table consists of multiple segments. A segment is the result of the combined action of multiple transactions. So a segment can be represented as <img src="https://latex.codecogs.com/svg.image?[T_{start},&space;T_{end}]" title="[T_{start}, T_{end}]" /> (<img src="https://latex.codecogs.com/svg.image?T_{start}" title="T_{start}" /> is the transaction commit time of the first row while <img src="https://latex.codecogs.com/svg.image?T_{end}" /> is the commit time of the last row). Since segment can be compacted to a new segment and segments can be merged into a new segment, a segment can be represented as <img src="https://latex.codecogs.com/svg.image?([T_{start},T_{end}],&space;[T_{create},T_{drop}])" title="([T_{start},T_{end}], [T_{create},T_{drop}])" /> (<img src="https://latex.codecogs.com/svg.image?T_{create}" title="T_{create}" /> is the segment create time while <img src="https://latex.codecogs.com/svg.image?T_{drop}" title="T_{drop}" /> is the segment drop time). <img src="https://latex.codecogs.com/svg.image?T_{drop}&space;\equiv&space;0" title="T_{drop} \equiv 0" /> means the segment is not dropped.
+
+A transaction can be represented as <img src="https://latex.codecogs.com/svg.image?[Txn_{start},&space;Txn_{commit}]" title="[Txn_{start}, Txn_{commit}]" /> (<img src="https://latex.codecogs.com/svg.image?Txn_{start}" /> is the transaction start time while <img src="https://latex.codecogs.com/svg.image?T_{commit}" /> is the commit time). The segments view to a transaction can be determined by the following two formulas:
+
+<img src="https://latex.codecogs.com/svg.image?(Txn_{start}&space;\geqslant&space;T_{create})&space;\bigcap&space;((T_{drop}\equiv&space;0)\bigcup&space;(T_{drop}>Txn_{start}))" title="(Txn_{start} \geqslant T_{create}) \bigcap ((T_{drop}\equiv 0)\bigcup (T_{drop}>Txn_{start}))" />
+
+<img src="https://latex.codecogs.com/svg.image?(Txn_{commit}&space;\geqslant&space;T_{create})&space;\bigcap&space;((T_{drop}\equiv&space;0)\bigcup&space;(T_{drop}>Txn_{commit}))" title="(Txn_{commit} \geqslant T_{create}) \bigcap ((T_{drop}\equiv 0)\bigcup (T_{drop}>Txn_{commit}))" />
+
+The following figure is a specific example
+
+<img src="https://user-images.githubusercontent.com/39627130/154995795-2c367e33-bafa-4e47-812d-f80d82594613.png" height="80%" width="80%" />
+
 **TODO**
 
 ## Transaction
