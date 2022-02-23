@@ -152,6 +152,14 @@ Compaction is needed for space efficiency, read efficiency, and timely data dele
 - <img src="https://latex.codecogs.com/svg.image?Segment_{L_{2}}&space;\overset{compact}{\rightarrow}&space;Segment_{L_{2}}" title="Segment_{L_{2}} \overset{compact}{\rightarrow} Segment_{L_{2}}" />. If there are many updates to a L2 segment and it is needed to compact the block to a new segment to improve read efficiency.
 - <img src="https://latex.codecogs.com/svg.image?\{Segment_{L_{2}}&space;...\}&space;\overset{merge}{\rightarrow}&space;Segment_{L_{2}}" title="\{Segment_{L_{2}} ...\} \overset{merge}{\rightarrow} Segment_{L_{2}}" />. Multiple L2 segments are merge-sorted into a L2 segment.
 
+#### Block Sort Example
+
+<img src="https://user-images.githubusercontent.com/39627130/155315545-0ec97d65-b716-4c30-9a00-e9bddcfaea2d.png" height="100%" width="100%" />
+
+<img src="https://latex.codecogs.com/svg.image?Block1_{L_{0}}" title="Block1_{L_{0}}" /> is created @ <img src="https://latex.codecogs.com/svg.image?t_{1}" title="t_{1}" />, which contains data from <img src="https://latex.codecogs.com/svg.image?\{Txn1,Txn2,Txn3,Txn4\}" title="\{Txn1,Txn2,Txn3,Txn4\}" />. <img src="https://latex.codecogs.com/svg.image?Block1_{L_{0}}" title="Block1_{L_{0}}" /> starts to sort @ <img src="https://latex.codecogs.com/svg.image?t_{11}" title="t_{11}" />，and its block read view is the baseline plus an uncommitted update node, which will be skipped. Sort and persist a block may take a long time. There are two committed transactions <img src="https://latex.codecogs.com/svg.image?\{Txn5,Txn6\}" title="\{Txn5,Txn6\}" /> and one uncommitted <img src="https://latex.codecogs.com/svg.image?\{Txn7\}" title="\{Txn7\}" /> before commiting sorted <img src="https://latex.codecogs.com/svg.image?Block2_{L_{1}}" title="Block2_{L_{1}}" />. When commiting <img src="https://latex.codecogs.com/svg.image?\{Txn7\}" title="\{Txn7\}" /> @ <img src="https://latex.codecogs.com/svg.image?t_{16}" title="t_{16}" />, it will fail because <img src="https://latex.codecogs.com/svg.image?Block1_{L_{0}}" title="Block1_{L_{0}}" /> has been terminated. Update nodes <img src="https://latex.codecogs.com/svg.image?\{Txn5,Txn6\}" title="\{Txn5,Txn6\}" /> that were committed in between <img src="https://latex.codecogs.com/svg.image?(t_{11},&space;t_{16})" title="(t_{11}, t_{16})" /> will be merged into a new update node and it  will be committed together with <img src="https://latex.codecogs.com/svg.image?Block2_{L_{1}}" title="Block2_{L_{1}}" /> @ <img src="https://latex.codecogs.com/svg.image?t_{16}" title="t_{16}" />.
+
+![image](https://user-images.githubusercontent.com/39627130/155317195-483f7b67-48b1-4474-8555-315805492204.png)
+
 <img src="https://user-images.githubusercontent.com/39627130/155258302-49df557c-bd40-4e6b-80f4-9f4b8648ceb1.png" height="50%" width="50%" />
 
 **TODO**
