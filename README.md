@@ -61,7 +61,7 @@ From the granularity of the index, we divide the index into two categories, one 
 
 The segment-level index in **TAE** is a two-level structure, bloomfilter and zonemap respectively. There are two options for bloomfilter, a segment-based bloomfilter, and a block-based bloomfilter. The Segment-based is a better choice when the index can be fully resident in memory. The workflow is as follows:
 
-<img src="https://user-images.githubusercontent.com/39627130/154958080-495a461c-ea9f-4c43-ad0f-b57232720d50.png" height="30%" width="30%" />
+<img src="https://user-images.githubusercontent.com/39627130/154958080-495a461c-ea9f-4c43-ad0f-b57232720d50.png" height="40%" width="40%" />
 
 **TODO**
 
@@ -160,9 +160,10 @@ Compaction is needed for space efficiency, read efficiency, and timely data dele
 
 ![image](https://user-images.githubusercontent.com/39627130/155317195-483f7b67-48b1-4474-8555-315805492204.png)
 
-<img src="https://user-images.githubusercontent.com/39627130/155258302-49df557c-bd40-4e6b-80f4-9f4b8648ceb1.png" height="50%" width="50%" />
+#### Compaction As A Schema Transactional Change
+A compaction is the termination of a series of blocks or segments, while atomically creating a new one (building index). It usually takes a long time compared to normal transactions and we don't want to block update or delete transactions on involved blocks or segments. Here we extend the content of the **read view** to include the metadata of blocks and segments into it. When commiting a normal transaction, once it is detected that the metadata of blocks (segments) corresponding to write operation has been changed (committed), it will fail.
 
-**TODO**
+For a compaction transaction, write operations include block (segment) soft deletion and addition. During the execution of the transaction, each write will detect a write-write conflict. Once there is a conflict, the transaction will be terminated in advance.
 
 ## Transaction
 **TODO**
