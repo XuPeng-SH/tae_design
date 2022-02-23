@@ -143,6 +143,17 @@ For example, the read view of <img src="https://latex.codecogs.com/svg.image?Txn
 
 The block read view is similar to segment.
 
+### Concurrent Compaction
+Compaction is needed for space efficiency, read efficiency, and timely data deletion. In **TAE**, the following scenarios require compaction：
+
+- <img src="https://latex.codecogs.com/svg.image?Block_{L_{0}}&space;\overset{sort}{\rightarrow}&space;Block_{L_{1}}" title="Block_{L_{0}} \overset{sort}{\rightarrow} Block_{L_{1}}" />. When inserting data, it first flows to L0 in an unordered manner. After certain conditions are met, the data will be reorganized and flowed to L1, sorted by the primary key.
+- <img src="https://latex.codecogs.com/svg.image?\{Block_{L_{1}},...\}&space;\overset{merge}{\rightarrow}Segment_{L_{2}}" title="\{Block_{L_{1}},...\} \overset{merge}{\rightarrow}Segment_{L_{2}}" />. Multiple L1 blocks are merge-sorted into a L2 segment.
+- <img src="https://latex.codecogs.com/svg.image?Block_{L_{2}}&space;\overset{compact}{\rightarrow}&space;Block_{L_{2}}" title="Block_{L_{2}} \overset{compact}{\rightarrow} Block_{L_{2}}" />. If there are many updates to a L2 block and it is needed to compact the block to a new block to improve read efficiency.
+- <img src="https://latex.codecogs.com/svg.image?Segment_{L_{2}}&space;\overset{compact}{\rightarrow}&space;Segment_{L_{2}}" title="Segment_{L_{2}} \overset{compact}{\rightarrow} Segment_{L_{2}}" />. If there are many updates to a L2 segment and it is needed to compact the block to a new segment to improve read efficiency.
+- <img src="https://latex.codecogs.com/svg.image?\{Segment_{L_{2}}&space;...\}&space;\overset{merge}{\rightarrow}&space;Segment_{L_{2}}" title="\{Segment_{L_{2}} ...\} \overset{merge}{\rightarrow} Segment_{L_{2}}" />. Multiple L2 segments are merge-sorted into a L2 segment.
+
+<img src="https://user-images.githubusercontent.com/39627130/155258302-49df557c-bd40-4e6b-80f4-9f4b8648ceb1.png" height="50%" width="50%" />
+
 **TODO**
 
 ## Transaction
