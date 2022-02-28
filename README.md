@@ -105,7 +105,33 @@ An embedded log-structured data store. It is used as the underlying driver of **
 **TODO**
 
 ## WAL
-**Write-ahead logging** (WAL) is the key for providing **atomicity** and **durability**. All modifications should be written to a log before applied. In **TAE**, **REDO** log does not need to record every operation, but it must be recorded when the transaction is committed. We will reduce the usage of io by using the redo log buffer manager, and avoid any io events for those transactions that are not long and may need to be rolled back due to various conflicts. It can also support long or large transactions.
+Write-ahead logging (WAL) is the key for providing atomicity and durability. All modifications should be written to a log before applied. In TAE,                 REDO log does not need to record every write operation, but it must be recorded when the transaction is committed. We will reduce the usage of io by using the     redo log buffer manager, and avoid any io events for those transactions that are not long and may need to be rolled back due to various conflicts. It can also support long or large transactions.
+
+### Log Entry
+
+#### Log Entry Type
+
+| Type       | Datatype | Value| Description                                                  |
+| ---------- | -------- | -----| ------------------------------------------------------------ |
+| `AC`       | int8     | 0x10 | A committed transaction of complete write operations         |
+| `PC`       | int8     | 0x11 | A committed transaction of partial write operations          |
+| `UC`       | int8     | 0x12 | Partial write operations of a uncommitted transaction        |
+| `RB`       | int8     | 0x13 | Rollback of a transaction                                    |
+
+#### Layout
+
+A REDO log entry includes multiple nodes, and there are multiple types of nodes. DML node, delete info node, append info node, update info node.
+
+<img src="https://user-images.githubusercontent.com/39627130/156007293-d3e303a3-a578-4bc7-883d-1fa9c90850f7.png" height="40%" width="40%" />
+
+#### Header Layout
+| Item         | Size(Byte) | Scope| Description                                                |
+| ------------ | -------- | -----| ------------------------------------------------------------ |
+| `GroupId`      | 4        | `All` | Specify the group id          |
+| `Id`         | 8        | `All` | Specify the entry id            |
+| `Length`     | 4        | `All` | Specify the length of the entry         |
+| `Type`       | 1        | `All` | Specify the entry type         |
+| `PrevPtr`    | 12       | `UC`,`PC`,`RB` | A pointer to the previous entry of the dependency|
 
 **TODO**
 
