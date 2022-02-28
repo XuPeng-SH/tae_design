@@ -57,11 +57,15 @@ In **TAE**, there is a dedicated fixed-size LRU cache for all indexes. Compared 
 - Memory usage
 - Match with the underlying data store layout
 
-From the granularity of the index, we divide the index into two categories, one is a table-level index, and the other is an index set composed of a series of partition indexes. For example, we can have a table-level B tree index, or each segment has a B tree index. The table data of **TAE** consists of multiple segments, and each segment must be unordered first and then ordered. Compaction, merging, or splitting may take place afterwards. This scenario is very unfriendly to the table-level index. So the index of TAE should be a segment-level index set.
+From the granularity of the index, we divide the index into two categories, one is a table-level index, and the other is an index set composed of a series of partition indexes. For example, we can have a table-level B tree index, or each segment has a B tree index. The table data of **TAE** consists of multiple segments, and each segment must be unordered first and then ordered. Compaction, merging, or splitting may take place afterwards. This scenario is very unfriendly to the table-level index. So the index of **TAE** should be a segment-level index set.
 
-The segment-level index in **TAE** is a two-level structure, bloomfilter and zonemap respectively. There are two options for bloomfilter, a segment-based bloomfilter, and a block-based bloomfilter. The Segment-based is a better choice when the index can be fully resident in memory. The workflow is as follows:
+There are two types of segment. One is appendable and the other is not. For non-appendable segment, the segment-level index is a two-level structure, bloomfilter and zonemap respectively. There are two options for bloomfilter, a segment-based bloomfilter, and a block-based bloomfilter. The Segment-based is a better choice when the index can be fully resident in memory. An appendable segment consists of at least one appendable block plus multiple non-appendable blocks. Appendable block index is a resident memory ART-tree plus zonemap while the non-appendable one is bloomfilter plus zonemap.
 
-<img src="https://user-images.githubusercontent.com/39627130/154958080-495a461c-ea9f-4c43-ad0f-b57232720d50.png" height="40%" width="40%" />
+<img src="https://user-images.githubusercontent.com/39627130/155945090-945442eb-25f6-4624-8c5a-442475328e49.png" height="70%" width="70%" />
+
+The query flow chart of segment index is as follow:
+
+<img src="https://user-images.githubusercontent.com/39627130/155949839-3e771818-8fb0-41d5-8765-f81fdc650289.png" height="100%" width="100%" />
 
 **TODO**
 
