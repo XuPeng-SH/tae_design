@@ -241,7 +241,7 @@ Compaction is needed for space efficiency, read efficiency, and timely data dele
 
 ![image](https://user-images.githubusercontent.com/39627130/155317195-483f7b67-48b1-4474-8555-315805492204.png)
 
-#### Compaction As A Schema Transactional Change
+#### Compaction As A Transactional Schema Change
 A compaction is the termination of a series of blocks or segments, while atomically creating a new one (building index). It usually takes a long time compared to normal transactions and we don't want to block update or delete transactions on involved blocks or segments. Here we extend the content of the **read view** to include the metadata of blocks and segments into it. When commiting a normal transaction, once it is detected that the metadata of blocks (segments) corresponding to write operation has been changed (committed), it will fail.
 
 For a compaction transaction, write operations include block (segment) soft deletion and addition. During the execution of the transaction, each write will detect a write-write conflict. Once there is a conflict, the transaction will be terminated in advance.
