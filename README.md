@@ -109,7 +109,19 @@ Write-ahead logging (WAL) is the key for providing atomicity and durability. All
 
 ### Log Entry
 
-#### Log Entry Type
+#### Entry Layout
+
+<img src="https://user-images.githubusercontent.com/39627130/156019975-ea156716-79fa-4682-ab63-a9cbe0c07f33.png" height="40%" width="40%" />
+
+#### Entry Header Layout
+| Item         | Size(Byte) | Scope| Description                                                |
+| ------------ | -------- | -----| ------------------------------------------------------------ |
+| `GroupId`      | 4        | `All` | Specify the group id          |
+| `Id`         | 8        | `All` | Specify the entry id            |
+| `Length`     | 4        | `All` | Specify the length of the entry         |
+| `Type`       | 1        | `All` | Specify the entry type         |
+
+#### Entry Type
 
 | Type       | Datatype | Value| Description                                                  |
 | ---------- | -------- | -----| ------------------------------------------------------------ |
@@ -118,20 +130,40 @@ Write-ahead logging (WAL) is the key for providing atomicity and durability. All
 | `UC`       | int8     | 0x12 | Partial write operations of a uncommitted transaction        |
 | `RB`       | int8     | 0x13 | Rollback of a transaction                                    |
 
-#### Layout
+#### Transaction Payload
 
-A REDO log entry includes multiple nodes, and there are multiple types of nodes. DML node, delete info node, append info node, update info node.
+A transaction log entry includes multiple nodes, and there are multiple types of nodes. DML node, delete info node, append info node, update info node.
 
-<img src="https://user-images.githubusercontent.com/39627130/156007293-d3e303a3-a578-4bc7-883d-1fa9c90850f7.png" height="40%" width="40%" />
+<img src="https://user-images.githubusercontent.com/39627130/156021428-3282eb20-4e69-4ba0-a4ed-ba5409ac7b71.png" height="40%" width="40%" />
 
-#### Header Layout
-| Item         | Size(Byte) | Scope| Description                                                |
-| ------------ | -------- | -----| ------------------------------------------------------------ |
-| `GroupId`      | 4        | `All` | Specify the group id          |
-| `Id`         | 8        | `All` | Specify the entry id            |
-| `Length`     | 4        | `All` | Specify the length of the entry         |
-| `Type`       | 1        | `All` | Specify the entry type         |
-| `PrevPtr`    | 12       | `UC`,`PC`,`RB` | A pointer to the previous entry of the dependency|
+##### Meta Layout
+| Item         | Size(Byte) |  Scope |  Description                                                |
+| ------------ | -------- | -------- | ------------------------------------------------------------ |
+| `Id`      | 8      |  `All` |  Specify the transaction id          |
+| `InfoLen` | 2      |  `All` |  Specify the length of transaction info   |
+| `Info`    | -      |  `All` |  Specify the transaction info        |
+| `PrevPtr` | 12     | `UC`,`PC`,`RB` | Specify the previous entry      |
+| `NodeCnt` | 4      |  `All` |  Specify the count of nodes          |
+
+##### Node Type
+| Type       | Datatype | Value| Description                                                  |
+| ---------- | -------- | -----| ------------------------------------------------------------ |
+| `DML_A`   | int8     | 0x1  | Append info         |
+| `DML_D`   | int8     | 0x2  | Delete info         |
+| `DML_U`   | int8     | 0x3  | Update info         |
+| `DDL_CT`  | int8     | 0x4  | Create table info       |
+| `DDL_DT`  | int8     | 0x5  | Drop table info         |
+| `DDL_CD`  | int8     | 0x6  | Create database info    |
+| `DDL_DD`  | int8     | 0x7  | Drop database info         |
+| `DDL_CI`  | int8     | 0x8  | Create index info         |
+| `DDL_DI`  | int8     | 0x9  | Drop index info         |
+
+##### Node Layout
+| Item         | Size(Byte) |  Scope | Description                                                |
+| ------------ | -------- |  -------- | ------------------------------------------------------------ |
+| `Type`      | 1      | `All`     | Specify the type of node        |
+| `Len`      | 4      | `All`  | Specify the length of node      |
+| `Buf`      | -      | `All`  | Node payload      |
 
 **TODO**
 
