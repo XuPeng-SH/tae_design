@@ -117,18 +117,19 @@ Write-ahead logging (WAL) is the key for providing atomicity and durability. All
 | Item         | Size(Byte) | Scope| Description                                                |
 | ------------ | -------- | -----| ------------------------------------------------------------ |
 | `GroupId`      | 4        | `All` | Specify the group id          |
-| `Id`         | 8        | `All` | Specify the entry id            |
+| `LSN`         | 8        | `All` | Specify the log sequence number        |
 | `Length`     | 4        | `All` | Specify the length of the entry         |
 | `Type`       | 1        | `All` | Specify the entry type         |
 
 #### Entry Type
 
-| Type       | Datatype | Value| Description                                                  |
-| ---------- | -------- | -----| ------------------------------------------------------------ |
+| Type       | Datatype | Value| Description                                                |
+| ---------- | -------- | -----| ---------------------------------------------------------- |
 | `AC`       | int8     | 0x10 | A committed transaction of complete write operations         |
 | `PC`       | int8     | 0x11 | A committed transaction of partial write operations          |
 | `UC`       | int8     | 0x12 | Partial write operations of a uncommitted transaction        |
 | `RB`       | int8     | 0x13 | Rollback of a transaction                                    |
+| `CKP`      | int8     | 0x40 | Checkpoint                                                   |
 
 #### Transaction Payload
 
