@@ -131,9 +131,20 @@ Write-ahead logging (WAL) is the key for providing atomicity and durability. All
 | `RB`       | int8     | 0x13 | Rollback of a transaction                                    |
 | `CKP`      | int8     | 0x40 | Checkpoint                                                   |
 
-#### Transaction Payload
+#### Transaction Log Entry
+Most transactions only have one log entry. Only those long or large transactions may need to record multiple log entries. So the log of a transaction may be of `1+` `UC` type log entries plus one `PC` type log entry, or only one `AC` type log entry. **TAE** assigns a dedicate group to log entries of type `UC`. Here is the transaction log of six committed transactions. <img src="https://latex.codecogs.com/svg.image?E_{2,3}" /> specifies the log entry in group 2 with LSN 3.
+- <img src="https://latex.codecogs.com/svg.image?Txn_{1}=E_{2,1}\leftarrow&space;&space;E_{1,5}" />
+- <img src="https://latex.codecogs.com/svg.image?Txn_{2}=E_{1,1}" />
+- <img src="https://latex.codecogs.com/svg.image?Txn_{3}=E_{1,2}" />
+- <img src="https://latex.codecogs.com/svg.image?Txn_{4}=E_{2,2}\leftarrow&space;&space;E_{1,4}" />
+- <img src="https://latex.codecogs.com/svg.image?Txn_{5}=E_{1,3}\leftarrow&space;&space;E_{1,5}" />
+- <img src="https://latex.codecogs.com/svg.image?Txn_{6}=E_{2,3}\leftarrow&space;&space;E_{2,4}\leftarrow&space;&space;E_{1,6}" />
 
-A transaction log entry includes multiple nodes, and there are multiple types of nodes. DML node, delete info node, append info node, update info node.
+<img src="https://user-images.githubusercontent.com/39627130/156754808-658a1f73-4635-4bd6-909f-5e930b6bcab6.png" height="100%" width="100%" />
+
+A transaction log entry includes multiple nodes, and there are multiple types of nodes. DML node, delete info node, append info node, update info node. A node is an atomic command, which can be annotated as a sub-entry index of a committed entry. For example, there are 3 nodes in <img src="https://latex.codecogs.com/svg.image?Txn_{6}" />, which can be annotated as <img src="https://latex.codecogs.com/svg.image?\{E_{6-1},E_{6-2},E_{6-3}\}" title="\{E_{6-1},E_{6-2},E_{6-3}\}" />
+
+##### Transaction Payload
 
 <img src="https://user-images.githubusercontent.com/39627130/156021428-3282eb20-4e69-4ba0-a4ed-ba5409ac7b71.png" height="40%" width="40%" />
 
@@ -199,7 +210,7 @@ However, the checkpoint in **TAE** is different
 #### Multi-Group
 The log of **TAE** will have different groups, and the LSN of each group is continuously monotonically increasing. Checkpoints and normal operation entries belong to different groups.
 
-#### Out-of-order Checkpoint
+#### Fuzzy Checkpoint
 The range indicated by a typical checkpoint is always a continous interval from the minimum value to a certain LSN like <img src="https://latex.codecogs.com/svg.image?(-\infty,&space;4]" title="(-\infty, 4]" /> and <img src="https://latex.codecogs.com/svg.image?(-\infty,&space;10]" title="(-\infty, 10]" />. While the interval of **TAE** does not need to be continuous like <img src="https://latex.codecogs.com/svg.image?\{[1,4],&space;[6,8]\}" title="\{[1,4], [6,8]\}" />.
 
 ## Catalog
