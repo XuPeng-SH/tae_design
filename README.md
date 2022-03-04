@@ -207,11 +207,11 @@ However, the checkpoint in **TAE** is different
 
 <img src="https://user-images.githubusercontent.com/39627130/156372311-1cee455b-ab97-406f-b6fe-abb14c097917.png" height="100%" width="100%" />
 
-#### Multi-Group
-The log of **TAE** will have different groups, and the LSN of each group is continuously monotonically increasing. Checkpoints and normal operation entries belong to different groups.
+#### Dedicated Group
+The log of **TAE** will have different groups, and the LSN of each group is continuously monotonically increasing. There is a dedicated group for checkpoint log entries.
 
 #### Fuzzy Checkpoint
-The range indicated by a typical checkpoint is always a continous interval from the minimum value to a certain LSN like <img src="https://latex.codecogs.com/svg.image?(-\infty,&space;4]" title="(-\infty, 4]" /> and <img src="https://latex.codecogs.com/svg.image?(-\infty,&space;10]" title="(-\infty, 10]" />. While the interval of **TAE** does not need to be continuous like <img src="https://latex.codecogs.com/svg.image?\{[1,4],&space;[6,8]\}" title="\{[1,4], [6,8]\}" />.
+The range indicated by a typical checkpoint is always a continous interval from the minimum value to a certain LSN like <img src="https://latex.codecogs.com/svg.image?(-\infty,&space;4]" title="(-\infty, 4]" /> and <img src="https://latex.codecogs.com/svg.image?(-\infty,&space;10]" title="(-\infty, 10]" />. While the interval of **TAE** does not need to be continuous like <img src="https://latex.codecogs.com/svg.image?\{[1,4],&space;[6,8]\}" title="\{[1,4], [6,8]\}" />. Futhermore, given that each committed entry is a collection of multiple subcommands, each checkpoint should be a collection of subcommands indexes <img src="https://latex.codecogs.com/svg.image?\{[E_{1},E_{4}],&space;\{E_{5-1}\}\,&space;[E_{6},E_{8}]\}" title="\{[E_{1},E_{4}], \{E_{5-1}\}\, [E_{6},E_{8}]\}" />
 
 ## Catalog
 **Catalog** is **TAE**'s in-memory metadata manager that manages all states of the engine, and the underlying driver is an embedded **LogStore**. **Catalog** implements a simple memory transaction database, retains a complete version chain in memory, and is compacted when it is not referenced. **Catalog** can be fully replayed from the underlying **LogStore**.
