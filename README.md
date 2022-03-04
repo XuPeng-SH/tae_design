@@ -274,6 +274,22 @@ A compaction is the termination of a series of blocks or segments, while atomica
 For a compaction transaction, write operations include block (segment) soft deletion and addition. During the execution of the transaction, each write will detect a write-write conflict. Once there is a conflict, the transaction will be terminated in advance.
 
 ## Transaction
+
+### DML
+#### Insert Data
+**TODO**
+
+#### Update And Delete Data
+<img src="https://user-images.githubusercontent.com/39627130/156788303-4fd2a2e4-6975-493e-8b5f-16f156fdc9dc.png" height="80%" width="80%" />
+
+**TODO**
+
+#### DDL
+
+### Commit & Rollback
+**TODO**
+
+### Schema Change
 **TODO**
 
 ## Snapshot
