@@ -277,6 +277,8 @@ For a compaction transaction, write operations include block (segment) soft dele
 
 ### DML
 #### Insert Data
+<img src="https://user-images.githubusercontent.com/39627130/156866455-e9dff497-21a9-463b-be66-8f8f564544d9.png" height="80%" width="80%" />
+
 **TODO**
 
 #### Update And Delete Data
