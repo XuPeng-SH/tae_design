@@ -238,7 +238,7 @@ The hierarchical relationship from top to bottom is: **Database**, **Table**, **
 <img src="https://user-images.githubusercontent.com/39627130/156906206-c1d905ef-ad5e-4c42-93cf-a38174dfd7be.png" height="80%" width="80%" />
 
 ### Transactional Operation
-Each table has an in-memory primary key index, and each node in the index corresponds to a table row. Once there is any update on the row, a version chain will be created for it.
+The **Catalog** transaction is actually a sub-transaction of the engine transaction. Each table has an in-memory primary key index, and each node in the index corresponds to a table row. Once there is any update on the row, a version chain will be created for it.
 
 <img src="https://user-images.githubusercontent.com/39627130/156907205-01ffab4b-5f44-4400-9d3b-5def876e7d49.png" height="50%" width="50%" />
 
@@ -284,7 +284,22 @@ Each table has an in-memory primary key index, and each node in the index corres
      - If the update node is uncommitted and is the same transaction, return row value
 
 #### Commit & Rollback
-**TODO**
+1. All uncommitted changes are stored in transaction's in-memory store
+2. All rows read in the transaction will be recorded in the txn store.
+3. Commit pipeline
+   - Prepare:
+     - Check R-W anti-dependency. If violated, rollback
+     - Update all related uncommitted rows' commit info
+   - Commit: flush and update visible version
+   - Rollback: remove all uncommitted rows
+
+#### Checkpoint
+Any operation within a subtransaction corresponds to a sub-command in the engine's transaction log. So a commit or rollback of **Catalog** transaction is a checkpoint to some sub-commands in the engine's transaction log.
+
+#### Compaction
+1. In-memory version chain pruning
+2. Hard delete previous soft deleted rows
+3. Compact disk data
 
 ## Database (Column Families)
 In **TAE**, a **Table** is a **Column Family** while a **Database** is **Column Families**. The main idea behind **Column Families** is that they share the write-ahead log (Share **Log Space**), so that we can implement **Database-level** atomic writes. The old **WAL** cannot be compacted when the mutable buffer of a **Table** flushed since it may contains live data from other **Tables**. It can only be compacted when all related **Tables** mutable buffer are flushed.
