@@ -231,13 +231,59 @@ The range indicated by a typical checkpoint is always a continous interval from 
 ### Built-in Tables
 The hierarchical relationship from top to bottom is: **Database**, **Table**, **Segment**, **Block**. **Catalog** is responsible for managing these resources and supports addition, deletion, modification and query.
 
-<img src="https://user-images.githubusercontent.com/39627130/145529173-1c6ad8eb-84e2-4d7e-a49a-9085153f3436.png" height="50%" width="50%" />
+<img src="https://user-images.githubusercontent.com/39627130/145529173-1c6ad8eb-84e2-4d7e-a49a-9085153f3436.png" height="60%" width="60%" />
 
 **Catalog** creates a table for each resource, corresponding to **Database Entry**, **Table Entry**, **Segment Entry** and **Block Entry**.
 
-<img src="https://user-images.githubusercontent.com/39627130/156906206-c1d905ef-ad5e-4c42-93cf-a38174dfd7be.png" height="70%" width="70%" />
+<img src="https://user-images.githubusercontent.com/39627130/156906206-c1d905ef-ad5e-4c42-93cf-a38174dfd7be.png" height="80%" width="80%" />
 
-### Transactional DDL Operation
+### Transactional Operation
+Each table has an in-memory primary key index, and each node in the index corresponds to a table row. Once there is any update on the row, a version chain will be created for it.
+
+<img src="https://user-images.githubusercontent.com/39627130/156907205-01ffab4b-5f44-4400-9d3b-5def876e7d49.png" height="50%" width="50%" />
+
+#### Insert
+1. Search the primary key index, if there is the same primary key, return Duplicate error
+2. Create a new index node (uncommitted)
+
+#### Delete
+1. Search the primary key index, if not found, return NotFound error
+2. If the row was already deleted (committed), return NotFound error
+3. If there's a no version chain on the row, create a version chain and insert a delete node into the chain. Return
+4. Scan the version chain. If a delete node is found
+   - If the delete node is committed, return NotFound error
+   - If the delete node is uncomiitted, if it is not the same transaction, return `W-W` conflict error. Else return NotFound error
+5. Insert a delete node into the chain. Return
+
+#### Update
+1. Search the primary key index, if not found, return NotFound error
+2. If the row was already deleted (committed), return NotFound error
+3. If there's a no version chain on the row, create a version chain and insert a update node into the chain. Return
+4. Scan the version chain.
+   - If a delete node is found
+     - If the delete node is committed, return NotFound error
+     - If the delete node is uncomiitted, if it is the different transaction, return `W-W` conflict error. Else return NotFound error
+   - If a update node is found
+     - If the delete node is uncommitted, return `W-W` conflict error
+5. Insert a update node into the chain. Return
+
+#### Query
+1. Search the primary key index, if not found, return NotFound error
+2. If the row was already deleted (committed), return NotFound error
+3. If there's a no version chain on the row
+   - If the row is uncommitted
+     - If it is the same transaction, return the row value
+     - If it is a different transaction, return NotFound error
+   - If the row is committed, return the row value
+5. Scan the version chain.
+   - If a delete node is found
+     - If the delete node is committed before the query transaction starts, return NotFound error.
+     - If the delete node is uncomiitted and is the same transaction, return NotFound error
+   - If a update node is found
+     - If the update node is committed before the query transaction starts, return row value
+     - If the update node is uncommitted and is the same transaction, return row value
+
+#### Commit & Rollback
 **TODO**
 
 ## Database (Column Families)
