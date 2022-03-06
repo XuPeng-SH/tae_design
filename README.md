@@ -274,6 +274,7 @@ A compaction is the termination of a series of blocks or segments, while atomica
 For a compaction transaction, write operations include block (segment) soft deletion and addition. During the execution of the transaction, each write will detect a write-write conflict. Once there is a conflict, the transaction will be terminated in advance.
 
 ## Transaction
+A tuple (T_{start},T_{commit}) is the representation of a transaction where both elements are of type uint64, and  can be regarded as . The gloabl timestamp is monotonically increasing continuously from 1, and after restarting, the previous value needs to be restored as a new starting point. When starting a transaction, the global timestamp is assigned to the transaction's  and incremented by 1. When a transaction is committed, the global timestamp is also assigned to its  and incremented by 1.
 
 ### DML
 #### Insert Data
