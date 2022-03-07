@@ -369,7 +369,51 @@ A tuple <img src="https://latex.codecogs.com/svg.image?(T_{start},T_{commit})" t
 
 #### DDL
 
-### Commit & Rollback
+### Commit
+A transaction usually consists of multiple commands, and each command is usually trivial. When committing a transaction, we want to be able to preprocess some commands ahead of time. It is a requirement of the fuzzy checkpoint mechanism.
+
+#### Command
+Here are all command types:
+
+| Command    | Datatype | Value| Description                                                |
+| ---------- | -------- | -----| ---------------------------------------------------------- |
+| `CREATE_DB`| int8     | 0x01 | Create a database          |
+| `DELETE_DB`| int8     | 0x02 | Delete a database          |
+| `CREATE_TABLE`   | int8     | 0x13 | Create a table       |
+| `UPDATE_TABLE`   | int8     | 0x14 | Update a table       |
+| `DELETE_TABLE`   | int8     | 0x15 | Delete a table       |
+| `INSERT`               | int8     | 0x30 | Insert rows                                                  |
+| `UPDATE_LOCAL`         | int8     | 0x31 | Update value in transaction local store                      |
+| `UPDATE_COMMITTED`     | int8     | 0x32 | Update committed value                                       |
+| `DELETE_LOCAL`         | int8     | 0x33 | Delete row in transaction local store                        |
+| `DELETE_COMMITTED`     | int8     | 0x34 | Delete committed row                                         |
+
+#### Split Commands
+The raw command list <img src="https://latex.codecogs.com/svg.image?&space;&space;&space;CMD_{1}^{t_{1}}&space;\to&space;CMD_{2}^{t_{2}}\to&space;CMD_{3}^{t_{3}}&space;\to&space;...&space;\to&space;CMD_{n}^{t_{n}}" title=" CMD_{1}^{t_{1}} \to CMD_{2}^{t_{2}}\to CMD_{3}^{t_{3}} \to ... \to CMD_{n}^{t_{n}}" /> for a transaction is in the order accepted. <img src="https://latex.codecogs.com/svg.image?n" title="n" /> is the command sequence and <img src="https://latex.codecogs.com/svg.image?t_{n}" title="t_{n}" /> is the command type. **Split** splits the command list into serveral lists, which improves the parallelism during committing. **Split** is table-bounded, and all commands applied on the same table are group into a same list.
+
+#### Merge Commands
+**Merge** transforms a command list <img src="https://latex.codecogs.com/svg.image?&space;&space;&space;CMD_{1}^{t_{1}}&space;\to&space;CMD_{2}^{t_{2}}\to&space;CMD_{3}^{t_{3}}&space;\to&space;...&space;\to&space;CMD_{n}^{t_{n}}" title=" CMD_{1}^{t_{1}} \to CMD_{2}^{t_{2}}\to CMD_{3}^{t_{3}} \to ... \to CMD_{n}^{t_{n}}" />  into a new list <img src="https://latex.codecogs.com/svg.image?&space;&space;CMD_{1}^{t_{1}}&space;\to&space;CMD_{2}^{t_{2}}\to&space;CMD_{3}^{t_{3}}&space;\to&space;...&space;\to&space;CMD_{m}^{t_{m}}&space;" title=" CMD_{1}^{t_{1}} \to CMD_{2}^{t_{2}}\to CMD_{3}^{t_{3}} \to ... \to CMD_{m}^{t_{m}} " />, where <img src="https://latex.codecogs.com/svg.image?m&space;<&space;n" title="m < n" />.
+
+##### Rules
+- There are some types of commands that cannot be merged
+  ```
+  CREATE_DB, DELETE_DB, CREATE_TABLE, CREATE_TABLE, DELETE_TABLE
+  ```
+- Commands of different types can be merged
+  ```
+  1. INSERT + INSERT => INSERT
+  2. INSERT + UPDATE_LOCAL => INSERT
+  3. INSERT + DELETE_LOCAL => INSERT
+  ```
+- Commands dependency. Prepend all `DELETE_COMMITTED` commands
+  ```
+  INSERT, INSERT, DELETE_COMMITTED, INSERT => DELETE_COMMITTED, INSERT
+  ```
+
+##### Example
+<img src="https://user-images.githubusercontent.com/39627130/156975961-c70d5e20-155b-4279-ac4a-b30544e490a0.png" height="90%" width="90%" />
+
+#### Commit Pipeline
 **TODO**
 
 ### Schema Change
