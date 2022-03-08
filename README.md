@@ -411,7 +411,7 @@ The raw command list <img src="https://latex.codecogs.com/svg.image?&space;&spac
   ```
 
 ##### Example
-<img src="https://user-images.githubusercontent.com/39627130/156975961-c70d5e20-155b-4279-ac4a-b30544e490a0.png" height="90%" width="90%" />
+<img src="https://user-images.githubusercontent.com/39627130/157154690-d66b71f2-15c5-488d-867c-ec2604ab3c5d.png" height="90%" width="90%" />
 
 #### Commit Pipeline
 **TODO**
