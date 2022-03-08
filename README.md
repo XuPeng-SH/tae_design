@@ -368,6 +368,11 @@ A tuple <img src="https://latex.codecogs.com/svg.image?(T_{start},T_{commit})" t
 **TODO**
 
 #### DDL
+A transaction usually contains multiple **DDL** and **DML** statements. As mentioned in [Catalog](#Catalog), **Catalog** has its own transaction mechanism, and the transaction of the **TAE** contains both **DDL** and **DML**, so we take the transaction of the **Catalog** as a sub-transaction of the **TAE** transaction.
+
+<img src="https://user-images.githubusercontent.com/39627130/157159731-4b7015cf-621a-4436-90e4-cc9d5d930412.png" height="70%" width="70%" />
+
+All **DDL** operations correspond to **Catalog** **DML** operations, see the [corresponding chapter](#Catalog) for details.
 
 ### Commit
 A transaction usually consists of multiple commands, and each command is usually trivial. When committing a transaction, we want to be able to preprocess some commands ahead of time. It is a requirement of the fuzzy checkpoint mechanism.
