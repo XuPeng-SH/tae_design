@@ -403,6 +403,7 @@ The raw command list <img src="https://latex.codecogs.com/svg.image?&space;&spac
 
 ### DML
 #### INSERT
+##### Uncommitted
 All inserted data is stored in transaction local storage before committed. Data in transaction local storage is grouped into tables. Insert request inserts data into the target table. The data for each table contains one or more batches. If the amount of request data is particularly large, it will be split into multiple batches <img src="https://latex.codecogs.com/svg.image?request_{rows=n+20}&space;\overset{split}{\rightarrow}&space;\{batch_{rows=20},&space;batch_{rows=n}\}"  />.
 
 Suppose the maximum number of rows in a batch is 10. Here are commands in a transaction
@@ -440,6 +441,8 @@ Txn Local Storage
              |
              |--- Batch3
 ```
+
+##### Committed
 
 <img src="https://user-images.githubusercontent.com/39627130/156866455-e9dff497-21a9-463b-be66-8f8f564544d9.png" height="80%" width="80%" />
 
