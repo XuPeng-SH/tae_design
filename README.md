@@ -443,12 +443,32 @@ Txn Local Storage
 
 <img src="https://user-images.githubusercontent.com/39627130/156866455-e9dff497-21a9-463b-be66-8f8f564544d9.png" height="80%" width="80%" />
 
-**TODO**
+#### UPDATE & DELETE
+##### UPDATE & DELETE INSERTED DATA
+If any deletes applied to the batch in the transaction local store，a bitmap for deletion is created. Any update will be transfer to a delete and insert.
 
-#### Update And Delete Data
+##### UPDATE & DELETE COMMITTED DATA
+A delete history will be create for blocks with any **DELETE** operation.
+```go
+type UpdateEntry struct {
+  txn *TxnEntry
+  indexes []*LogIndex
+}
+
+type DeleteHistry struct {
+  entries map[int32]*UpdateEntry
+}
+```
+
+For the **UPDATE** of the primary key, it will be converted to **DELETE** plus **INSERT**. So the **UPDATE** we are talking about is always update to non-primary key.
+```go
+type UpdateNode struct {
+  UpdateEntry
+  values map[int32]interface{}
+}
+```
+
 <img src="https://user-images.githubusercontent.com/39627130/156788303-4fd2a2e4-6975-493e-8b5f-16f156fdc9dc.png" height="80%" width="80%" />
-
-**TODO**
 
 #### DDL
 A transaction usually contains multiple **DDL** and **DML** statements. As mentioned in [Catalog](#Catalog), **Catalog** has its own transaction mechanism, and the transaction of the **TAE** contains both **DDL** and **DML**, so we take the transaction of the **Catalog** as a sub-transaction of the **TAE** transaction.
