@@ -356,25 +356,8 @@ For a compaction transaction, write operations include block (segment) soft dele
 ## Transaction
 A tuple <img src="https://latex.codecogs.com/svg.image?(T_{start},T_{commit})" title="(T_{start},T_{commit})" /> is the representation of a transaction where both elements are of type `uint64`, and <img src="https://latex.codecogs.com/svg.image?T_{start}" /> can be regarded as <img src="https://latex.codecogs.com/svg.image?TxnId" />. The gloabl timestamp is monotonically increasing continuously from 1, and after restarting, the previous value needs to be restored as a new starting point. When starting a transaction, the global timestamp is assigned to the transaction's <img src="https://latex.codecogs.com/svg.image?T_{start}" /> and incremented by 1. When a transaction is committed, the global timestamp is also assigned to its <img src="https://latex.codecogs.com/svg.image?T_{commit}" /> and incremented by 1.
 
-### DML
-#### Insert Data
-<img src="https://user-images.githubusercontent.com/39627130/156866455-e9dff497-21a9-463b-be66-8f8f564544d9.png" height="80%" width="80%" />
+### Preprocessing
 
-**TODO**
-
-#### Update And Delete Data
-<img src="https://user-images.githubusercontent.com/39627130/156788303-4fd2a2e4-6975-493e-8b5f-16f156fdc9dc.png" height="80%" width="80%" />
-
-**TODO**
-
-#### DDL
-A transaction usually contains multiple **DDL** and **DML** statements. As mentioned in [Catalog](#Catalog), **Catalog** has its own transaction mechanism, and the transaction of the **TAE** contains both **DDL** and **DML**, so we take the transaction of the **Catalog** as a sub-transaction of the **TAE** transaction.
-
-<img src="https://user-images.githubusercontent.com/39627130/157159731-4b7015cf-621a-4436-90e4-cc9d5d930412.png" height="70%" width="70%" />
-
-All **DDL** operations correspond to **Catalog** **DML** operations, see the [corresponding chapter](#Catalog) for details.
-
-### Commit
 A transaction usually consists of multiple commands, and each command is usually trivial. When committing a transaction, we want to be able to preprocess some commands ahead of time. It is a requirement of the fuzzy checkpoint mechanism.
 
 #### Command
@@ -417,6 +400,26 @@ The raw command list <img src="https://latex.codecogs.com/svg.image?&space;&spac
 
 ##### Example
 <img src="https://user-images.githubusercontent.com/39627130/157154690-d66b71f2-15c5-488d-867c-ec2604ab3c5d.png" height="90%" width="90%" />
+
+### DML
+#### Insert Data
+<img src="https://user-images.githubusercontent.com/39627130/156866455-e9dff497-21a9-463b-be66-8f8f564544d9.png" height="80%" width="80%" />
+
+**TODO**
+
+#### Update And Delete Data
+<img src="https://user-images.githubusercontent.com/39627130/156788303-4fd2a2e4-6975-493e-8b5f-16f156fdc9dc.png" height="80%" width="80%" />
+
+**TODO**
+
+#### DDL
+A transaction usually contains multiple **DDL** and **DML** statements. As mentioned in [Catalog](#Catalog), **Catalog** has its own transaction mechanism, and the transaction of the **TAE** contains both **DDL** and **DML**, so we take the transaction of the **Catalog** as a sub-transaction of the **TAE** transaction.
+
+<img src="https://user-images.githubusercontent.com/39627130/157159731-4b7015cf-621a-4436-90e4-cc9d5d930412.png" height="70%" width="70%" />
+
+All **DDL** operations correspond to **Catalog** **DML** operations, see the [corresponding chapter](#Catalog) for details.
+
+### Commit
 
 #### Commit Pipeline
 **TODO**
