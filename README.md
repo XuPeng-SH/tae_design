@@ -402,7 +402,45 @@ The raw command list <img src="https://latex.codecogs.com/svg.image?&space;&spac
 <img src="https://user-images.githubusercontent.com/39627130/157154690-d66b71f2-15c5-488d-867c-ec2604ab3c5d.png" height="90%" width="90%" />
 
 ### DML
-#### Insert Data
+#### INSERT
+All inserted data is stored in transaction local storage before committed. Data in transaction local storage is grouped into tables. Insert request inserts data into the target table. The data for each table contains one or more batches. If the amount of request data is particularly large, it will be split into multiple batches <img src="https://latex.codecogs.com/svg.image?request_{rows=n+20}&space;\overset{split}{\rightarrow}&space;\{batch_{rows=20},&space;batch_{rows=n}\}"  />.
+
+Suppose the maximum number of rows in a batch is 10. Here are commands in a transaction
+
+```
+1. INSERT 15 ROWS INTO TABLE1
+```
+- <img src="https://latex.codecogs.com/svg.image?request_{rows=15}^{1}&space;\overset{split}{\rightarrow}&space;\{batch_{rows=10}^{1},&space;batch_{rows=5}^{2}\}&space;" title="request_{rows=15}^{1} \overset{split}{\rightarrow} \{batch_{rows=10}^{1}, batch_{rows=5}^{2}\} " />
+- <img src="https://latex.codecogs.com/svg.image?batch_{rows=10}^{1}&space;\overset{append}{\rightarrow}&space;Batch_{}^{1}" title="batch_{rows=10}^{1} \overset{append}{\rightarrow} Batch_{}^{1}" />, <img src="https://latex.codecogs.com/svg.image?batch_{rows=5}^{2}&space;\overset{append}{\rightarrow}&space;Batch_{}^{2}" title="batch_{rows=5}^{2} \overset{append}{\rightarrow} Batch_{}^{2}" />
+- <img src="https://latex.codecogs.com/svg.image?Table_{}^{1}&space;=&space;\{Batch_{}^{1},&space;Batch_{}^{2}\}" title="Table_{}^{1} = \{Batch_{}^{1}, Batch_{}^{2}\}" />
+
+```
+2. INSERT 4 ROWS INTO TABLE2
+```
+- <img src="https://latex.codecogs.com/svg.image?request_{rows=4}^{2}&space;\overset{split}{\rightarrow}&space;\{batch_{rows=4}^{1}\}" title="request_{rows=4}^{2} \overset{split}{\rightarrow} \{batch_{rows=4}^{1}\}" />
+- <img src="https://latex.codecogs.com/svg.image?batch_{rows=4}^{1}&space;\overset{append}{\rightarrow}&space;Batch_{}^{3}" title="batch_{rows=4}^{1} \overset{append}{\rightarrow} Batch_{}^{3}" />
+- <img src="https://latex.codecogs.com/svg.image?Table_{}^{2}&space;=&space;\{Batch_{}^{3}\}" title="Table_{}^{2} = \{Batch_{}^{3}\}" />
+
+```
+3. INSERT 5 ROWS INTO TABLE1
+```
+- <img src="https://latex.codecogs.com/svg.image?request_{rows=5}^{3}&space;\overset{split}{\rightarrow}&space;\{batch_{rows=5}^{1}\}" title="request_{rows=5}^{3} \overset{split}{\rightarrow} \{batch_{rows=5}^{1}\}" />
+- <img src="https://latex.codecogs.com/svg.image?batch_{rows=5}^{1}&space;\overset{append}{\rightarrow}&space;Batch_{}^{2}" title="batch_{rows=5}^{1} \overset{append}{\rightarrow} Batch_{}^{2}" />
+- <img src="https://latex.codecogs.com/svg.image?Table_{}^{1}&space;=&space;\{Batch_{}^{1},&space;Batch_{}^{2}\}" title="Table_{}^{1} = \{Batch_{}^{1}, Batch_{}^{2}\}" />
+
+```
+Txn Local Storage
+       |
+       |--- Table1
+       |     |
+       |     |--- Batch1
+       |     |--- Batch2
+       |
+       |--- Table2
+             |
+             |--- Batch3
+```
+
 <img src="https://user-images.githubusercontent.com/39627130/156866455-e9dff497-21a9-463b-be66-8f8f564544d9.png" height="80%" width="80%" />
 
 **TODO**
