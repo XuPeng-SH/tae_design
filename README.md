@@ -479,6 +479,45 @@ A transaction usually contains multiple **DDL** and **DML** statements. As menti
 All **DDL** operations correspond to **Catalog** **DML** operations, see the [corresponding chapter](#Catalog) for details.
 
 ### Commit
+As mentioned earlier，the data of a transaction is grouped by table, and each group of data is a combination of the following data types
+- <img src="https://latex.codecogs.com/svg.image?Batch_{}^{i}" title="Batch_{}^{i}" />. The i-th uncommitted batch
+- <img src="https://latex.codecogs.com/svg.image?Bitmap_{}^{i}" title="Bitmap_{}^{i}" />. The delete bitmap of <img src="https://latex.codecogs.com/svg.image?Batch_{}^{i}" title="Batch_{}^{i}" />
+- <img src="https://latex.codecogs.com/svg.image?DeleteNode_{blk}" title="DeleteNode_{blk}" />. The delete node of a committed block.
+- <img src="https://latex.codecogs.com/svg.image?UpdateNode_{blk}^{col}" title="UpdateNode_{blk}^{col}" />. The update node of a committed column block.
+- `CREATE_TABLE`
+- `DROP_TABLE`
+
+When committing a transaction, all combinations can be summed up in the following pattern:
+1. **P1**: Only insert
+2. **P2**: Only delete or update to committed data
+3. **P3**: Insert and delete or update to inserted data
+4. **P4**: Insert and delete or update to committed data
+5. **P5**: Only DDL
+6. **P6**: DDL and others
+
+#### P1
+1. Wrap each batch as a command with a sequence number
+2. Append the batch to statemachine with annotated command context
+
+#### P2
+1. Wrap each update|delete node as a command with a sequence number
+2. Update the update|delete node commit info
+
+#### P3
+1. If there is a delete bitmap for a batch, apply the delete bitmap first to generate a new batch
+2. Same as [P1](#P1)
+
+#### P4
+1. Process delete|update first. Same as [P2](#P2)
+2. Process insert. Same as [P1](#P1)
+
+#### P5
+1. Wrap a command with a sequence number
+2. Update the commit info
+
+#### P6
+1. All operations to a table before the `DROP TABLE` can be eliminated. Delete all related uncommitted batch, delete|update nodes. Then do as [P5](#P5)
+2. `CREATE TABLE` should always be the first command, unless there is a `DROP TABLE` later
 
 #### Commit Pipeline
 **TODO**
