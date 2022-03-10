@@ -371,7 +371,6 @@ Here are all command types:
 | `UPDATE_TABLE`   | int8     | 0x14 | Update a table       |
 | `DELETE_TABLE`   | int8     | 0x15 | Delete a table       |
 | `INSERT`               | int8     | 0x30 | Insert rows                                                  |
-| `UPDATE_LOCAL`         | int8     | 0x31 | Update value in transaction local store                      |
 | `UPDATE_COMMITTED`     | int8     | 0x32 | Update committed value                                       |
 | `DELETE_LOCAL`         | int8     | 0x33 | Delete row in transaction local store                        |
 | `DELETE_COMMITTED`     | int8     | 0x34 | Delete committed row                                         |
@@ -390,8 +389,7 @@ The raw command list <img src="https://latex.codecogs.com/svg.image?&space;&spac
 - Commands of different types can be merged
   ```
   1. INSERT + INSERT => INSERT
-  2. INSERT + UPDATE_LOCAL => INSERT
-  3. INSERT + DELETE_LOCAL => INSERT
+  2. INSERT + DELETE_LOCAL => INSERT
   ```
 - Commands dependency. Prepend all `DELETE_COMMITTED` commands
   ```
