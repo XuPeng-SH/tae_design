@@ -126,11 +126,40 @@ NextPartOffset = Next part pointer
 Payload = The size of payload is ($Size * 1K - 2B - 4B)
 ```
 
-#### Block
-**TODO**
+#### Segment File
 
-#### Segment
-**TODO**
+| Format       | Value    | Description             |
+| ------------ | -------- | ----- |
+| SegmentFile | 0x10     | Segment file format      |
+
+```
++--------------------------------------------------+
+|   Non-Appendable Segment File Meta Part Payload  |
++-----------+-----------------+--------------------+
+| Cols (2B) | BlockCnt (2B)   |   <ColumnMeta>     |
++-----------+--------------------------------------+
+                                       |
+                                       |
+                      +----------------------------------+
+                      |             ColumnMeta           |
+                      +-------------------+--------------+
+                      | CompressAlgo (1B) | <BlocksMeta> |
+                      +-------------------+--------------+
+                                                |
+                                                |
+                     +----------------------------------------------------+
+                     |                    BlocksMeta                      |
+                     +--------------+-------------+---...---+-------------+
+                     |  <BlockMeta> | <BlockMeta> |         | <BlockMeta> |
+                     +--------------+-------------+---...---+-------------+
+                              |
+                              |
++----------------------------------------------------------+
+|                        BlockMeta                         |
++------------------+------------+-----------+--------------+
+|  PartOffset (4B) | Start (4B) | Size (4B) | RawSize (4B) |
++------------------+------------+-----------+--------------+
+```
 
 ## Buffer manager
 Buffer manager is responsible for the allocation of buffer space. It handles all requests for data pages and temporary blocks of the **TAE**.
