@@ -76,6 +76,56 @@ The query flow chart of segment index is as follow:
 **TAE** is a column-oriented data store, very friendly to data compression. It supports per-column compression codecs and now only **LZ4** is used. You can easily obtain the meta information of compressed blocks. In **TAE**, the compression unit is a column of a block.
 
 ### Layout
+
+#### Storage File Format
+<img src="https://user-images.githubusercontent.com/39627130/158129098-dfe77d0b-c6dc-4323-a63e-b7b381f15949.png" height="100%" width="100%" />
+
+##### Header
+```
++-------------+--------------+-------------+----------------+------------------+------------------+
+|  Magic (8B) | Version (2B) | Format (2B) | Reserved (32B) | MinPartSize (2B) | MaxPartSize (2B) |
++-------------+--------------+-------------+----------------+------------------+------------------+
+
+Magic = Engine identity (0x01346616). TAE only
+Version = File version
+Format = Layout format
+Reserved = 32 bytes reserved space
+MinPartSize = Specify the size of the smallest part uint. 1 for 1K bytes. If 4 is specified, the smallest part size is 4K bytes
+MaxPartSize = Specify the size of the bigest part. 1 for 1K bytes
+```
+
+##### Meta
+```
+Meta-1, Meta-2 = One is stale while the other is active
+
++----------+----------+-
+| <Meta-1> | <Meta-2> |
++----------+----------+-
+       |
+       |
++---------------------------------------------------+
+|                        Meta                       |
++---------------+-----------------+-----------------+
+|  Version (2B) | PartOffset (4B) | Reserved (128B) |
++---------------+-----------------+-----------------+
+
+Version = Meta version
+PartOffset = The first part position
+Reserved = 128 bytes reserved space
+```
+
+##### Part
+
+```
++------------+---------------------+---- ... ----+
+|  Size (2B) | NextPartOffset (4B) |   Payload   |
++------------+---------------------+---- ... ----+
+
+Size = Part size. 1 for 1K bytes
+NextPartOffset = Next part pointer
+Payload = The size of payload is ($Size * 1K - 2B - 4B)
+```
+
 #### Block
 **TODO**
 
