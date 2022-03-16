@@ -17,75 +17,6 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-// const (
-// 	ETRedo = entry.ETCustomizeStart + 1
-// )
-
-// func SetCommitIdToLogEntry(commitId uint64, entry store.AsyncEntry) {
-// 	buf := entry.GetMeta().GetReservedBuf()[store.EntryTypeSize+store.EntrySizeSize : store.EntryTypeSize+store.EntrySizeSize+8]
-// 	binary.BigEndian.PutUint64(buf, commitId)
-// }
-
-// func GetCommitIdFromLogEntry(entry store.AsyncEntry) uint64 {
-// 	buf := entry.GetMeta().GetReservedBuf()[store.EntryTypeSize+store.EntrySizeSize : store.EntryTypeSize+store.EntrySizeSize+8]
-// 	return binary.BigEndian.Uint64(buf)
-// }
-
-// type redoNode struct {
-// 	*buffer.Node
-// 	store   store.AwareStore
-// 	vec     *vector.Vector
-// 	entId   uint64
-// 	tempary bool
-// }
-
-// func newNode(mgr base.INodeManager, id common.ID, store store.AwareStore) *redoNode {
-// 	impl := new(redoNode)
-// 	impl.Node = buffer.NewNode(impl, mgr, id, 0)
-// 	impl.DestroyFunc = impl.OnDestory
-// 	impl.UnloadFunc = impl.OnUnload
-// 	impl.store = store
-// 	return impl
-// }
-
-// func (n *redoNode) OnDestory() {
-// 	// id := n.GetID()
-// 	// log.Infof("Destroying %s", id.String())
-// }
-
-// func (n *redoNode) SetTemp() {
-// 	n.tempary = true
-// }
-
-// func (n *redoNode) OnUnload() {
-// 	if n.tempary {
-// 		return
-// 	}
-// 	id := n.GetID()
-// 	log.Infof("Unloading %s", id.String())
-// 	if n.vec == nil {
-// 		return
-// 	}
-// 	if n.entId != 0 {
-// 		return
-// 	}
-// 	e := n.MakeEntry()
-// 	n.store.AppendEntry(e)
-// 	e.WaitDone()
-// 	e.Free()
-// }
-
-// func (n *redoNode) MakeEntry() store.AsyncEntry {
-// 	id := common.NextGlobalSeqNum()
-// 	e := store.NewAsyncBaseEntry()
-// 	e.Meta.SetType(ETRedo)
-// 	SetCommitIdToLogEntry(id, e)
-// 	buf, _ := n.vec.Show()
-// 	e.Unmarshal(buf)
-// 	n.entId = id
-// 	return e
-// }
-
 // 1. 30 concurrency
 // 2. 10000 node
 // 3. 512K buffer
@@ -98,20 +29,20 @@ func init() {
 func getNodes() int {
 	v := rand.Intn(100)
 	if v < 30 {
-		return 1 * 5
+		return 1 * 2
 	} else if v < 55 {
-		return 2 * 5
+		return 2 * 2
 	} else if v < 75 {
-		return 3 * 5
+		return 3 * 2
 	} else if v < 90 {
-		return 4 * 50
+		return 4 * 2
 	}
-	return 5 * 5
+	return 5 * 2
 }
 
 func initTestPath(t *testing.T) string {
 	dir := filepath.Join("/tmp", t.Name())
-	os.Remove(dir)
+	os.RemoveAll(dir)
 	return dir
 }
 
@@ -133,7 +64,6 @@ func TestInsertNode(t *testing.T) {
 		return func() {
 			defer wg.Done()
 			cnt := getNodes()
-			cnt = 10
 			nodes := make([]*insertNode, cnt)
 			for i := 0; i < cnt; i++ {
 				var cid common.ID
@@ -144,11 +74,11 @@ func TestInsertNode(t *testing.T) {
 				h := mgr.Pin(n)
 				var err error
 				if err = n.Expand(common.K*1, func() error {
-					n.data = bat.Vecs[0]
+					n.Append(bat, 0)
 					return nil
 				}); err != nil {
 					err = n.Expand(common.K*1, func() error {
-						n.data = bat.Vecs[0]
+						n.Append(bat, 0)
 						return nil
 					})
 				}
@@ -166,7 +96,7 @@ func TestInsertNode(t *testing.T) {
 	}
 	for {
 		id := idAlloc.Alloc()
-		if id > 20 {
+		if id > 10 {
 			break
 		}
 		wg.Add(1)
@@ -175,6 +105,7 @@ func TestInsertNode(t *testing.T) {
 	wg.Wait()
 	t.Log(all)
 	t.Log(mgr.String())
+	t.Log(common.GPool.String())
 }
 
 func TestTable(t *testing.T) {

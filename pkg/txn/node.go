@@ -7,7 +7,6 @@ import (
 
 	"github.com/RoaringBitmap/roaring/roaring64"
 	gbat "github.com/matrixorigin/matrixone/pkg/container/batch"
-	gvec "github.com/matrixorigin/matrixone/pkg/container/vector"
 
 	"github.com/matrixorigin/matrixone/pkg/vm/engine/aoe/storage/common"
 	"github.com/matrixorigin/matrixone/pkg/vm/engine/aoe/storage/container/batch"
@@ -55,8 +54,7 @@ type InsertNode interface {
 type insertNode struct {
 	*buffer.Node
 	driver   NodeDriver
-	data2    batch.IBatch
-	data     *gvec.Vector
+	data     batch.IBatch
 	sequence int64
 	typ      NodeState
 	deletes  *roaring64.Bitmap
@@ -80,7 +78,10 @@ func (n *insertNode) Type() NodeType { return NTInsert }
 func (n *insertNode) makeEntry() NodeEntry {
 	e := entry.GetBase()
 	e.SetType(ETInsertNode)
-	buf, _ := n.data.Show()
+	buf, err := MarshalBatch(n.data)
+	if err != nil {
+		panic(err)
+	}
 	e.Unmarshal(buf)
 	return e
 }
@@ -94,8 +95,8 @@ func (n *insertNode) ToTransient() {
 }
 
 func (n *insertNode) OnDestory() {
-	if n.data2 != nil {
-		n.data2.Close()
+	if n.data != nil {
+		n.data.Close()
 	}
 }
 func (n *insertNode) OnUnload() {
@@ -121,7 +122,7 @@ func (n *insertNode) OnUnload() {
 }
 
 func (n *insertNode) Append(data *gbat.Batch, offset uint32) (uint32, error) {
-	if n.data2 == nil {
+	if n.data == nil {
 		var cnt int
 		var err error
 		vecs := make([]vector.IVector, len(data.Vecs))
@@ -134,16 +135,16 @@ func (n *insertNode) Append(data *gbat.Batch, offset uint32) (uint32, error) {
 				return 0, err
 			}
 		}
-		if n.data2, err = batch.NewBatch(attrs, vecs); err != nil {
+		if n.data, err = batch.NewBatch(attrs, vecs); err != nil {
 			return 0, err
 		}
-		n.rows = uint32(n.data2.Length())
+		n.rows = uint32(n.data.Length())
 		return uint32(cnt), nil
 	}
 
 	var cnt int
-	for i, attr := range n.data2.GetAttrs() {
-		vec, err := n.data2.GetVectorByAttr(attr)
+	for i, attr := range n.data.GetAttrs() {
+		vec, err := n.data.GetVectorByAttr(attr)
 		if err != nil {
 			return 0, err
 		}
