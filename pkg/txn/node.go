@@ -7,9 +7,11 @@ import (
 
 	"github.com/RoaringBitmap/roaring/roaring64"
 	gbat "github.com/matrixorigin/matrixone/pkg/container/batch"
-	"github.com/matrixorigin/matrixone/pkg/container/vector"
+	gvec "github.com/matrixorigin/matrixone/pkg/container/vector"
 
 	"github.com/matrixorigin/matrixone/pkg/vm/engine/aoe/storage/common"
+	"github.com/matrixorigin/matrixone/pkg/vm/engine/aoe/storage/container/batch"
+	"github.com/matrixorigin/matrixone/pkg/vm/engine/aoe/storage/container/vector"
 	"github.com/matrixorigin/matrixone/pkg/vm/engine/aoe/storage/mutation/buffer"
 	"github.com/matrixorigin/matrixone/pkg/vm/engine/aoe/storage/mutation/buffer/base"
 )
@@ -51,10 +53,10 @@ type InsertNode interface {
 
 type insertNode struct {
 	*buffer.Node
-	driver NodeDriver
-	// data     batch.IBatch
-	data     *vector.Vector
-	sequence uint64
+	driver   NodeDriver
+	data2    batch.IBatch
+	data     *gvec.Vector
+	sequence int64
 	typ      NodeState
 	deletes  *roaring64.Bitmap
 }
@@ -66,6 +68,7 @@ func NewInsertNode(mgr base.INodeManager, id common.ID, driver NodeDriver) *inse
 	impl.typ = PersistNode
 	impl.UnloadFunc = impl.OnUnload
 	impl.DestroyFunc = impl.OnDestory
+	impl.sequence = -1
 	return impl
 }
 
@@ -88,30 +91,57 @@ func (n *insertNode) ToTransient() {
 }
 
 func (n *insertNode) OnDestory() {
-	// if n.data != nil {
-	// 	n.data.Close()
-	// }
+	if n.data2 != nil {
+		n.data2.Close()
+	}
 }
 func (n *insertNode) OnUnload() {
 	if n.IsTransient() {
 		return
 	}
-	if atomic.LoadUint64(&n.sequence) != 0 {
+	if atomic.LoadInt64(&n.sequence) != -1 {
+		return
+	}
+	if n.data == nil {
 		return
 	}
 	e := n.makeEntry()
 	if seq, err := n.driver.AppendEntry(e); err != nil {
 		panic(err)
 	} else {
-		atomic.StoreUint64(&n.sequence, seq)
+		atomic.StoreInt64(&n.sequence, int64(seq))
+		// id := n.GetID()
+		// logrus.Infof("Unloading %s", id.String())
 	}
 	e.WaitDone()
 	e.Free()
 }
 
 func (n *insertNode) Append(data *gbat.Batch, offset uint32) (uint32, error) {
-	// TODO
-	return 0, nil
+	if n.data2 == nil {
+		vecs := make([]vector.IVector, len(data.Vecs))
+		for i, vec := range data.Vecs {
+			vecs[i] = vector.NewVector(vec.Typ, uint64(MaxNodeRows))
+			cnt, err := vecs[i].AppendVector(vec, int(offset))
+			if err != nil {
+				return 0, err
+			}
+			return uint32(cnt), nil
+		}
+	}
+
+	var cnt int
+	for i, attr := range n.data2.GetAttrs() {
+		vec, err := n.data2.GetVectorByAttr(attr)
+		if err != nil {
+			return 0, err
+		}
+		cnt, err = vec.AppendVector(data.Vecs[i], int(offset))
+		if err != nil {
+			return 0, err
+		}
+	}
+	return uint32(cnt), nil
 }
 
 func (n *insertNode) GetSpace() uint32 {

@@ -3,9 +3,7 @@ package txn
 import (
 	"sync"
 
-	"github.com/jiangxinmeng1/logstore/pkg/entry"
 	"github.com/jiangxinmeng1/logstore/pkg/store"
-	"github.com/sirupsen/logrus"
 )
 
 type NodeDriver interface {
@@ -16,7 +14,6 @@ type NodeDriver interface {
 type nodeDriver struct {
 	sync.RWMutex
 	impl store.Store
-	seq  uint64
 	own  bool
 }
 
@@ -38,14 +35,7 @@ func NewNodeDriverWithStore(impl store.Store, own bool) NodeDriver {
 
 func (nd *nodeDriver) AppendEntry(e NodeEntry) (uint64, error) {
 	nd.Lock()
-	id := nd.seq
-	info := &entry.Info{
-		CommitId: id,
-	}
-	e.SetInfo(info)
-	nd.seq++
-	logrus.Infof("xxxxxx-%d", e.GetPayloadSize())
-	err := nd.impl.AppendEntry(e)
+	id, err := nd.impl.AppendEntry(e)
 	nd.Unlock()
 	return id, err
 }

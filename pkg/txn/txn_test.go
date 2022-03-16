@@ -14,6 +14,7 @@ import (
 	"github.com/matrixorigin/matrixone/pkg/vm/engine/aoe/storage/mock"
 	"github.com/matrixorigin/matrixone/pkg/vm/engine/aoe/storage/mutation/buffer"
 	"github.com/panjf2000/ants/v2"
+	"github.com/stretchr/testify/assert"
 )
 
 // const (
@@ -116,14 +117,14 @@ func initTestPath(t *testing.T) string {
 
 func TestInsertNode(t *testing.T) {
 	dir := initTestPath(t)
-	mgr := buffer.NewNodeManager(common.M*2, nil)
+	mgr := buffer.NewNodeManager(common.K*6, nil)
 	driver := NewNodeDriver(dir, "store", nil)
 	defer driver.Close()
 
 	idAlloc := common.NewIdAlloctor(1)
 	schema := metadata.MockSchema(1)
 	bat := mock.MockBatch(schema.Types(), 1024)
-	p, _ := ants.NewPool(30)
+	p, _ := ants.NewPool(5)
 
 	var wg sync.WaitGroup
 	var all uint64
@@ -132,8 +133,8 @@ func TestInsertNode(t *testing.T) {
 		return func() {
 			defer wg.Done()
 			cnt := getNodes()
-			cnt = 50
-			nodes := make([]Node, cnt)
+			cnt = 10
+			nodes := make([]*insertNode, cnt)
 			for i := 0; i < cnt; i++ {
 				var cid common.ID
 				cid.BlockID = id
@@ -142,10 +143,19 @@ func TestInsertNode(t *testing.T) {
 				nodes[i] = n
 				mgr.RegisterNode(n)
 				h := mgr.Pin(n)
-				n.Expand(common.K*4, func() error {
+				var err error
+				if err = n.Expand(common.K*1, func() error {
 					n.data = bat.Vecs[0]
 					return nil
-				})
+				}); err != nil {
+					err = n.Expand(common.K*1, func() error {
+						n.data = bat.Vecs[0]
+						return nil
+					})
+				}
+				if err != nil {
+					assert.NotNil(t, err)
+				}
 				h.Close()
 			}
 			for _, n := range nodes {
