@@ -5,6 +5,7 @@ import (
 	"github.com/matrixorigin/matrixone/pkg/container/vector"
 	"github.com/matrixorigin/matrixone/pkg/vm/engine/aoe/storage/common"
 	"github.com/matrixorigin/matrixone/pkg/vm/engine/aoe/storage/mutation/buffer/base"
+	"github.com/sirupsen/logrus"
 )
 
 type TableIndex interface {
@@ -21,9 +22,20 @@ type Table struct {
 	index      TableIndex
 }
 
+func NewTable(id uint64, driver NodeDriver, mgr base.INodeManager) *Table {
+	tbl := &Table{
+		nodes:    make([]Node, 0),
+		nodesMgr: mgr,
+		id:       id,
+		driver:   driver,
+	}
+	return tbl
+}
+
 func (tbl *Table) registerInsertNode() error {
 	id := common.ID{
-		TableID: tbl.id,
+		TableID:   tbl.id,
+		SegmentID: uint64(len(tbl.nodes)),
 	}
 	n := NewInsertNode(tbl.nodesMgr, id, tbl.driver)
 	tbl.appendable = n
@@ -42,18 +54,28 @@ func (tbl *Table) Append(data *batch.Batch) error {
 	offset := uint32(0)
 	length := uint32(vector.Length(data.Vecs[0]))
 	for {
-		if appended, err = tbl.appendable.Append(data, offset); err != nil {
+		h := tbl.nodesMgr.Pin(tbl.appendable)
+		if h == nil {
+			panic("unexpected")
+		}
+		defer h.Close()
+		err := tbl.appendable.Expand(common.K, func() error {
+			appended, err = tbl.appendable.Append(data, offset)
+			return err
+		})
+		if err != nil {
 			break
 		}
 		offset += appended
-		if offset >= length {
-			break
-		}
 		space := tbl.appendable.GetSpace()
+		logrus.Infof("Appended: %d, Space:%d", appended, space)
 		if space == 0 {
 			if err = tbl.registerInsertNode(); err != nil {
 				break
 			}
+		}
+		if offset >= length {
+			break
 		}
 	}
 	return err

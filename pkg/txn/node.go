@@ -40,6 +40,7 @@ const (
 )
 
 type Node interface {
+	base.INode
 	Type() NodeType
 	ToTransient()
 	Close() error
@@ -59,6 +60,7 @@ type insertNode struct {
 	sequence int64
 	typ      NodeState
 	deletes  *roaring64.Bitmap
+	rows     uint32
 }
 
 func NewInsertNode(mgr base.INodeManager, id common.ID, driver NodeDriver) *insertNode {
@@ -69,6 +71,7 @@ func NewInsertNode(mgr base.INodeManager, id common.ID, driver NodeDriver) *inse
 	impl.UnloadFunc = impl.OnUnload
 	impl.DestroyFunc = impl.OnDestory
 	impl.sequence = -1
+	mgr.RegisterNode(impl)
 	return impl
 }
 
@@ -119,15 +122,23 @@ func (n *insertNode) OnUnload() {
 
 func (n *insertNode) Append(data *gbat.Batch, offset uint32) (uint32, error) {
 	if n.data2 == nil {
+		var cnt int
+		var err error
 		vecs := make([]vector.IVector, len(data.Vecs))
+		attrs := make([]int, len(data.Vecs))
 		for i, vec := range data.Vecs {
+			attrs[i] = i
 			vecs[i] = vector.NewVector(vec.Typ, uint64(MaxNodeRows))
-			cnt, err := vecs[i].AppendVector(vec, int(offset))
+			cnt, err = vecs[i].AppendVector(vec, int(offset))
 			if err != nil {
 				return 0, err
 			}
-			return uint32(cnt), nil
 		}
+		if n.data2, err = batch.NewBatch(attrs, vecs); err != nil {
+			return 0, err
+		}
+		n.rows = uint32(n.data2.Length())
+		return uint32(cnt), nil
 	}
 
 	var cnt int
@@ -140,13 +151,13 @@ func (n *insertNode) Append(data *gbat.Batch, offset uint32) (uint32, error) {
 		if err != nil {
 			return 0, err
 		}
+		n.rows = uint32(vec.Length())
 	}
 	return uint32(cnt), nil
 }
 
 func (n *insertNode) GetSpace() uint32 {
-	// TODO
-	return 0
+	return MaxNodeRows - n.rows
 }
 
 func (n *insertNode) DeleteRows(interval *common.Range) error {

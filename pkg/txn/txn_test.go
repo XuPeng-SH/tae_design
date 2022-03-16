@@ -141,7 +141,6 @@ func TestInsertNode(t *testing.T) {
 				cid.Idx = uint16(i)
 				n := NewInsertNode(mgr, cid, driver)
 				nodes[i] = n
-				mgr.RegisterNode(n)
 				h := mgr.Pin(n)
 				var err error
 				if err = n.Expand(common.K*1, func() error {
@@ -167,7 +166,7 @@ func TestInsertNode(t *testing.T) {
 	}
 	for {
 		id := idAlloc.Alloc()
-		if id > 100 {
+		if id > 20 {
 			break
 		}
 		wg.Add(1)
@@ -175,5 +174,23 @@ func TestInsertNode(t *testing.T) {
 	}
 	wg.Wait()
 	t.Log(all)
+	t.Log(mgr.String())
+}
+
+func TestTable(t *testing.T) {
+	dir := initTestPath(t)
+	mgr := buffer.NewNodeManager(common.K*10, nil)
+	driver := NewNodeDriver(dir, "store", nil)
+	defer driver.Close()
+
+	schema := metadata.MockSchema(1)
+	bat := mock.MockBatch(schema.Types(), 1024)
+
+	id := common.NextGlobalSeqNum()
+	tbl := NewTable(id, driver, mgr)
+	for i := 0; i < 100; i++ {
+		err := tbl.Append(bat)
+		assert.Nil(t, err)
+	}
 	t.Log(mgr.String())
 }
