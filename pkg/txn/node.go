@@ -57,6 +57,7 @@ type InsertNode interface {
 	Window(start, end uint32) (*gbat.Batch, error)
 	GetSpace() uint32
 	Rows() uint32
+	GetValue(col int, row uint32) (interface{}, error)
 }
 
 type insertNode struct {
@@ -172,6 +173,15 @@ func (n *insertNode) GetSpace() uint32 {
 
 func (n *insertNode) Rows() uint32 {
 	return n.rows
+}
+
+func (n *insertNode) GetValue(col int, row uint32) (interface{}, error) {
+	vec, err := n.data.GetVectorByAttr(col)
+	if err != nil {
+		return nil, err
+	}
+	v, err := vec.GetValue(int(row))
+	return v, err
 }
 
 func (n *insertNode) RangeDelete(start, end uint32) error {
