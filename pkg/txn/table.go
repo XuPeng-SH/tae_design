@@ -13,7 +13,21 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-type Table struct {
+type Table interface {
+	GetSchema() *metadata.Schema
+	GetID() uint64
+	Append(data *batch.Batch) error
+	RangeDeleteLocalRows(start, end uint32) error
+	LocalDeletesToString() string
+	IsLocalDeleted(row uint32) bool
+	GetLocalPhysicalAxis(row uint32) (int, uint32)
+	UpdateLocalValue(row uint32, col uint16, value interface{}) error
+	Rows() uint32
+	BatchDedupLocal(data *gbat.Batch) error
+	BatchDedupLocalByCol(col *gvec.Vector) error
+}
+
+type txnTable struct {
 	inodes     []InsertNode
 	appendable InsertNode
 	driver     NodeDriver
@@ -24,8 +38,8 @@ type Table struct {
 	rows       uint32
 }
 
-func NewTable(id uint64, schema *metadata.Schema, driver NodeDriver, mgr base.INodeManager) *Table {
-	tbl := &Table{
+func NewTable(id uint64, schema *metadata.Schema, driver NodeDriver, mgr base.INodeManager) *txnTable {
+	tbl := &txnTable{
 		inodes:   make([]InsertNode, 0),
 		nodesMgr: mgr,
 		id:       id,
@@ -36,15 +50,15 @@ func NewTable(id uint64, schema *metadata.Schema, driver NodeDriver, mgr base.IN
 	return tbl
 }
 
-func (tbl *Table) GetSchema() *metadata.Schema {
+func (tbl *txnTable) GetSchema() *metadata.Schema {
 	return tbl.schema
 }
 
-func (tbl *Table) GetID() uint64 {
+func (tbl *txnTable) GetID() uint64 {
 	return tbl.id
 }
 
-func (tbl *Table) registerInsertNode() error {
+func (tbl *txnTable) registerInsertNode() error {
 	id := common.ID{
 		TableID:   tbl.id,
 		SegmentID: uint64(len(tbl.inodes)),
@@ -55,7 +69,7 @@ func (tbl *Table) registerInsertNode() error {
 	return nil
 }
 
-func (tbl *Table) Append(data *batch.Batch) error {
+func (tbl *txnTable) Append(data *batch.Batch) error {
 	var err error
 	if tbl.appendable == nil {
 		if err = tbl.registerInsertNode(); err != nil {
@@ -101,7 +115,7 @@ func (tbl *Table) Append(data *batch.Batch) error {
 // 1. Split the interval to multiple intervals, with each interval belongs to only one insert node
 // 2. For each new interval, call insert node RangeDelete
 // 3. Update the table index
-func (tbl *Table) RangeDeleteLocalRows(start, end uint32) error {
+func (tbl *txnTable) RangeDeleteLocalRows(start, end uint32) error {
 	first, firstOffset := tbl.GetLocalPhysicalAxis(start)
 	last, lastOffset := tbl.GetLocalPhysicalAxis(end)
 	var err error
@@ -125,21 +139,21 @@ func (tbl *Table) RangeDeleteLocalRows(start, end uint32) error {
 	return err
 }
 
-func (tbl *Table) PrintLocalDeletes() string {
-	s := fmt.Sprintf("<Table-%d>[LocalDeletes]:\n", tbl.id)
+func (tbl *txnTable) LocalDeletesToString() string {
+	s := fmt.Sprintf("<txnTable-%d>[LocalDeletes]:\n", tbl.id)
 	for i, n := range tbl.inodes {
 		s = fmt.Sprintf("%s\t<INode-%d>: %s\n", s, i, n.PrintDeletes())
 	}
 	return s
 }
 
-func (tbl *Table) IsLocalDeleted(row uint32) bool {
+func (tbl *txnTable) IsLocalDeleted(row uint32) bool {
 	npos, noffset := tbl.GetLocalPhysicalAxis(row)
 	n := tbl.inodes[npos]
 	return n.IsRowDeleted(noffset)
 }
 
-func (tbl *Table) GetLocalPhysicalAxis(row uint32) (int, uint32) {
+func (tbl *txnTable) GetLocalPhysicalAxis(row uint32) (int, uint32) {
 	npos := int(row) / int(MaxNodeRows)
 	noffset := row % uint32(MaxNodeRows)
 	return npos, noffset
@@ -150,7 +164,7 @@ func (tbl *Table) GetLocalPhysicalAxis(row uint32) (int, uint32) {
 // 3. Build a new row
 // 4. Delete the row in the node
 // 5. Append the new row
-func (tbl *Table) UpdateLocalValue(row uint32, col uint16, value interface{}) error {
+func (tbl *txnTable) UpdateLocalValue(row uint32, col uint16, value interface{}) error {
 	npos, noffset := tbl.GetLocalPhysicalAxis(row)
 	n := tbl.inodes[npos]
 	window, err := n.Window(uint32(noffset), uint32(noffset))
@@ -164,7 +178,7 @@ func (tbl *Table) UpdateLocalValue(row uint32, col uint16, value interface{}) er
 	return err
 }
 
-func (tbl *Table) Rows() uint32 {
+func (tbl *txnTable) Rows() uint32 {
 	cnt := len(tbl.inodes)
 	if cnt == 0 {
 		return 0
@@ -172,10 +186,10 @@ func (tbl *Table) Rows() uint32 {
 	return (uint32(cnt)-1)*MaxNodeRows + tbl.inodes[cnt-1].Rows()
 }
 
-func (tbl *Table) BatchDedupLocal(bat *gbat.Batch) error {
+func (tbl *txnTable) BatchDedupLocal(bat *gbat.Batch) error {
 	return tbl.BatchDedupLocalByCol(bat.Vecs[tbl.schema.PrimaryKey])
 }
 
-func (tbl *Table) BatchDedupLocalByCol(col *gvec.Vector) error {
+func (tbl *txnTable) BatchDedupLocalByCol(col *gvec.Vector) error {
 	return tbl.index.BatchDedup(col)
 }

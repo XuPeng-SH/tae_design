@@ -68,10 +68,10 @@ type insertNode struct {
 	typ     NodeState
 	deletes *roaring64.Bitmap
 	rows    uint32
-	table   *Table
+	table   Table
 }
 
-func NewInsertNode(tbl *Table, mgr base.INodeManager, id common.ID, driver NodeDriver) *insertNode {
+func NewInsertNode(tbl Table, mgr base.INodeManager, id common.ID, driver NodeDriver) *insertNode {
 	impl := new(insertNode)
 	impl.Node = buffer.NewNode(impl, mgr, id, 0)
 	impl.driver = driver
@@ -208,9 +208,9 @@ func (n *insertNode) PrintDeletes() string {
 
 // TODO: Rewrite later
 func (n *insertNode) Window(start, end uint32) (*gbat.Batch, error) {
-	attrs := make([]string, len(n.table.schema.ColDefs))
+	attrs := make([]string, len(n.table.GetSchema().ColDefs))
 	for i, _ := range attrs {
-		attrs[i] = n.table.schema.ColDefs[i].Name
+		attrs[i] = n.table.GetSchema().ColDefs[i].Name
 	}
 	ret := gbat.New(true, attrs)
 	for i, attr := range n.data.GetAttrs() {
