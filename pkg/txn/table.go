@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/matrixorigin/matrixone/pkg/container/batch"
+	gbat "github.com/matrixorigin/matrixone/pkg/container/batch"
 	"github.com/matrixorigin/matrixone/pkg/container/vector"
 	gvec "github.com/matrixorigin/matrixone/pkg/container/vector"
 	"github.com/matrixorigin/matrixone/pkg/vm/engine/aoe/storage/common"
@@ -20,6 +21,7 @@ type Table struct {
 	schema     *metadata.Schema
 	nodesMgr   base.INodeManager
 	index      TableIndex
+	rows       uint32
 }
 
 func NewTable(id uint64, schema *metadata.Schema, driver NodeDriver, mgr base.INodeManager) *Table {
@@ -79,6 +81,11 @@ func (tbl *Table) Append(data *batch.Batch) error {
 		offset += appended
 		space := tbl.appendable.GetSpace()
 		logrus.Infof("Appended: %d, Space:%d", appended, space)
+		start := tbl.rows
+		if err = tbl.index.BatchInsert(data.Vecs[tbl.schema.PrimaryKey], start, false); err != nil {
+			break
+		}
+		tbl.rows += appended
 		if space == 0 {
 			if err = tbl.registerInsertNode(); err != nil {
 				break
@@ -165,6 +172,10 @@ func (tbl *Table) Rows() uint32 {
 	return (uint32(cnt)-1)*MaxNodeRows + tbl.inodes[cnt-1].Rows()
 }
 
-func (tbl *Table) BatchDedupLocal(col *gvec.Vector) error {
+func (tbl *Table) BatchDedupLocal(bat *gbat.Batch) error {
+	return tbl.BatchDedupLocalByCol(bat.Vecs[tbl.schema.PrimaryKey])
+}
+
+func (tbl *Table) BatchDedupLocalByCol(col *gvec.Vector) error {
 	return tbl.index.BatchDedup(col)
 }

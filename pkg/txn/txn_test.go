@@ -9,6 +9,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/matrixorigin/matrixone/pkg/container/batch"
+	"github.com/matrixorigin/matrixone/pkg/container/vector"
 	gvec "github.com/matrixorigin/matrixone/pkg/container/vector"
 	"github.com/matrixorigin/matrixone/pkg/vm/engine/aoe/storage/common"
 	"github.com/matrixorigin/matrixone/pkg/vm/engine/aoe/storage/metadata/v1"
@@ -157,6 +159,69 @@ func TestUpdate(t *testing.T) {
 	assert.Nil(t, err)
 	assert.True(t, tbl.IsLocalDeleted(row))
 	assert.Equal(t, rows+1, tbl.Rows())
+}
+
+func TestAppend(t *testing.T) {
+	dir := initTestPath(t)
+	mgr := buffer.NewNodeManager(common.K*10, nil)
+	driver := NewNodeDriver(dir, "store", nil)
+	defer driver.Close()
+
+	schema := metadata.MockSchemaAll(2)
+	schema.PrimaryKey = 1
+	rows := uint64(MaxNodeRows) / 8 * 3
+	brows := rows / 3
+	bat := mock.MockBatch(schema.Types(), rows)
+	v00 := vector.New(bat.Vecs[0].Typ)
+	vector.Window(bat.Vecs[0], 0, int(brows), v00)
+	v10 := vector.New(bat.Vecs[1].Typ)
+	vector.Window(bat.Vecs[1], 0, int(brows), v10)
+	bat1 := batch.New(true, bat.Attrs)
+	bat1.Vecs[0] = v00
+	bat1.Vecs[1] = v10
+
+	v01 := vector.New(bat.Vecs[0].Typ)
+	vector.Window(bat.Vecs[0], int(brows), 2*int(brows), v01)
+	v11 := vector.New(bat.Vecs[1].Typ)
+	vector.Window(bat.Vecs[1], int(brows), 2*int(brows), v11)
+	bat2 := batch.New(true, bat.Attrs)
+	bat2.Vecs[0] = v01
+	bat2.Vecs[1] = v11
+
+	v02 := vector.New(bat.Vecs[0].Typ)
+	vector.Window(bat.Vecs[0], 2*int(brows), 3*int(brows), v02)
+	v12 := vector.New(bat.Vecs[1].Typ)
+	vector.Window(bat.Vecs[1], 2*int(brows), 3*int(brows), v12)
+	bat3 := batch.New(true, bat.Attrs)
+	bat3.Vecs[0] = v02
+	bat3.Vecs[1] = v12
+
+	id := common.NextGlobalSeqNum()
+	tbl := NewTable(id, schema, driver, mgr)
+
+	err := tbl.BatchDedupLocal(bat1)
+	assert.Nil(t, err)
+	err = tbl.Append(bat1)
+	assert.Nil(t, err)
+	assert.Equal(t, int(brows), int(tbl.Rows()))
+	assert.Equal(t, int(brows), int(tbl.index.Count()))
+
+	err = tbl.BatchDedupLocal(bat1)
+	assert.NotNil(t, err)
+
+	err = tbl.BatchDedupLocal(bat2)
+	assert.Nil(t, err)
+	err = tbl.Append(bat2)
+	assert.Nil(t, err)
+	assert.Equal(t, 2*int(brows), int(tbl.Rows()))
+	assert.Equal(t, 2*int(brows), int(tbl.index.Count()))
+
+	err = tbl.BatchDedupLocal(bat3)
+	assert.Nil(t, err)
+	err = tbl.Append(bat3)
+	assert.Nil(t, err)
+	assert.Equal(t, 3*int(brows), int(tbl.Rows()))
+	assert.Equal(t, 3*int(brows), int(tbl.index.Count()))
 }
 
 func TestIndex(t *testing.T) {
