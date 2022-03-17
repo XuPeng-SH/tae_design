@@ -1,6 +1,7 @@
 package txn
 
 import (
+	"fmt"
 	"sync/atomic"
 
 	"github.com/jiangxinmeng1/logstore/pkg/entry"
@@ -48,6 +49,9 @@ type Node interface {
 type InsertNode interface {
 	Node
 	Append(data *gbat.Batch, offset uint32) (appended uint32, err error)
+	DeleteRows(interval *common.Range) error
+	IsRowDeleted(row uint32) bool
+	DebugDeletes() string
 	GetSpace() uint32
 }
 
@@ -165,8 +169,22 @@ func (n *insertNode) DeleteRows(interval *common.Range) error {
 	if n.deletes == nil {
 		n.deletes = roaring64.New()
 	}
-	n.deletes.AddRange(interval.Left, interval.Right)
+	n.deletes.AddRange(interval.Left, interval.Right+1)
 	return nil
+}
+
+func (n *insertNode) IsRowDeleted(row uint32) bool {
+	if n.deletes == nil {
+		return false
+	}
+	return n.deletes.Contains(uint64(row))
+}
+
+func (n *insertNode) DebugDeletes() string {
+	if n.deletes == nil {
+		return fmt.Sprintf("NoDeletes")
+	}
+	return n.deletes.String()
 }
 
 // TODO: Engine merge delete info or just provide raw delete info?

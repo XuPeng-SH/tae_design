@@ -1,6 +1,8 @@
 package txn
 
 import (
+	"fmt"
+
 	"github.com/matrixorigin/matrixone/pkg/container/batch"
 	"github.com/matrixorigin/matrixone/pkg/container/vector"
 	"github.com/matrixorigin/matrixone/pkg/vm/engine/aoe/storage/common"
@@ -14,7 +16,7 @@ type TableIndex interface {
 }
 
 type Table struct {
-	nodes      []Node
+	inodes     []InsertNode
 	appendable InsertNode
 	driver     NodeDriver
 	id         uint64
@@ -24,7 +26,7 @@ type Table struct {
 
 func NewTable(id uint64, driver NodeDriver, mgr base.INodeManager) *Table {
 	tbl := &Table{
-		nodes:    make([]Node, 0),
+		inodes:   make([]InsertNode, 0),
 		nodesMgr: mgr,
 		id:       id,
 		driver:   driver,
@@ -35,11 +37,11 @@ func NewTable(id uint64, driver NodeDriver, mgr base.INodeManager) *Table {
 func (tbl *Table) registerInsertNode() error {
 	id := common.ID{
 		TableID:   tbl.id,
-		SegmentID: uint64(len(tbl.nodes)),
+		SegmentID: uint64(len(tbl.inodes)),
 	}
 	n := NewInsertNode(tbl.nodesMgr, id, tbl.driver)
 	tbl.appendable = n
-	tbl.nodes = append(tbl.nodes, n)
+	tbl.inodes = append(tbl.inodes, n)
 	return nil
 }
 
@@ -81,12 +83,60 @@ func (tbl *Table) Append(data *batch.Batch) error {
 	return err
 }
 
+// 1. Split the interval to multiple intervals, with each interval belongs to only one insert node
+// 2. For each new interval, call insert node DeleteRows
+// 3. Update the table index
 func (tbl *Table) DeleteRows(interval *common.Range) error {
-	// TODO
-	// 1. Split the interval to multiple intervals, with each interval belongs to only one insert node
-	// 2. For each new interval, call insert node DeleteRows
-	// 3. Update the table index
-	return nil
+	first := int(interval.Left) / int(MaxNodeRows)
+	firstOffset := interval.Left % uint64(MaxNodeRows)
+	last := int(interval.Right) / int(MaxNodeRows)
+	lastOffset := interval.Right % uint64(MaxNodeRows)
+	var err error
+	if last == first {
+		node := tbl.inodes[first]
+		err = node.DeleteRows(&common.Range{
+			Left:  firstOffset,
+			Right: lastOffset,
+		})
+	} else {
+		node := tbl.inodes[first]
+		err = node.DeleteRows(&common.Range{
+			Left:  firstOffset,
+			Right: uint64(MaxNodeRows) - 1,
+		})
+		node = tbl.inodes[last]
+		err = node.DeleteRows(&common.Range{
+			Left:  0,
+			Right: lastOffset,
+		})
+		if last > first+1 {
+			for i := first + 1; i < last; i++ {
+				node = tbl.inodes[i]
+				if err = node.DeleteRows(&common.Range{
+					Left:  0,
+					Right: uint64(MaxNodeRows),
+				}); err != nil {
+					break
+				}
+			}
+		}
+	}
+	return err
+}
+
+func (tbl *Table) DebugLocalDeletes() string {
+	s := fmt.Sprintf("<Table-%d>[LocalDeletes]:\n", tbl.id)
+	for i, n := range tbl.inodes {
+		s = fmt.Sprintf("%s\t<INode-%d>: %s\n", s, i, n.DebugDeletes())
+	}
+	return s
+}
+
+func (tbl *Table) IsLocalDeleted(row uint64) bool {
+	npos := int(row) / int(MaxNodeRows)
+	noffset := uint32(row % uint64(MaxNodeRows))
+	n := tbl.inodes[npos]
+	return n.IsRowDeleted(noffset)
 }
 
 func (tbl *Table) UpdateValue(row uint32, col uint16, value interface{}) error {
