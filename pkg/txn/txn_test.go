@@ -47,17 +47,19 @@ func initTestPath(t *testing.T) string {
 	return dir
 }
 
+func makeTable(t *testing.T, dir string, colCnt int, bufSize uint64) *txnTable {
+	mgr := buffer.NewNodeManager(bufSize, nil)
+	driver := NewNodeDriver(dir, "store", nil)
+	id := common.NextGlobalSeqNum()
+	schema := metadata.MockSchemaAll(colCnt)
+	return NewTable(id, schema, driver, mgr)
+}
+
 func TestInsertNode(t *testing.T) {
 	dir := initTestPath(t)
-	mgr := buffer.NewNodeManager(common.K*6, nil)
-	driver := NewNodeDriver(dir, "store", nil)
-	defer driver.Close()
-
-	idAlloc := common.NewIdAlloctor(1)
-	schema := metadata.MockSchema(1)
-
-	tbl := NewTable(0, schema, driver, mgr)
-	bat := mock.MockBatch(schema.Types(), 1024)
+	tbl := makeTable(t, dir, 1, common.K*6)
+	defer tbl.driver.Close()
+	bat := mock.MockBatch(tbl.GetSchema().Types(), 1024)
 	p, _ := ants.NewPool(5)
 
 	var wg sync.WaitGroup
@@ -72,9 +74,9 @@ func TestInsertNode(t *testing.T) {
 				var cid common.ID
 				cid.BlockID = id
 				cid.Idx = uint16(i)
-				n := NewInsertNode(tbl, mgr, cid, driver)
+				n := NewInsertNode(tbl, tbl.nodesMgr, cid, tbl.driver)
 				nodes[i] = n
-				h := mgr.Pin(n)
+				h := tbl.nodesMgr.Pin(n)
 				var err error
 				if err = n.Expand(common.K*1, func() error {
 					n.Append(bat, 0)
@@ -97,6 +99,7 @@ func TestInsertNode(t *testing.T) {
 			atomic.AddUint64(&all, uint64(len(nodes)))
 		}
 	}
+	idAlloc := common.NewIdAlloctor(1)
 	for {
 		id := idAlloc.Alloc()
 		if id > 10 {
@@ -107,25 +110,21 @@ func TestInsertNode(t *testing.T) {
 	}
 	wg.Wait()
 	t.Log(all)
-	t.Log(mgr.String())
+	t.Log(tbl.nodesMgr.String())
 	t.Log(common.GPool.String())
 }
 
 func TestTable(t *testing.T) {
 	dir := initTestPath(t)
-	mgr := buffer.NewNodeManager(common.K*10, nil)
-	driver := NewNodeDriver(dir, "store", nil)
-	defer driver.Close()
-	schema := metadata.MockSchema(1)
-	bat := mock.MockBatch(schema.Types(), 1024)
+	tbl := makeTable(t, dir, 1, common.K*20)
+	defer tbl.driver.Close()
 
-	id := common.NextGlobalSeqNum()
-	tbl := NewTable(id, schema, driver, mgr)
+	bat := mock.MockBatch(tbl.GetSchema().Types(), 1024)
 	for i := 0; i < 100; i++ {
 		err := tbl.Append(bat)
 		assert.Nil(t, err)
 	}
-	t.Log(mgr.String())
+	t.Log(tbl.nodesMgr.String())
 	tbl.RangeDeleteLocalRows(1024+20, 1024+30)
 	tbl.RangeDeleteLocalRows(1024*2+38, 1024*2+40)
 	t.Log(t, tbl.LocalDeletesToString())
@@ -137,17 +136,13 @@ func TestTable(t *testing.T) {
 
 func TestUpdate(t *testing.T) {
 	dir := initTestPath(t)
-	mgr := buffer.NewNodeManager(common.K*10, nil)
-	driver := NewNodeDriver(dir, "store", nil)
-	defer driver.Close()
-	schema := metadata.MockSchema(2)
-	schema.PrimaryKey = 1
-	bat := mock.MockBatch(schema.Types(), 1024)
+	tbl := makeTable(t, dir, 2, common.K*10)
+	defer tbl.driver.Close()
+	tbl.GetSchema().PrimaryKey = 1
+	bat := mock.MockBatch(tbl.GetSchema().Types(), 1024)
 
 	bats := SplitBatch(bat, 2)
 
-	id := common.NextGlobalSeqNum()
-	tbl := NewTable(id, schema, driver, mgr)
 	for _, b := range bats {
 		err := tbl.BatchDedupLocal(b)
 		assert.Nil(t, err)
@@ -166,44 +161,16 @@ func TestUpdate(t *testing.T) {
 
 func TestAppend(t *testing.T) {
 	dir := initTestPath(t)
-	mgr := buffer.NewNodeManager(common.K*10, nil)
-	driver := NewNodeDriver(dir, "store", nil)
-	defer driver.Close()
+	tbl := makeTable(t, dir, 2, common.K*20)
+	defer tbl.driver.Close()
 
-	schema := metadata.MockSchemaAll(2)
-	schema.PrimaryKey = 1
+	tbl.GetSchema().PrimaryKey = 1
+
 	rows := uint64(MaxNodeRows) / 8 * 3
 	brows := rows / 3
-	bat := mock.MockBatch(schema.Types(), rows)
-
-	// v00 := vector.New(bat.Vecs[0].Typ)
-	// vector.Window(bat.Vecs[0], 0, int(brows), v00)
-	// v10 := vector.New(bat.Vecs[1].Typ)
-	// vector.Window(bat.Vecs[1], 0, int(brows), v10)
-	// bat1 := batch.New(true, bat.Attrs)
-	// bat1.Vecs[0] = v00
-	// bat1.Vecs[1] = v10
-
-	// v01 := vector.New(bat.Vecs[0].Typ)
-	// vector.Window(bat.Vecs[0], int(brows), 2*int(brows), v01)
-	// v11 := vector.New(bat.Vecs[1].Typ)
-	// vector.Window(bat.Vecs[1], int(brows), 2*int(brows), v11)
-	// bat2 := batch.New(true, bat.Attrs)
-	// bat2.Vecs[0] = v01
-	// bat2.Vecs[1] = v11
-
-	// v02 := vector.New(bat.Vecs[0].Typ)
-	// vector.Window(bat.Vecs[0], 2*int(brows), 3*int(brows), v02)
-	// v12 := vector.New(bat.Vecs[1].Typ)
-	// vector.Window(bat.Vecs[1], 2*int(brows), 3*int(brows), v12)
-	// bat3 := batch.New(true, bat.Attrs)
-	// bat3.Vecs[0] = v02
-	// bat3.Vecs[1] = v12
+	bat := mock.MockBatch(tbl.GetSchema().Types(), rows)
 
 	bats := SplitBatch(bat, 3)
-
-	id := common.NextGlobalSeqNum()
-	tbl := NewTable(id, schema, driver, mgr)
 
 	err := tbl.BatchDedupLocal(bats[0])
 	assert.Nil(t, err)
@@ -246,7 +213,6 @@ func TestIndex(t *testing.T) {
 
 	schema := metadata.MockSchemaAll(14)
 	bat := mock.MockBatch(schema.Types(), 500)
-	// bat2 := mock.MockBatch(schema.Types(), 100)
 
 	idx := NewSimpleTableIndex()
 	err = idx.BatchDedup(bat.Vecs[0])
@@ -276,4 +242,19 @@ func TestIndex(t *testing.T) {
 	assert.Equal(t, 2, gvec.Length(window))
 	err = idx.BatchDedup(window)
 	assert.NotNil(t, err)
+}
+
+func TestLoad(t *testing.T) {
+	dir := initTestPath(t)
+	tbl := makeTable(t, dir, 14, common.K*3000)
+	defer tbl.driver.Close()
+	tbl.GetSchema().PrimaryKey = 13
+
+	bat := mock.MockBatch(tbl.GetSchema().Types(), 200000)
+	bats := SplitBatch(bat, 4)
+
+	err := tbl.Append(bats[0])
+	assert.Nil(t, err)
+
+	// tbl2 := NewTable(common.NextGlobalSeqNum(), tbl.GetSchema(), tbl.driver, tbl.nodesMgr)
 }

@@ -84,12 +84,17 @@ func (tbl *txnTable) Append(data *batch.Batch) error {
 		if h == nil {
 			panic("unexpected")
 		}
-		defer h.Close()
-		err := tbl.appendable.Expand(common.K, func() error {
+		toAppend := tbl.appendable.PrepareAppend(data, offset)
+		size := EstimateSize(data, offset, toAppend)
+		logrus.Infof("Offset=%d, ToAppend=%d, EstimateSize=%d", offset, toAppend, size)
+		err := tbl.appendable.Expand(size, func() error {
 			appended, err = tbl.appendable.Append(data, offset)
 			return err
 		})
 		if err != nil {
+			logrus.Info(tbl.nodesMgr.String())
+			logrus.Error(err)
+			h.Close()
 			break
 		}
 		offset += appended
@@ -97,8 +102,10 @@ func (tbl *txnTable) Append(data *batch.Batch) error {
 		logrus.Infof("Appended: %d, Space:%d", appended, space)
 		start := tbl.rows
 		if err = tbl.index.BatchInsert(data.Vecs[tbl.schema.PrimaryKey], start, false); err != nil {
+			h.Close()
 			break
 		}
+		h.Close()
 		tbl.rows += appended
 		if space == 0 {
 			if err = tbl.registerInsertNode(); err != nil {

@@ -50,6 +50,7 @@ type Node interface {
 
 type InsertNode interface {
 	Node
+	PrepareAppend(data *gbat.Batch, offset uint32) (toAppend uint32)
 	Append(data *gbat.Batch, offset uint32) (appended uint32, err error)
 	RangeDelete(start, end uint32) error
 	IsRowDeleted(row uint32) bool
@@ -129,6 +130,16 @@ func (n *insertNode) OnUnload() {
 	}
 	e.WaitDone()
 	e.Free()
+}
+
+func (n *insertNode) PrepareAppend(data *gbat.Batch, offset uint32) uint32 {
+	length := gvec.Length(data.Vecs[0])
+	left := uint32(length) - offset
+	nodeLeft := MaxNodeRows - n.rows
+	if left <= nodeLeft {
+		return left
+	}
+	return nodeLeft
 }
 
 func (n *insertNode) Append(data *gbat.Batch, offset uint32) (uint32, error) {
