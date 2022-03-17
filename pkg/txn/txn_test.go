@@ -124,15 +124,9 @@ func TestTable(t *testing.T) {
 		assert.Nil(t, err)
 	}
 	t.Log(mgr.String())
-	tbl.DeleteRows(&common.Range{
-		Left:  1024 + 20,
-		Right: 1024 + 30,
-	})
-	tbl.DeleteRows(&common.Range{
-		Left:  1024*2 + 38,
-		Right: 1024*2 + 40,
-	})
-	t.Log(t, tbl.DebugLocalDeletes())
+	tbl.RangeDeleteLocalRows(1024+20, 1024+30)
+	tbl.RangeDeleteLocalRows(1024*2+38, 1024*2+40)
+	t.Log(t, tbl.PrintLocalDeletes())
 	assert.True(t, tbl.IsLocalDeleted(1024+20))
 	assert.True(t, tbl.IsLocalDeleted(1024+30))
 	assert.False(t, tbl.IsLocalDeleted(1024+19))

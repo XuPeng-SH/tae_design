@@ -84,38 +84,24 @@ func (tbl *Table) Append(data *batch.Batch) error {
 }
 
 // 1. Split the interval to multiple intervals, with each interval belongs to only one insert node
-// 2. For each new interval, call insert node DeleteRows
+// 2. For each new interval, call insert node RangeDelete
 // 3. Update the table index
-func (tbl *Table) DeleteRows(interval *common.Range) error {
-	first := int(interval.Left) / int(MaxNodeRows)
-	firstOffset := interval.Left % uint64(MaxNodeRows)
-	last := int(interval.Right) / int(MaxNodeRows)
-	lastOffset := interval.Right % uint64(MaxNodeRows)
+func (tbl *Table) RangeDeleteLocalRows(start, end uint32) error {
+	first, firstOffset := tbl.GetLocalPhysicalAxis(start)
+	last, lastOffset := tbl.GetLocalPhysicalAxis(end)
 	var err error
 	if last == first {
 		node := tbl.inodes[first]
-		err = node.DeleteRows(&common.Range{
-			Left:  firstOffset,
-			Right: lastOffset,
-		})
+		err = node.RangeDelete(firstOffset, lastOffset)
 	} else {
 		node := tbl.inodes[first]
-		err = node.DeleteRows(&common.Range{
-			Left:  firstOffset,
-			Right: uint64(MaxNodeRows) - 1,
-		})
+		err = node.RangeDelete(firstOffset, MaxNodeRows-1)
 		node = tbl.inodes[last]
-		err = node.DeleteRows(&common.Range{
-			Left:  0,
-			Right: lastOffset,
-		})
+		err = node.RangeDelete(0, lastOffset)
 		if last > first+1 {
 			for i := first + 1; i < last; i++ {
 				node = tbl.inodes[i]
-				if err = node.DeleteRows(&common.Range{
-					Left:  0,
-					Right: uint64(MaxNodeRows),
-				}); err != nil {
+				if err = node.RangeDelete(0, MaxNodeRows); err != nil {
 					break
 				}
 			}
@@ -124,27 +110,38 @@ func (tbl *Table) DeleteRows(interval *common.Range) error {
 	return err
 }
 
-func (tbl *Table) DebugLocalDeletes() string {
+func (tbl *Table) PrintLocalDeletes() string {
 	s := fmt.Sprintf("<Table-%d>[LocalDeletes]:\n", tbl.id)
 	for i, n := range tbl.inodes {
-		s = fmt.Sprintf("%s\t<INode-%d>: %s\n", s, i, n.DebugDeletes())
+		s = fmt.Sprintf("%s\t<INode-%d>: %s\n", s, i, n.PrintDeletes())
 	}
 	return s
 }
 
-func (tbl *Table) IsLocalDeleted(row uint64) bool {
-	npos := int(row) / int(MaxNodeRows)
-	noffset := uint32(row % uint64(MaxNodeRows))
+func (tbl *Table) IsLocalDeleted(row uint32) bool {
+	npos, noffset := tbl.GetLocalPhysicalAxis(row)
 	n := tbl.inodes[npos]
 	return n.IsRowDeleted(noffset)
 }
 
-func (tbl *Table) UpdateValue(row uint32, col uint16, value interface{}) error {
-	// TODO
-	// 1. Get insert node and offset in node
-	// 2. Get row
-	// 3. Build a new row
-	// 4. Delete the row in the node
-	// 5. Append the new row
+func (tbl *Table) GetLocalPhysicalAxis(row uint32) (int, uint32) {
+	npos := int(row) / int(MaxNodeRows)
+	noffset := row % uint32(MaxNodeRows)
+	return npos, noffset
+}
+
+// 1. Get insert node and offset in node
+// 2. Get row
+// 3. Build a new row
+// 4. Delete the row in the node
+// 5. Append the new row
+func (tbl *Table) UpdateLocalValue(row uint32, col uint16, value interface{}) error {
+	// npos, noffset := tbl.GetLocalPhysicalAxis(row)
+	// n := tbl.inodes[npos]
+	// tuples := n.GetTuples(noffset, noffset)
+	// err := n.RangeDelete(&common.Range{Left: uint64(noffset), Right: uint64(noffset)})
+	// if err != nil {
+	// 	return err
+	// }
 	return nil
 }

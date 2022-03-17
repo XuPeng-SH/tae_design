@@ -49,9 +49,9 @@ type Node interface {
 type InsertNode interface {
 	Node
 	Append(data *gbat.Batch, offset uint32) (appended uint32, err error)
-	DeleteRows(interval *common.Range) error
+	RangeDelete(start, end uint32) error
 	IsRowDeleted(row uint32) bool
-	DebugDeletes() string
+	PrintDeletes() string
 	GetSpace() uint32
 }
 
@@ -165,11 +165,11 @@ func (n *insertNode) GetSpace() uint32 {
 	return MaxNodeRows - n.rows
 }
 
-func (n *insertNode) DeleteRows(interval *common.Range) error {
+func (n *insertNode) RangeDelete(start, end uint32) error {
 	if n.deletes == nil {
 		n.deletes = roaring64.New()
 	}
-	n.deletes.AddRange(interval.Left, interval.Right+1)
+	n.deletes.AddRange(uint64(start), uint64(end)+1)
 	return nil
 }
 
@@ -180,7 +180,7 @@ func (n *insertNode) IsRowDeleted(row uint32) bool {
 	return n.deletes.Contains(uint64(row))
 }
 
-func (n *insertNode) DebugDeletes() string {
+func (n *insertNode) PrintDeletes() string {
 	if n.deletes == nil {
 		return fmt.Sprintf("NoDeletes")
 	}
