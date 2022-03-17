@@ -4,9 +4,10 @@ go 1.17
 
 require (
 	github.com/RoaringBitmap/roaring v0.9.4
-	github.com/jiangxinmeng1/logstore v0.0.0-20220316112349-4908cc432e81
+	github.com/jiangxinmeng1/logstore v0.0.0-20220317024418-f73b3d9931a1
 	github.com/matrixorigin/matrixone v0.3.1-0.20220316031920-c10d896170be
 	github.com/panjf2000/ants/v2 v2.4.7
+	github.com/sirupsen/logrus v1.8.1
 	github.com/stretchr/testify v1.7.0
 	github.com/yireyun/go-queue v0.0.0-20210520035143-72b190eafcba
 )
@@ -19,7 +20,6 @@ require (
 	github.com/mschoch/smat v0.2.0 // indirect
 	github.com/pierrec/lz4 v2.6.1+incompatible // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
-	github.com/sirupsen/logrus v1.8.1 // indirect
 	go.uber.org/atomic v1.7.0 // indirect
 	go.uber.org/multierr v1.6.0 // indirect
 	go.uber.org/zap v1.19.1 // indirect

@@ -6,6 +6,12 @@ import (
 	"github.com/jiangxinmeng1/logstore/pkg/store"
 )
 
+const (
+	GroupAC uint32 = iota + 10
+	GroupPC
+	GroupUC
+)
+
 type NodeDriver interface {
 	AppendEntry(NodeEntry) (uint64, error)
 	Close() error
@@ -34,9 +40,7 @@ func NewNodeDriverWithStore(impl store.Store, own bool) NodeDriver {
 }
 
 func (nd *nodeDriver) AppendEntry(e NodeEntry) (uint64, error) {
-	nd.Lock()
-	id, err := nd.impl.AppendEntry(e)
-	nd.Unlock()
+	id, err := nd.impl.AppendEntry(GroupUC, e)
 	return id, err
 }
 

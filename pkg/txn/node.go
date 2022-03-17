@@ -5,6 +5,7 @@ import (
 	"sync/atomic"
 
 	"github.com/jiangxinmeng1/logstore/pkg/entry"
+	"github.com/sirupsen/logrus"
 
 	"github.com/RoaringBitmap/roaring/roaring64"
 	gbat "github.com/matrixorigin/matrixone/pkg/container/batch"
@@ -60,13 +61,13 @@ type InsertNode interface {
 
 type insertNode struct {
 	*buffer.Node
-	driver   NodeDriver
-	data     batch.IBatch
-	sequence int64
-	typ      NodeState
-	deletes  *roaring64.Bitmap
-	rows     uint32
-	table    *Table
+	driver  NodeDriver
+	data    batch.IBatch
+	lsn     uint64
+	typ     NodeState
+	deletes *roaring64.Bitmap
+	rows    uint32
+	table   *Table
 }
 
 func NewInsertNode(tbl *Table, mgr base.INodeManager, id common.ID, driver NodeDriver) *insertNode {
@@ -76,7 +77,6 @@ func NewInsertNode(tbl *Table, mgr base.INodeManager, id common.ID, driver NodeD
 	impl.typ = PersistNode
 	impl.UnloadFunc = impl.OnUnload
 	impl.DestroyFunc = impl.OnDestory
-	impl.sequence = -1
 	impl.table = tbl
 	mgr.RegisterNode(impl)
 	return impl
@@ -112,7 +112,7 @@ func (n *insertNode) OnUnload() {
 	if n.IsTransient() {
 		return
 	}
-	if atomic.LoadInt64(&n.sequence) != -1 {
+	if atomic.LoadUint64(&n.lsn) != 0 {
 		return
 	}
 	if n.data == nil {
@@ -122,9 +122,9 @@ func (n *insertNode) OnUnload() {
 	if seq, err := n.driver.AppendEntry(e); err != nil {
 		panic(err)
 	} else {
-		atomic.StoreInt64(&n.sequence, int64(seq))
-		// id := n.GetID()
-		// logrus.Infof("Unloading %s", id.String())
+		atomic.StoreUint64(&n.lsn, seq)
+		id := n.GetID()
+		logrus.Infof("Unloading lsn=%d id=%s", seq, id.SegmentString())
 	}
 	e.WaitDone()
 	e.Free()
