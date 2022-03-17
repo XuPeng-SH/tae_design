@@ -6,6 +6,7 @@ import (
 	"github.com/matrixorigin/matrixone/pkg/container/batch"
 	"github.com/matrixorigin/matrixone/pkg/container/vector"
 	"github.com/matrixorigin/matrixone/pkg/vm/engine/aoe/storage/common"
+	"github.com/matrixorigin/matrixone/pkg/vm/engine/aoe/storage/metadata/v1"
 	"github.com/matrixorigin/matrixone/pkg/vm/engine/aoe/storage/mutation/buffer/base"
 	"github.com/sirupsen/logrus"
 )
@@ -20,18 +21,28 @@ type Table struct {
 	appendable InsertNode
 	driver     NodeDriver
 	id         uint64
+	schema     *metadata.Schema
 	nodesMgr   base.INodeManager
 	index      TableIndex
 }
 
-func NewTable(id uint64, driver NodeDriver, mgr base.INodeManager) *Table {
+func NewTable(id uint64, schema *metadata.Schema, driver NodeDriver, mgr base.INodeManager) *Table {
 	tbl := &Table{
 		inodes:   make([]InsertNode, 0),
 		nodesMgr: mgr,
 		id:       id,
+		schema:   schema,
 		driver:   driver,
 	}
 	return tbl
+}
+
+func (tbl *Table) GetSchema() *metadata.Schema {
+	return tbl.schema
+}
+
+func (tbl *Table) GetID() uint64 {
+	return tbl.id
 }
 
 func (tbl *Table) registerInsertNode() error {
@@ -39,7 +50,7 @@ func (tbl *Table) registerInsertNode() error {
 		TableID:   tbl.id,
 		SegmentID: uint64(len(tbl.inodes)),
 	}
-	n := NewInsertNode(tbl.nodesMgr, id, tbl.driver)
+	n := NewInsertNode(tbl, tbl.nodesMgr, id, tbl.driver)
 	tbl.appendable = n
 	tbl.inodes = append(tbl.inodes, n)
 	return nil
@@ -136,12 +147,23 @@ func (tbl *Table) GetLocalPhysicalAxis(row uint32) (int, uint32) {
 // 4. Delete the row in the node
 // 5. Append the new row
 func (tbl *Table) UpdateLocalValue(row uint32, col uint16, value interface{}) error {
-	// npos, noffset := tbl.GetLocalPhysicalAxis(row)
-	// n := tbl.inodes[npos]
-	// tuples := n.GetTuples(noffset, noffset)
-	// err := n.RangeDelete(&common.Range{Left: uint64(noffset), Right: uint64(noffset)})
-	// if err != nil {
-	// 	return err
-	// }
-	return nil
+	npos, noffset := tbl.GetLocalPhysicalAxis(row)
+	n := tbl.inodes[npos]
+	window, err := n.Window(uint32(noffset), uint32(noffset))
+	if err != nil {
+		return err
+	}
+	if err = n.RangeDelete(uint32(noffset), uint32(noffset)); err != nil {
+		return err
+	}
+	err = tbl.Append(window)
+	return err
+}
+
+func (tbl *Table) Rows() uint32 {
+	cnt := len(tbl.inodes)
+	if cnt == 0 {
+		return 0
+	}
+	return (uint32(cnt)-1)*MaxNodeRows + tbl.inodes[cnt-1].Rows()
 }

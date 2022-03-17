@@ -8,6 +8,7 @@ import (
 
 	"github.com/RoaringBitmap/roaring/roaring64"
 	gbat "github.com/matrixorigin/matrixone/pkg/container/batch"
+	gvec "github.com/matrixorigin/matrixone/pkg/container/vector"
 
 	"github.com/matrixorigin/matrixone/pkg/vm/engine/aoe/storage/common"
 	"github.com/matrixorigin/matrixone/pkg/vm/engine/aoe/storage/container/batch"
@@ -52,7 +53,9 @@ type InsertNode interface {
 	RangeDelete(start, end uint32) error
 	IsRowDeleted(row uint32) bool
 	PrintDeletes() string
+	Window(start, end uint32) (*gbat.Batch, error)
 	GetSpace() uint32
+	Rows() uint32
 }
 
 type insertNode struct {
@@ -63,9 +66,10 @@ type insertNode struct {
 	typ      NodeState
 	deletes  *roaring64.Bitmap
 	rows     uint32
+	table    *Table
 }
 
-func NewInsertNode(mgr base.INodeManager, id common.ID, driver NodeDriver) *insertNode {
+func NewInsertNode(tbl *Table, mgr base.INodeManager, id common.ID, driver NodeDriver) *insertNode {
 	impl := new(insertNode)
 	impl.Node = buffer.NewNode(impl, mgr, id, 0)
 	impl.driver = driver
@@ -73,6 +77,7 @@ func NewInsertNode(mgr base.INodeManager, id common.ID, driver NodeDriver) *inse
 	impl.UnloadFunc = impl.OnUnload
 	impl.DestroyFunc = impl.OnDestory
 	impl.sequence = -1
+	impl.table = tbl
 	mgr.RegisterNode(impl)
 	return impl
 }
@@ -165,6 +170,10 @@ func (n *insertNode) GetSpace() uint32 {
 	return MaxNodeRows - n.rows
 }
 
+func (n *insertNode) Rows() uint32 {
+	return n.rows
+}
+
 func (n *insertNode) RangeDelete(start, end uint32) error {
 	if n.deletes == nil {
 		n.deletes = roaring64.New()
@@ -185,6 +194,26 @@ func (n *insertNode) PrintDeletes() string {
 		return fmt.Sprintf("NoDeletes")
 	}
 	return n.deletes.String()
+}
+
+// TODO: Rewrite later
+func (n *insertNode) Window(start, end uint32) (*gbat.Batch, error) {
+	attrs := make([]string, len(n.table.schema.ColDefs))
+	for i, _ := range attrs {
+		attrs[i] = n.table.schema.ColDefs[i].Name
+	}
+	ret := gbat.New(true, attrs)
+	for i, attr := range n.data.GetAttrs() {
+		src, err := n.data.GetVectorByAttr(attr)
+		if err != nil {
+			return nil, err
+		}
+		srcVec, _ := src.GetLatestView().CopyToVector()
+		destVec := gvec.New(srcVec.Typ)
+		gvec.Window(srcVec, int(start), int(end)+1, destVec)
+		ret.Vecs[i] = destVec
+	}
+	return ret, nil
 }
 
 // TODO: Engine merge delete info or just provide raw delete info?

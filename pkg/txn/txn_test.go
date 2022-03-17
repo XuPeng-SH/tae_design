@@ -54,6 +54,8 @@ func TestInsertNode(t *testing.T) {
 
 	idAlloc := common.NewIdAlloctor(1)
 	schema := metadata.MockSchema(1)
+
+	tbl := NewTable(0, schema, driver, mgr)
 	bat := mock.MockBatch(schema.Types(), 1024)
 	p, _ := ants.NewPool(5)
 
@@ -69,7 +71,7 @@ func TestInsertNode(t *testing.T) {
 				var cid common.ID
 				cid.BlockID = id
 				cid.Idx = uint16(i)
-				n := NewInsertNode(mgr, cid, driver)
+				n := NewInsertNode(tbl, mgr, cid, driver)
 				nodes[i] = n
 				h := mgr.Pin(n)
 				var err error
@@ -113,12 +115,11 @@ func TestTable(t *testing.T) {
 	mgr := buffer.NewNodeManager(common.K*10, nil)
 	driver := NewNodeDriver(dir, "store", nil)
 	defer driver.Close()
-
 	schema := metadata.MockSchema(1)
 	bat := mock.MockBatch(schema.Types(), 1024)
 
 	id := common.NextGlobalSeqNum()
-	tbl := NewTable(id, driver, mgr)
+	tbl := NewTable(id, schema, driver, mgr)
 	for i := 0; i < 100; i++ {
 		err := tbl.Append(bat)
 		assert.Nil(t, err)
@@ -131,4 +132,28 @@ func TestTable(t *testing.T) {
 	assert.True(t, tbl.IsLocalDeleted(1024+30))
 	assert.False(t, tbl.IsLocalDeleted(1024+19))
 	assert.False(t, tbl.IsLocalDeleted(1024+31))
+}
+
+func TestUpdate(t *testing.T) {
+	dir := initTestPath(t)
+	mgr := buffer.NewNodeManager(common.K*10, nil)
+	driver := NewNodeDriver(dir, "store", nil)
+	defer driver.Close()
+	schema := metadata.MockSchema(1)
+	bat := mock.MockBatch(schema.Types(), 1024)
+
+	id := common.NextGlobalSeqNum()
+	tbl := NewTable(id, schema, driver, mgr)
+	for i := 0; i < 2; i++ {
+		err := tbl.Append(bat)
+		assert.Nil(t, err)
+	}
+
+	row := uint32(999)
+	assert.False(t, tbl.IsLocalDeleted(row))
+	rows := tbl.Rows()
+	err := tbl.UpdateLocalValue(row, 0, 999)
+	assert.Nil(t, err)
+	assert.True(t, tbl.IsLocalDeleted(row))
+	assert.Equal(t, rows+1, tbl.Rows())
 }
