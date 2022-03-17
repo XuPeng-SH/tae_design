@@ -5,16 +5,12 @@ import (
 
 	"github.com/matrixorigin/matrixone/pkg/container/batch"
 	"github.com/matrixorigin/matrixone/pkg/container/vector"
+	gvec "github.com/matrixorigin/matrixone/pkg/container/vector"
 	"github.com/matrixorigin/matrixone/pkg/vm/engine/aoe/storage/common"
 	"github.com/matrixorigin/matrixone/pkg/vm/engine/aoe/storage/metadata/v1"
 	"github.com/matrixorigin/matrixone/pkg/vm/engine/aoe/storage/mutation/buffer/base"
 	"github.com/sirupsen/logrus"
 )
-
-type TableIndex interface {
-	Insert([]byte, uint32) error
-	Delete([]byte)
-}
 
 type Table struct {
 	inodes     []InsertNode
@@ -33,6 +29,7 @@ func NewTable(id uint64, schema *metadata.Schema, driver NodeDriver, mgr base.IN
 		id:       id,
 		schema:   schema,
 		driver:   driver,
+		index:    NewSimpleTableIndex(),
 	}
 	return tbl
 }
@@ -166,4 +163,8 @@ func (tbl *Table) Rows() uint32 {
 		return 0
 	}
 	return (uint32(cnt)-1)*MaxNodeRows + tbl.inodes[cnt-1].Rows()
+}
+
+func (tbl *Table) BatchDedupLocal(col *gvec.Vector) error {
+	return tbl.index.BatchDedup(col)
 }
