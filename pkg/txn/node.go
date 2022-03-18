@@ -126,6 +126,12 @@ func (n *insertNode) OnLoad() {
 		panic(err)
 	}
 	logrus.Infof("GetPayloadSize=%d", e.GetPayloadSize())
+	buf := e.GetPayload()
+	n.data, err = UnmarshalBatch(n.table.GetSchema().Types(), buf, int(n.rows))
+	if err != nil {
+		panic(err)
+	}
+	// v, err := n.GetValue(n.table.GetSchema().PrimaryKey, 10)
 }
 
 func (n *insertNode) OnUnload() {

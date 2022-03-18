@@ -9,6 +9,7 @@ import (
 	gvec "github.com/matrixorigin/matrixone/pkg/container/vector"
 	"github.com/matrixorigin/matrixone/pkg/vm/engine/aoe/storage/container/batch"
 	"github.com/matrixorigin/matrixone/pkg/vm/engine/aoe/storage/container/vector"
+	"github.com/sirupsen/logrus"
 )
 
 func MarshalBatch(data batch.IBatch) ([]byte, error) {
@@ -17,29 +18,69 @@ func MarshalBatch(data batch.IBatch) ([]byte, error) {
 		return buf, nil
 	}
 	var bbuf bytes.Buffer
-	vecs := make([]*gvec.Vector, 0)
+	vecs := make([]vector.IVectorNode, 0)
 	for _, attr := range data.GetAttrs() {
 		vec, err := data.GetVectorByAttr(attr)
 		if err != nil {
 			return buf, err
 		}
-		v, err := vec.GetLatestView().CopyToVector()
-		if err != nil {
-			return buf, err
-		}
+		v := vec.(vector.IVectorNode)
+		// v, err := vec.GetLatestView().CopyToVector()
+		// if err != nil {
+		// 	return buf, err
+		// }
 		vecs = append(vecs, v)
 	}
 	binary.Write(&bbuf, binary.BigEndian, uint16(len(vecs)))
-	for _, vec := range vecs {
-		vecBuf, _ := vec.Show()
+	bufs := make([][]byte, len(vecs))
+	for i, vec := range vecs {
+		// vecBuf, _ := vec.Show()
+		vecBuf, _ := vec.Marshal()
+		bufs[i] = vecBuf
 		binary.Write(&bbuf, binary.BigEndian, uint32(len(vecBuf)))
-		bbuf.Write(vecBuf)
+	}
+	for _, colBuf := range bufs {
+		bbuf.Write(colBuf)
 	}
 	return bbuf.Bytes(), nil
 }
 
-func UnmarshalBatch(data batch.IBatch, buf []byte) error {
-	return nil
+func UnmarshalBatch(types []types.Type, buf []byte, rows int) (batch.IBatch, error) {
+	nbuf := bytes.NewBuffer(buf)
+	var vecs uint16
+	var err error
+	pos := 0
+	if binary.Read(nbuf, binary.BigEndian, &vecs); err != nil {
+		return nil, err
+	}
+	pos += 2
+	logrus.Info(pos)
+	lens := make([]uint32, vecs)
+	for i := uint16(0); i < vecs; i++ {
+		if err = binary.Read(nbuf, binary.BigEndian, &lens[i]); err != nil {
+			return nil, err
+		}
+		pos += 4
+	}
+
+	attrs := make([]int, vecs)
+	cols := make([]vector.IVector, vecs)
+	for i, colType := range types {
+		col := vector.NewVector(colType, uint64(rows))
+		cols[i] = col
+		attrs[i] = i
+		if col.(vector.IVectorNode).Unmarshal(buf[pos : pos+int(lens[i])]); err != nil {
+			return nil, err
+		}
+		pos += int(lens[i])
+	}
+
+	data, err := batch.NewBatch(attrs, cols)
+	if err != nil {
+		return nil, err
+	}
+
+	return data, nil
 }
 
 func GetValue(col *gvec.Vector, row uint32) interface{} {

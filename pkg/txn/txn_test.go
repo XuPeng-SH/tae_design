@@ -257,8 +257,8 @@ func TestLoad(t *testing.T) {
 	assert.Nil(t, err)
 
 	t.Log(tbl.nodesMgr.String())
-	tbl.GetLocalValue(100, 0)
+	v, err := tbl.GetLocalValue(100, 0)
+	assert.Nil(t, err)
 	t.Log(tbl.nodesMgr.String())
-
-	// tbl2 := NewTable(common.NextGlobalSeqNum(), tbl.GetSchema(), tbl.driver, tbl.nodesMgr)
+	t.Logf("Row %d, Col %d, Val %v", 100, 0, v)
 }
