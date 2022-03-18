@@ -217,12 +217,12 @@ func TestIndex(t *testing.T) {
 	idx := NewSimpleTableIndex()
 	err = idx.BatchDedup(bat.Vecs[0])
 	assert.Nil(t, err)
-	err = idx.BatchInsert(bat.Vecs[0], 0, true)
+	err = idx.BatchInsert(bat.Vecs[0], 0, gvec.Length(bat.Vecs[0]), 0, true)
 	assert.NotNil(t, err)
 
 	err = idx.BatchDedup(bat.Vecs[1])
 	assert.Nil(t, err)
-	err = idx.BatchInsert(bat.Vecs[1], 0, true)
+	err = idx.BatchInsert(bat.Vecs[1], 0, gvec.Length(bat.Vecs[1]), 0, true)
 	assert.Nil(t, err)
 
 	window := gvec.New(bat.Vecs[1].Typ)
@@ -234,7 +234,7 @@ func TestIndex(t *testing.T) {
 	idx = NewSimpleTableIndex()
 	err = idx.BatchDedup(bat.Vecs[12])
 	assert.Nil(t, err)
-	err = idx.BatchInsert(bat.Vecs[12], 0, true)
+	err = idx.BatchInsert(bat.Vecs[12], 0, gvec.Length(bat.Vecs[12]), 0, true)
 	assert.Nil(t, err)
 
 	window = gvec.New(bat.Vecs[12].Typ)
@@ -246,12 +246,17 @@ func TestIndex(t *testing.T) {
 
 func TestLoad(t *testing.T) {
 	dir := initTestPath(t)
-	tbl := makeTable(t, dir, 14, common.K*1500)
+	tbl := makeTable(t, dir, 14, common.M*1500)
 	defer tbl.driver.Close()
 	tbl.GetSchema().PrimaryKey = 13
 
 	bat := mock.MockBatch(tbl.GetSchema().Types(), 200000)
-	bats := SplitBatch(bat, 4)
+	bats := SplitBatch(bat, 5)
+	// for _, b := range bats {
+	// 	tbl.Append(b)
+	// }
+	// t.Log(tbl.Rows())
+	// t.Log(len(tbl.inodes))
 
 	err := tbl.Append(bats[0])
 	assert.Nil(t, err)

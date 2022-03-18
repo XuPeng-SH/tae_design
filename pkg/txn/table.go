@@ -97,15 +97,15 @@ func (tbl *txnTable) Append(data *batch.Batch) error {
 			h.Close()
 			break
 		}
-		offset += appended
 		space := tbl.appendable.GetSpace()
 		logrus.Infof("Appended: %d, Space:%d", appended, space)
 		start := tbl.rows
-		if err = tbl.index.BatchInsert(data.Vecs[tbl.schema.PrimaryKey], start, false); err != nil {
+		if err = tbl.index.BatchInsert(data.Vecs[tbl.schema.PrimaryKey], int(offset), int(appended), start, false); err != nil {
 			h.Close()
 			break
 		}
 		h.Close()
+		offset += appended
 		tbl.rows += appended
 		if space == 0 {
 			if err = tbl.registerInsertNode(); err != nil {

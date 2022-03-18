@@ -16,7 +16,7 @@ var (
 
 type TableIndex interface {
 	BatchDedup(*gvec.Vector) error
-	BatchInsert(*gvec.Vector, uint32, bool) error
+	BatchInsert(*gvec.Vector, int, int, uint32, bool) error
 	Insert(interface{}, uint32) error
 	Delete(interface{}) error
 	Find(interface{}) (uint32, error)
@@ -78,7 +78,7 @@ func (idx *simpleTableIndex) Find(v interface{}) (uint32, error) {
 	return uint32(row), nil
 }
 
-func (idx *simpleTableIndex) BatchInsert(col *gvec.Vector, row uint32, dedupCol bool) error {
+func (idx *simpleTableIndex) BatchInsert(col *gvec.Vector, start, count int, row uint32, dedupCol bool) error {
 	idx.Lock()
 	defer idx.Unlock()
 	vals := col.Col
@@ -87,14 +87,14 @@ func (idx *simpleTableIndex) BatchInsert(col *gvec.Vector, row uint32, dedupCol 
 		data := vals.([]int8)
 		if dedupCol {
 			set := make(map[int8]bool)
-			for _, v := range data {
+			for _, v := range data[start : start+count] {
 				if _, ok := set[v]; ok {
 					return ErrDuplicated
 				}
 				set[v] = true
 			}
 		}
-		for _, v := range data {
+		for _, v := range data[start : start+count] {
 			idx.tree[v] = row
 			row++
 		}
@@ -102,14 +102,14 @@ func (idx *simpleTableIndex) BatchInsert(col *gvec.Vector, row uint32, dedupCol 
 		data := vals.([]int16)
 		if dedupCol {
 			set := make(map[int16]bool)
-			for _, v := range data {
+			for _, v := range data[start : start+count] {
 				if _, ok := set[v]; ok {
 					return ErrDuplicated
 				}
 				set[v] = true
 			}
 		}
-		for _, v := range data {
+		for _, v := range data[start : start+count] {
 			idx.tree[v] = row
 			row++
 		}
@@ -117,14 +117,14 @@ func (idx *simpleTableIndex) BatchInsert(col *gvec.Vector, row uint32, dedupCol 
 		data := vals.([]int32)
 		if dedupCol {
 			set := make(map[int32]bool)
-			for _, v := range data {
+			for _, v := range data[start : start+count] {
 				if _, ok := set[v]; ok {
 					return ErrDuplicated
 				}
 				set[v] = true
 			}
 		}
-		for _, v := range data {
+		for _, v := range data[start : start+count] {
 			idx.tree[v] = row
 			row++
 		}
@@ -132,14 +132,14 @@ func (idx *simpleTableIndex) BatchInsert(col *gvec.Vector, row uint32, dedupCol 
 		data := vals.([]int64)
 		if dedupCol {
 			set := make(map[int64]bool)
-			for _, v := range data {
+			for _, v := range data[start : start+count] {
 				if _, ok := set[v]; ok {
 					return ErrDuplicated
 				}
 				set[v] = true
 			}
 		}
-		for _, v := range data {
+		for _, v := range data[start : start+count] {
 			idx.tree[v] = row
 			row++
 		}
@@ -147,14 +147,14 @@ func (idx *simpleTableIndex) BatchInsert(col *gvec.Vector, row uint32, dedupCol 
 		data := vals.([]uint8)
 		if dedupCol {
 			set := make(map[uint8]bool)
-			for _, v := range data {
+			for _, v := range data[start : start+count] {
 				if _, ok := set[v]; ok {
 					return ErrDuplicated
 				}
 				set[v] = true
 			}
 		}
-		for _, v := range data {
+		for _, v := range data[start : start+count] {
 			idx.tree[v] = row
 			row++
 		}
@@ -162,14 +162,14 @@ func (idx *simpleTableIndex) BatchInsert(col *gvec.Vector, row uint32, dedupCol 
 		data := vals.([]uint16)
 		if dedupCol {
 			set := make(map[uint16]bool)
-			for _, v := range data {
+			for _, v := range data[start : start+count] {
 				if _, ok := set[v]; ok {
 					return ErrDuplicated
 				}
 				set[v] = true
 			}
 		}
-		for _, v := range data {
+		for _, v := range data[start : start+count] {
 			idx.tree[v] = row
 			row++
 		}
@@ -177,14 +177,14 @@ func (idx *simpleTableIndex) BatchInsert(col *gvec.Vector, row uint32, dedupCol 
 		data := vals.([]uint32)
 		if dedupCol {
 			set := make(map[uint32]bool)
-			for _, v := range data {
+			for _, v := range data[start : start+count] {
 				if _, ok := set[v]; ok {
 					return ErrDuplicated
 				}
 				set[v] = true
 			}
 		}
-		for _, v := range data {
+		for _, v := range data[start : start+count] {
 			idx.tree[v] = row
 			row++
 		}
@@ -192,14 +192,14 @@ func (idx *simpleTableIndex) BatchInsert(col *gvec.Vector, row uint32, dedupCol 
 		data := vals.([]uint64)
 		if dedupCol {
 			set := make(map[uint64]bool)
-			for _, v := range data {
+			for _, v := range data[start : start+count] {
 				if _, ok := set[v]; ok {
 					return ErrDuplicated
 				}
 				set[v] = true
 			}
 		}
-		for _, v := range data {
+		for _, v := range data[start : start+count] {
 			idx.tree[v] = row
 			row++
 		}
@@ -207,14 +207,14 @@ func (idx *simpleTableIndex) BatchInsert(col *gvec.Vector, row uint32, dedupCol 
 		data := vals.([]types.Decimal)
 		if dedupCol {
 			set := make(map[types.Decimal]bool)
-			for _, v := range data {
+			for _, v := range data[start : start+count] {
 				if _, ok := set[v]; ok {
 					return ErrDuplicated
 				}
 				set[v] = true
 			}
 		}
-		for _, v := range data {
+		for _, v := range data[start : start+count] {
 			idx.tree[v] = row
 			row++
 		}
@@ -222,14 +222,14 @@ func (idx *simpleTableIndex) BatchInsert(col *gvec.Vector, row uint32, dedupCol 
 		data := vals.([]float32)
 		if dedupCol {
 			set := make(map[float32]bool)
-			for _, v := range data {
+			for _, v := range data[start : start+count] {
 				if _, ok := set[v]; ok {
 					return ErrDuplicated
 				}
 				set[v] = true
 			}
 		}
-		for _, v := range data {
+		for _, v := range data[start : start+count] {
 			idx.tree[v] = row
 			row++
 		}
@@ -237,14 +237,14 @@ func (idx *simpleTableIndex) BatchInsert(col *gvec.Vector, row uint32, dedupCol 
 		data := vals.([]float64)
 		if dedupCol {
 			set := make(map[float64]bool)
-			for _, v := range data {
+			for _, v := range data[start : start+count] {
 				if _, ok := set[v]; ok {
 					return ErrDuplicated
 				}
 				set[v] = true
 			}
 		}
-		for _, v := range data {
+		for _, v := range data[start : start+count] {
 			idx.tree[v] = row
 			row++
 		}
@@ -252,14 +252,14 @@ func (idx *simpleTableIndex) BatchInsert(col *gvec.Vector, row uint32, dedupCol 
 		data := vals.([]types.Date)
 		if dedupCol {
 			set := make(map[types.Date]bool)
-			for _, v := range data {
+			for _, v := range data[start : start+count] {
 				if _, ok := set[v]; ok {
 					return ErrDuplicated
 				}
 				set[v] = true
 			}
 		}
-		for _, v := range data {
+		for _, v := range data[start : start+count] {
 			idx.tree[v] = row
 			row++
 		}
@@ -267,14 +267,14 @@ func (idx *simpleTableIndex) BatchInsert(col *gvec.Vector, row uint32, dedupCol 
 		data := vals.([]types.Datetime)
 		if dedupCol {
 			set := make(map[types.Datetime]bool)
-			for _, v := range data {
+			for _, v := range data[start : start+count] {
 				if _, ok := set[v]; ok {
 					return ErrDuplicated
 				}
 				set[v] = true
 			}
 		}
-		for _, v := range data {
+		for _, v := range data[start : start+count] {
 			idx.tree[v] = row
 			row++
 		}
@@ -282,8 +282,8 @@ func (idx *simpleTableIndex) BatchInsert(col *gvec.Vector, row uint32, dedupCol 
 		data := vals.(*types.Bytes)
 		if dedupCol {
 			set := make(map[string]bool)
-			for i, s := range data.Offsets {
-				e := s + data.Lengths[i]
+			for i, s := range data.Offsets[start : start+count] {
+				e := s + data.Lengths[i+start]
 				v := string(data.Data[s:e])
 				if _, ok := set[v]; ok {
 					return ErrDuplicated
@@ -291,8 +291,8 @@ func (idx *simpleTableIndex) BatchInsert(col *gvec.Vector, row uint32, dedupCol 
 				set[v] = true
 			}
 		}
-		for i, s := range data.Offsets {
-			e := s + data.Lengths[i]
+		for i, s := range data.Offsets[start : start+count] {
+			e := s + data.Lengths[i+start]
 			v := string(data.Data[s:e])
 			idx.tree[v] = row
 			row++
