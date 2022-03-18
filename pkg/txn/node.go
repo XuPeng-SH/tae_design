@@ -79,6 +79,7 @@ func NewInsertNode(tbl Table, mgr base.INodeManager, id common.ID, driver NodeDr
 	impl.typ = PersistNode
 	impl.UnloadFunc = impl.OnUnload
 	impl.DestroyFunc = impl.OnDestory
+	impl.LoadFunc = impl.OnLoad
 	impl.table = tbl
 	mgr.RegisterNode(impl)
 	return impl
@@ -110,6 +111,23 @@ func (n *insertNode) OnDestory() {
 		n.data.Close()
 	}
 }
+
+func (n *insertNode) OnLoad() {
+	if n.IsTransient() {
+		return
+	}
+
+	lsn := atomic.LoadUint64(&n.lsn)
+	if lsn == 0 {
+		return
+	}
+	e, err := n.driver.LoadEntry(GroupUC, lsn)
+	if err != nil {
+		panic(err)
+	}
+	logrus.Infof("GetPayloadSize=%d", e.GetPayloadSize())
+}
+
 func (n *insertNode) OnUnload() {
 	if n.IsTransient() {
 		return

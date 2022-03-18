@@ -246,7 +246,7 @@ func TestIndex(t *testing.T) {
 
 func TestLoad(t *testing.T) {
 	dir := initTestPath(t)
-	tbl := makeTable(t, dir, 14, common.K*3000)
+	tbl := makeTable(t, dir, 14, common.K*1500)
 	defer tbl.driver.Close()
 	tbl.GetSchema().PrimaryKey = 13
 
@@ -255,6 +255,10 @@ func TestLoad(t *testing.T) {
 
 	err := tbl.Append(bats[0])
 	assert.Nil(t, err)
+
+	t.Log(tbl.nodesMgr.String())
+	tbl.GetLocalValue(100, 0)
+	t.Log(tbl.nodesMgr.String())
 
 	// tbl2 := NewTable(common.NextGlobalSeqNum(), tbl.GetSchema(), tbl.driver, tbl.nodesMgr)
 }

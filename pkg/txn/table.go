@@ -200,3 +200,11 @@ func (tbl *txnTable) BatchDedupLocal(bat *gbat.Batch) error {
 func (tbl *txnTable) BatchDedupLocalByCol(col *gvec.Vector) error {
 	return tbl.index.BatchDedup(col)
 }
+
+func (tbl *txnTable) GetLocalValue(row uint32, col uint16) (interface{}, error) {
+	npos, noffset := tbl.GetLocalPhysicalAxis(row)
+	n := tbl.inodes[npos]
+	h := tbl.nodesMgr.Pin(n)
+	defer h.Close()
+	return n.GetValue(int(col), noffset)
+}

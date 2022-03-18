@@ -14,6 +14,7 @@ const (
 
 type NodeDriver interface {
 	AppendEntry(NodeEntry) (uint64, error)
+	LoadEntry(groupId uint32, lsn uint64) (NodeEntry, error)
 	Close() error
 }
 
@@ -37,6 +38,10 @@ func NewNodeDriverWithStore(impl store.Store, own bool) NodeDriver {
 	driver.impl = impl
 	driver.own = own
 	return driver
+}
+
+func (nd *nodeDriver) LoadEntry(groupId uint32, lsn uint64) (NodeEntry, error) {
+	return nd.impl.Load(groupId, lsn)
 }
 
 func (nd *nodeDriver) AppendEntry(e NodeEntry) (uint64, error) {
