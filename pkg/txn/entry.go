@@ -1,6 +1,8 @@
 package txn
 
-import "github.com/jiangxinmeng1/logstore/pkg/entry"
+import (
+	"github.com/jiangxinmeng1/logstore/pkg/entry"
+)
 
 type NodeEntry entry.Entry
 

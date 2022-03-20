@@ -1,6 +1,7 @@
 package txn
 
 import (
+	"bytes"
 	"fmt"
 	"sync/atomic"
 
@@ -87,10 +88,12 @@ func NewInsertNode(tbl Table, mgr base.INodeManager, id common.ID, driver NodeDr
 
 func (n *insertNode) Type() NodeType { return NTInsert }
 
-func (n *insertNode) makeEntry() NodeEntry {
+func (n *insertNode) makeLogEntry() NodeEntry {
+	cmd := NewBatchCmd(n.data, n.table.GetSchema().Types())
+	buf, err := cmd.Marshal()
 	e := entry.GetBase()
 	e.SetType(ETInsertNode)
-	buf, err := MarshalBatch(n.data)
+	// buf, err := MarshalBatch(n.data)
 	if err != nil {
 		panic(err)
 	}
@@ -127,15 +130,17 @@ func (n *insertNode) OnLoad() {
 	}
 	logrus.Infof("GetPayloadSize=%d", e.GetPayloadSize())
 	buf := e.GetPayload()
-	n.data, err = UnmarshalBatch(n.table.GetSchema().Types(), buf, int(n.rows))
+	r := bytes.NewBuffer(buf)
+	cmd, err := BuildCommandFrom(r)
 	if err != nil {
 		panic(err)
 	}
+	n.data = cmd.(*BatchCmd).Bat
 	// v, err := n.GetValue(n.table.GetSchema().PrimaryKey, 10)
 }
 
 func (n *insertNode) OnUnload() {
-	if n.IsTransient() {
+	if n.IsTransient() || n.table.IsCommitted() || n.table.IsRollbacked() {
 		return
 	}
 	if atomic.LoadUint64(&n.lsn) != 0 {
@@ -144,8 +149,8 @@ func (n *insertNode) OnUnload() {
 	if n.data == nil {
 		return
 	}
-	e := n.makeEntry()
-	if seq, err := n.driver.AppendEntry(e); err != nil {
+	e := n.makeLogEntry()
+	if seq, err := n.driver.AppendEntry(GroupUC, e); err != nil {
 		panic(err)
 	} else {
 		atomic.StoreUint64(&n.lsn, seq)

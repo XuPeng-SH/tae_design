@@ -13,7 +13,7 @@ const (
 )
 
 type NodeDriver interface {
-	AppendEntry(NodeEntry) (uint64, error)
+	AppendEntry(uint32, NodeEntry) (uint64, error)
 	LoadEntry(groupId uint32, lsn uint64) (NodeEntry, error)
 	Close() error
 }
@@ -44,8 +44,8 @@ func (nd *nodeDriver) LoadEntry(groupId uint32, lsn uint64) (NodeEntry, error) {
 	return nd.impl.Load(groupId, lsn)
 }
 
-func (nd *nodeDriver) AppendEntry(e NodeEntry) (uint64, error) {
-	id, err := nd.impl.AppendEntry(GroupUC, e)
+func (nd *nodeDriver) AppendEntry(group uint32, e NodeEntry) (uint64, error) {
+	id, err := nd.impl.AppendEntry(group, e)
 	return id, err
 }
 

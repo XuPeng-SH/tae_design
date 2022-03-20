@@ -3,16 +3,18 @@ package txn
 import (
 	"bytes"
 	"encoding/binary"
+	"io"
 
 	gbat "github.com/matrixorigin/matrixone/pkg/container/batch"
 	"github.com/matrixorigin/matrixone/pkg/container/types"
 	gvec "github.com/matrixorigin/matrixone/pkg/container/vector"
+	"github.com/matrixorigin/matrixone/pkg/encoding"
 	"github.com/matrixorigin/matrixone/pkg/vm/engine/aoe/storage/container/batch"
 	"github.com/matrixorigin/matrixone/pkg/vm/engine/aoe/storage/container/vector"
 	"github.com/sirupsen/logrus"
 )
 
-func MarshalBatch(data batch.IBatch) ([]byte, error) {
+func MarshalBatch(types []types.Type, data batch.IBatch) ([]byte, error) {
 	var buf []byte
 	if data == nil {
 		return buf, nil
@@ -25,62 +27,80 @@ func MarshalBatch(data batch.IBatch) ([]byte, error) {
 			return buf, err
 		}
 		v := vec.(vector.IVectorNode)
-		// v, err := vec.GetLatestView().CopyToVector()
-		// if err != nil {
-		// 	return buf, err
-		// }
 		vecs = append(vecs, v)
 	}
+	binary.Write(&bbuf, binary.BigEndian, uint32(0))
 	binary.Write(&bbuf, binary.BigEndian, uint16(len(vecs)))
+	binary.Write(&bbuf, binary.BigEndian, uint32(data.Length()))
 	bufs := make([][]byte, len(vecs))
 	for i, vec := range vecs {
-		// vecBuf, _ := vec.Show()
 		vecBuf, _ := vec.Marshal()
 		bufs[i] = vecBuf
+		typeBuf := encoding.EncodeType(types[i])
+		_, err := bbuf.Write(typeBuf)
+		if err != nil {
+			return nil, err
+		}
 		binary.Write(&bbuf, binary.BigEndian, uint32(len(vecBuf)))
 	}
 	for _, colBuf := range bufs {
 		bbuf.Write(colBuf)
 	}
-	return bbuf.Bytes(), nil
+	buf = bbuf.Bytes()
+	binary.BigEndian.PutUint32(buf[0:4], uint32(len(buf)))
+	return buf, nil
 }
 
-func UnmarshalBatch(types []types.Type, buf []byte, rows int) (batch.IBatch, error) {
-	nbuf := bytes.NewBuffer(buf)
+func UnmarshalBatch(buf []byte) (vecTypes []types.Type, bat batch.IBatch, err error) {
+	r := bytes.NewBuffer(buf)
+	return UnmarshalBatchFrom(r)
+}
+
+func UnmarshalBatchFrom(r io.Reader) (vecTypes []types.Type, bat batch.IBatch, err error) {
+	var size uint32
 	var vecs uint16
-	var err error
 	pos := 0
-	if binary.Read(nbuf, binary.BigEndian, &vecs); err != nil {
-		return nil, err
+	if binary.Read(r, binary.BigEndian, &size); err != nil {
+		return
 	}
-	pos += 2
+	buf := make([]byte, size-4)
+	if _, err = r.Read(buf); err != nil {
+		return
+	}
+	bbuf := bytes.NewBuffer(buf)
+	if binary.Read(bbuf, binary.BigEndian, &vecs); err != nil {
+		return
+	}
+	var rows uint32
+	if binary.Read(bbuf, binary.BigEndian, &rows); err != nil {
+		return
+	}
+	pos += 2 + 4
 	logrus.Info(pos)
 	lens := make([]uint32, vecs)
+	vecTypes = make([]types.Type, vecs)
 	for i := uint16(0); i < vecs; i++ {
-		if err = binary.Read(nbuf, binary.BigEndian, &lens[i]); err != nil {
-			return nil, err
-		}
+		colType := encoding.DecodeType(buf[pos : pos+encoding.TypeSize])
+		vecTypes[i] = colType
+		pos += encoding.TypeSize
+		lens[i] = binary.BigEndian.Uint32(buf[pos:])
 		pos += 4
 	}
 
 	attrs := make([]int, vecs)
 	cols := make([]vector.IVector, vecs)
-	for i, colType := range types {
-		col := vector.NewVector(colType, uint64(rows))
+	for i := 0; i < int(vecs); i++ {
+		col := vector.NewVector(vecTypes[i], uint64(rows))
 		cols[i] = col
 		attrs[i] = i
 		if col.(vector.IVectorNode).Unmarshal(buf[pos : pos+int(lens[i])]); err != nil {
-			return nil, err
+			return
 		}
 		pos += int(lens[i])
 	}
 
-	data, err := batch.NewBatch(attrs, cols)
-	if err != nil {
-		return nil, err
-	}
-
-	return data, nil
+	bat, err = batch.NewBatch(attrs, cols)
+	return
 }
 
 func GetValue(col *gvec.Vector, row uint32) interface{} {
@@ -191,9 +211,21 @@ func EstimateSize(bat *gbat.Batch, offset, length uint32) uint64 {
 	for _, vec := range bat.Vecs {
 		colSize := length * uint32(vec.Typ.Size)
 		size += uint64(colSize)
-		// vLen := gvec.Length(vec)
-		// colSize := len(vec.Data) * int(length) / vLen
-		// size += uint64(colSize)
 	}
 	return size
+}
+
+func CopyToIBatch(data *gbat.Batch) (bat batch.IBatch, err error) {
+	vecs := make([]vector.IVector, len(data.Vecs))
+	attrs := make([]int, len(data.Vecs))
+	for i, vec := range data.Vecs {
+		attrs[i] = i
+		vecs[i] = vector.NewVector(vec.Typ, uint64(MaxNodeRows))
+		_, err = vecs[i].AppendVector(vec, 0)
+		if err != nil {
+			return
+		}
+	}
+	bat, err = batch.NewBatch(attrs, vecs)
+	return
 }

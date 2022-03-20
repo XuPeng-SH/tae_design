@@ -13,7 +13,18 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
+type TransactionState interface {
+	ToCommitting() error
+	ToCommitted() error
+	ToRollbacking() error
+	ToRollbacked() error
+	IsUncommitted() bool
+	IsCommitted() bool
+	IsRollbacked() bool
+}
+
 type Table interface {
+	TransactionState
 	GetSchema() *metadata.Schema
 	GetID() uint64
 	Append(data *batch.Batch) error
@@ -25,9 +36,12 @@ type Table interface {
 	Rows() uint32
 	BatchDedupLocal(data *gbat.Batch) error
 	BatchDedupLocalByCol(col *gvec.Vector) error
+	// Commit() error
+	// Rollback() error
 }
 
 type txnTable struct {
+	*TxnState
 	inodes     []InsertNode
 	appendable InsertNode
 	driver     NodeDriver
@@ -38,7 +52,10 @@ type txnTable struct {
 	rows       uint32
 }
 
-func NewTable(id uint64, schema *metadata.Schema, driver NodeDriver, mgr base.INodeManager) *txnTable {
+func NewTable(txnState *TxnState, id uint64, schema *metadata.Schema, driver NodeDriver, mgr base.INodeManager) *txnTable {
+	if txnState == nil {
+		txnState = new(TxnState)
+	}
 	tbl := &txnTable{
 		inodes:   make([]InsertNode, 0),
 		nodesMgr: mgr,
@@ -46,6 +63,7 @@ func NewTable(id uint64, schema *metadata.Schema, driver NodeDriver, mgr base.IN
 		schema:   schema,
 		driver:   driver,
 		index:    NewSimpleTableIndex(),
+		TxnState: txnState,
 	}
 	return tbl
 }
@@ -208,3 +226,54 @@ func (tbl *txnTable) GetLocalValue(row uint32, col uint16) (interface{}, error) 
 	defer h.Close()
 	return n.GetValue(int(col), noffset)
 }
+
+// func (tbl *txnTable) PrepareCommit() error {
+// 	err := tbl.ToCommitting()
+// 	if err != nil {
+// 		return err
+// 	}
+// 	tableInsertEntry := NewTableInsertCommitEntry()
+// 	// insertEntries := make([]NodeEntry, 0)
+// 	// pendings := make([]*AsyncEntry, 0)
+// 	cnt := len(tbl.inodes)
+// 	for i, inode := range tbl.inodes {
+// 		h := tbl.nodesMgr.Pin(inode)
+// 		if h == nil {
+// 			panic("not expected")
+// 		}
+// 		e := inode.MakeCommitEntry()
+// 		// Processing last insert node
+// 		if i == cnt-1 {
+// 			insertEntries = append(insertEntries, e)
+// 			inode.ToTransient()
+// 			h.Close()
+// 			break
+// 		}
+
+// 		if e.IsUCPointer() {
+// 			insertEntries = append(insertEntries, e)
+// 			h.Close()
+// 			continue
+// 		}
+// 		lsn, err := tbl.driver.AppendEntry(GroupUC, e)
+// 		if err != nil {
+// 			panic(err)
+// 		}
+// 		asyncE := &AsyncEntry{
+// 			lsn:       lsn,
+// 			group:     GroupUC,
+// 			NodeEntry: e,
+// 			seq:       uint32(i),
+// 		}
+// 		insertEntries = append(insertEntries, asyncE)
+// 		pendings = append(pendings, asyncE)
+// 		inode.ToTransient()
+// 		h.Close()
+// 	}
+// 	tbl.ToCommitted()
+// 	return nil
+// }
+
+// func (tbl *txnTable) Commit() error {
+// 	return nil
+// }

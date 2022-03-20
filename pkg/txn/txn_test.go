@@ -52,7 +52,7 @@ func makeTable(t *testing.T, dir string, colCnt int, bufSize uint64) *txnTable {
 	driver := NewNodeDriver(dir, "store", nil)
 	id := common.NextGlobalSeqNum()
 	schema := metadata.MockSchemaAll(colCnt)
-	return NewTable(id, schema, driver, mgr)
+	return NewTable(nil, id, schema, driver, mgr)
 }
 
 func TestInsertNode(t *testing.T) {
@@ -246,11 +246,11 @@ func TestIndex(t *testing.T) {
 
 func TestLoad(t *testing.T) {
 	dir := initTestPath(t)
-	tbl := makeTable(t, dir, 14, common.M*1500)
+	tbl := makeTable(t, dir, 14, common.K*1000)
 	defer tbl.driver.Close()
 	tbl.GetSchema().PrimaryKey = 13
 
-	bat := mock.MockBatch(tbl.GetSchema().Types(), 200000)
+	bat := mock.MockBatch(tbl.GetSchema().Types(), 60000)
 	bats := SplitBatch(bat, 5)
 	// for _, b := range bats {
 	// 	tbl.Append(b)
