@@ -60,6 +60,7 @@ type InsertNode interface {
 	GetSpace() uint32
 	Rows() uint32
 	GetValue(col int, row uint32) (interface{}, error)
+	MakeCommand() (TxnCmd, error)
 }
 
 type insertNode struct {
@@ -84,6 +85,24 @@ func NewInsertNode(tbl Table, mgr base.INodeManager, id common.ID, driver NodeDr
 	impl.table = tbl
 	mgr.RegisterNode(impl)
 	return impl
+}
+
+func (n *insertNode) MakeCommand() (cmd TxnCmd, err error) {
+	composedCmd := NewComposedCmd()
+	if n.lsn != 0 {
+		ptrCmd := new(PointerCmd)
+		ptrCmd.Lsn = n.lsn
+		ptrCmd.Group = GroupUC
+		composedCmd.AddCmd(ptrCmd)
+	} else {
+		batchCmd := NewBatchCmd(n.data, n.table.GetSchema().Types())
+		composedCmd.AddCmd(batchCmd)
+	}
+	if n.deletes != nil {
+		delCmd := NewDeleteBitmapCmd(n.deletes)
+		composedCmd.AddCmd(delCmd)
+	}
+	return composedCmd, nil
 }
 
 func (n *insertNode) Type() NodeType { return NTInsert }

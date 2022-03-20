@@ -7,8 +7,7 @@ import (
 )
 
 const (
-	GroupAC uint32 = iota + 10
-	GroupPC
+	GroupC uint32 = iota + 10
 	GroupUC
 )
 

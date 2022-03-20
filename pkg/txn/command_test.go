@@ -31,25 +31,25 @@ func TestPointerCmd(t *testing.T) {
 	}
 }
 
-func TestDeletesCmd(t *testing.T) {
-	deletes := make(map[uint32]*roaring64.Bitmap)
-	for i := 0; i < 10; i++ {
-		deletes[uint32(i)] = roaring64.NewBitmap()
-		deletes[uint32(i)].Add(uint64(i)*2 + 1)
-	}
-	cmd := MakeDeletesCmd(deletes)
-	var w bytes.Buffer
-	err := cmd.WriteTo(&w)
-	assert.Nil(t, err)
+// func TestDeletesCmd(t *testing.T) {
+// 	deletes := make(map[uint32]*roaring64.Bitmap)
+// 	for i := 0; i < 10; i++ {
+// 		deletes[uint32(i)] = roaring64.NewBitmap()
+// 		deletes[uint32(i)].Add(uint64(i)*2 + 1)
+// 	}
+// 	cmd := MakeDeletesCmd(deletes)
+// 	var w bytes.Buffer
+// 	err := cmd.WriteTo(&w)
+// 	assert.Nil(t, err)
 
-	buf := w.Bytes()
-	r := bytes.NewBuffer(buf)
-	cmd2, err := BuildCommandFrom(r)
-	assert.Nil(t, err)
-	for k, v := range cmd2.(*LocalDeletesCmd).Deletes {
-		assert.True(t, v.Contains(2*uint64(k)+1))
-	}
-}
+// 	buf := w.Bytes()
+// 	r := bytes.NewBuffer(buf)
+// 	cmd2, err := BuildCommandFrom(r)
+// 	assert.Nil(t, err)
+// 	for k, v := range cmd2.(*LocalDeletesCmd).Deletes {
+// 		assert.True(t, v.Contains(2*uint64(k)+1))
+// 	}
+// }
 
 func TestComposedCmd(t *testing.T) {
 	composed := NewComposedCmd()
@@ -66,7 +66,6 @@ func TestComposedCmd(t *testing.T) {
 		}
 	}
 	batCnt := 5
-	delCmd := NewLocalDeletesCmd()
 
 	schema := metadata.MockSchema(4)
 	for i := 0; i < batCnt; i++ {
@@ -74,12 +73,14 @@ func TestComposedCmd(t *testing.T) {
 		bat, err := CopyToIBatch(data)
 		assert.Nil(t, err)
 		batCmd := NewBatchCmd(bat, schema.Types())
-		composed.AddCmd(batCmd)
 		del := roaring64.NewBitmap()
 		del.Add(uint64(i))
-		delCmd.AddDelete(uint32(i), del)
+		delCmd := NewDeleteBitmapCmd(del)
+		comp := NewComposedCmd()
+		comp.AddCmd(batCmd)
+		comp.AddCmd(delCmd)
+		composed.AddCmd(comp)
 	}
-	composed.AddCmd(delCmd)
 	var w bytes.Buffer
 	err := composed.WriteTo(&w)
 	assert.Nil(t, err)
@@ -100,18 +101,25 @@ func TestComposedCmd(t *testing.T) {
 		case CmdPointer:
 			assert.Equal(t, c1.(*PointerCmd).Group, c2.(*PointerCmd).Group)
 			assert.Equal(t, c1.(*PointerCmd).Group, c2.(*PointerCmd).Group)
-		case CmdDeleteBitmap:
-			assert.Equal(t, len(c1.(*LocalDeletesCmd).Deletes), len(c2.(*LocalDeletesCmd).Deletes))
-			for k, bm1 := range c1.(*LocalDeletesCmd).Deletes {
-				bm2 := c2.(*LocalDeletesCmd).Deletes[k]
-				assert.True(t, bm1.Contains(uint64(k)))
-				assert.True(t, bm2.Contains(uint64(k)))
+		case CmdComposed:
+			comp1 := c1.(*ComposedCmd)
+			comp2 := c2.(*ComposedCmd)
+			for j, cc1 := range comp1.Cmds {
+				cc2 := comp2.Cmds[j]
+				assert.Equal(t, cc1.GetType(), cc2.GetType())
+				switch cc1.GetType() {
+				case CmdPointer:
+					assert.Equal(t, cc1.(*PointerCmd).Group, cc2.(*PointerCmd).Group)
+					assert.Equal(t, cc1.(*PointerCmd).Group, cc2.(*PointerCmd).Group)
+				case CmdDeleteBitmap:
+					assert.True(t, cc1.(*DeleteBitmapCmd).Bitmap.Equals(cc1.(*DeleteBitmapCmd).Bitmap))
+				case CmdBatch:
+					b1 := cc1.(*BatchCmd)
+					b2 := cc2.(*BatchCmd)
+					assert.Equal(t, b1.Types, b2.Types)
+					assert.Equal(t, b1.Bat.Length(), b2.Bat.Length())
+				}
 			}
-		case CmdBatch:
-			b1 := c1.(*BatchCmd)
-			b2 := c2.(*BatchCmd)
-			assert.Equal(t, b1.Types, b2.Types)
-			assert.Equal(t, b1.Bat.Length(), b2.Bat.Length())
 		}
 	}
 }

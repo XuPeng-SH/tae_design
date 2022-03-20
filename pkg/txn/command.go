@@ -24,6 +24,7 @@ type TxnCmd interface {
 	Marshal() ([]byte, error)
 	Unmarshal([]byte) error
 	GetType() int16
+	String() string
 }
 
 type BaseCmd struct{}
@@ -34,9 +35,9 @@ type PointerCmd struct {
 	Lsn   uint64
 }
 
-type LocalDeletesCmd struct {
+type DeleteBitmapCmd struct {
 	BaseCmd
-	Deletes map[uint32]*roaring64.Bitmap
+	Bitmap *roaring64.Bitmap
 }
 
 type BatchCmd struct {
@@ -50,15 +51,9 @@ type ComposedCmd struct {
 	Cmds []TxnCmd
 }
 
-func NewLocalDeletesCmd() *LocalDeletesCmd {
-	return &LocalDeletesCmd{
-		Deletes: make(map[uint32]*roaring64.Bitmap),
-	}
-}
-
-func MakeDeletesCmd(deletes map[uint32]*roaring64.Bitmap) *LocalDeletesCmd {
-	return &LocalDeletesCmd{
-		Deletes: deletes,
+func NewDeleteBitmapCmd(bitmap *roaring64.Bitmap) *DeleteBitmapCmd {
+	return &DeleteBitmapCmd{
+		Bitmap: bitmap,
 	}
 }
 
@@ -77,6 +72,11 @@ func NewComposedCmd() *ComposedCmd {
 
 func (e *PointerCmd) GetType() int16 {
 	return CmdPointer
+}
+
+func (e *PointerCmd) String() string {
+	s := fmt.Sprintf("PointerCmd: Group=%d, Lsn=%d", e.Group, e.Lsn)
+	return s
 }
 
 func (e *PointerCmd) WriteTo(w io.Writer) (err error) {
@@ -117,60 +117,28 @@ func (e *PointerCmd) Unmarshal(buf []byte) error {
 	return err
 }
 
-func (e *LocalDeletesCmd) AddDelete(key uint32, bm *roaring64.Bitmap) {
-	e.Deletes[key] = bm
-}
-
-func (e *LocalDeletesCmd) GetType() int16 {
+func (e *DeleteBitmapCmd) GetType() int16 {
 	return CmdDeleteBitmap
 }
 
-func (e *LocalDeletesCmd) ReadFrom(r io.Reader) (err error) {
-	var cnt uint32
-	if err = binary.Read(r, binary.BigEndian, &cnt); err != nil {
-		return
-	}
-	if cnt == 0 {
-		return
-	}
-	e.Deletes = make(map[uint32]*roaring64.Bitmap)
-	for i := 0; i < int(cnt); i++ {
-		var k uint32
-		if err = binary.Read(r, binary.BigEndian, &k); err != nil {
-			break
-		}
-		bm := roaring64.NewBitmap()
-		if _, err = bm.ReadFrom(r); err != nil {
-			break
-		}
-		e.Deletes[k] = bm
-	}
+func (e *DeleteBitmapCmd) ReadFrom(r io.Reader) (err error) {
+	e.Bitmap = roaring64.NewBitmap()
+	_, err = e.Bitmap.ReadFrom(r)
 	return
 }
 
-func (e *LocalDeletesCmd) WriteTo(w io.Writer) (err error) {
+func (e *DeleteBitmapCmd) WriteTo(w io.Writer) (err error) {
 	if e == nil {
 		return
 	}
 	if err = binary.Write(w, binary.BigEndian, e.GetType()); err != nil {
 		return
 	}
-	cnt := uint32(len(e.Deletes))
-	if err = binary.Write(w, binary.BigEndian, cnt); err != nil {
-		return
-	}
-	for k, v := range e.Deletes {
-		if err = binary.Write(w, binary.BigEndian, k); err != nil {
-			break
-		}
-		if _, err = v.WriteTo(w); err != nil {
-			break
-		}
-	}
+	_, err = e.Bitmap.WriteTo(w)
 	return
 }
 
-func (e *LocalDeletesCmd) Marshal() (buf []byte, err error) {
+func (e *DeleteBitmapCmd) Marshal() (buf []byte, err error) {
 	var bbuf bytes.Buffer
 	if err = e.WriteTo(&bbuf); err != nil {
 		return
@@ -179,10 +147,15 @@ func (e *LocalDeletesCmd) Marshal() (buf []byte, err error) {
 	return
 }
 
-func (e *LocalDeletesCmd) Unmarshal(buf []byte) error {
+func (e *DeleteBitmapCmd) Unmarshal(buf []byte) error {
 	bbuf := bytes.NewBuffer(buf)
 	err := e.ReadFrom(bbuf)
 	return err
+}
+
+func (e *DeleteBitmapCmd) String() string {
+	s := fmt.Sprintf("DeleteBitmapCmd: Cardinality=%d", e.Bitmap.GetCardinality())
+	return s
 }
 
 func (e *BatchCmd) GetType() int16 {
@@ -219,6 +192,11 @@ func (e *BatchCmd) WriteTo(w io.Writer) (err error) {
 	}
 	_, err = w.Write(colsBuf)
 	return
+}
+
+func (e *BatchCmd) String() string {
+	s := fmt.Sprintf("BatchCmd: Rows=%d", e.Bat.Length())
+	return s
 }
 
 func (e *ComposedCmd) GetType() int16 {
@@ -273,6 +251,14 @@ func (cc *ComposedCmd) AddCmd(cmd TxnCmd) {
 	cc.Cmds = append(cc.Cmds, cmd)
 }
 
+func (cc *ComposedCmd) String() string {
+	s := fmt.Sprintf("ComposedCmd: Cnt=%d", len(cc.Cmds))
+	for _, cmd := range cc.Cmds {
+		s = fmt.Sprintf("%s\n\t%s", s, cmd.String())
+	}
+	return s
+}
+
 func BuildCommandFrom(r io.Reader) (cmd TxnCmd, err error) {
 	var cmdType int16
 	if err = binary.Read(r, binary.BigEndian, &cmdType); err != nil {
@@ -282,7 +268,7 @@ func BuildCommandFrom(r io.Reader) (cmd TxnCmd, err error) {
 	case CmdPointer:
 		cmd = new(PointerCmd)
 	case CmdDeleteBitmap:
-		cmd = new(LocalDeletesCmd)
+		cmd = new(DeleteBitmapCmd)
 	case CmdBatch:
 		cmd = new(BatchCmd)
 	case CmdComposed:

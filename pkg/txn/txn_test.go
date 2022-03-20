@@ -267,3 +267,27 @@ func TestLoad(t *testing.T) {
 	t.Log(tbl.nodesMgr.String())
 	t.Logf("Row %d, Col %d, Val %v", 100, 0, v)
 }
+
+func TestNodeCommand(t *testing.T) {
+	dir := initTestPath(t)
+	tbl := makeTable(t, dir, 14, common.K*1000)
+	defer tbl.driver.Close()
+	tbl.GetSchema().PrimaryKey = 13
+
+	bat := mock.MockBatch(tbl.GetSchema().Types(), 15000)
+	err := tbl.Append(bat)
+	assert.Nil(t, err)
+
+	err = tbl.RangeDeleteLocalRows(100, 200)
+	assert.Nil(t, err)
+
+	for i, inode := range tbl.inodes {
+		cmd, err := inode.MakeCommand()
+		assert.Nil(t, err)
+		if i == 0 {
+			assert.Equal(t, 2, len(cmd.(*ComposedCmd).Cmds))
+		} else {
+			assert.Equal(t, 1, len(cmd.(*ComposedCmd).Cmds))
+		}
+	}
+}

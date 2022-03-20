@@ -227,6 +227,36 @@ func (tbl *txnTable) GetLocalValue(row uint32, col uint16) (interface{}, error) 
 	return n.GetValue(int(col), noffset)
 }
 
+// func (tbl *txnTable) PrepareCommit() (entry NodeEntry, err error) {
+// 	err = tbl.ToCommitting()
+// 	if err != nil {
+// 		return
+// 	}
+// 	commitCmd, err := tbl.buildCommitCmd()
+// 	if err != nil {
+// 		return
+// 	}
+// 	entry, err = commitCmd.MakeLogEntry()
+// 	return
+// }
+
+// func (tbl *txnTable) buildCommitCmd() (cmd TxnCmd, err error) {
+// 	composedCmd := NewComposedCmd()
+
+// 	for i, inode := range tbl.inodes {
+// 		h := tbl.nodesMgr.Pin(inode)
+// 		if h == nil {
+// 			panic("not expected")
+// 		}
+// 		if i == len(tbl.inodes)-1 {
+
+// 		}
+// 		// composedCmd.AddCmd()
+// 		h.Close()
+// 	}
+// 	return
+// }
+
 // func (tbl *txnTable) PrepareCommit() error {
 // 	err := tbl.ToCommitting()
 // 	if err != nil {
