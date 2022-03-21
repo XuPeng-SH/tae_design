@@ -16,6 +16,8 @@ const (
 	CmdDeleteBitmap
 	CmdBatch
 	CmdComposed
+
+	CmdAppend
 )
 
 type TxnCmd interface {
@@ -51,6 +53,11 @@ type ComposedCmd struct {
 	Cmds []TxnCmd
 }
 
+type AppendCmd struct {
+	ComposedCmd
+	Node InsertNode
+}
+
 func NewDeleteBitmapCmd(bitmap *roaring64.Bitmap) *DeleteBitmapCmd {
 	return &DeleteBitmapCmd{
 		Bitmap: bitmap,
@@ -69,6 +76,15 @@ func NewComposedCmd() *ComposedCmd {
 		Cmds: make([]TxnCmd, 0),
 	}
 }
+
+func NewAppendCmd(node InsertNode) *AppendCmd {
+	return &AppendCmd{
+		ComposedCmd: *NewComposedCmd(),
+		Node:        node,
+	}
+}
+
+func (e *AppendCmd) GetType() int16 { return CmdAppend }
 
 func (e *PointerCmd) GetType() int16 {
 	return CmdPointer
@@ -273,42 +289,11 @@ func BuildCommandFrom(r io.Reader) (cmd TxnCmd, err error) {
 		cmd = new(BatchCmd)
 	case CmdComposed:
 		cmd = new(ComposedCmd)
+	case CmdAppend:
+		cmd = NewAppendCmd(nil)
 	default:
 		panic(fmt.Sprintf("not support cmd type: %d", cmdType))
 	}
 	err = cmd.ReadFrom(r)
 	return
 }
-
-// type WaitablePointerEntry struct {
-// 	PointerCmd
-// 	NodeEntry
-// }
-
-// type TableInsertCommitEntry struct {
-// 	pointers []*PointerCmd
-// 	pendings []*WaitablePointerEntry
-// 	tail     NodeEntry
-// }
-
-// func NewTableInsertCommitEntry() *TableInsertCommitEntry {
-// 	// TODO
-// 	return new(TableInsertCommitEntry)
-// }
-
-// func (te *TableInsertCommitEntry) AddPointer(p *PointerCmd) {
-// 	// TODO
-// }
-
-// func (te *TableInsertCommitEntry) AddPending(group uint32, lsn uint64, e NodeEntry) {
-// 	// TODO
-// }
-
-// func (te *TableInsertCommitEntry) AddTail(e NodeEntry) {
-// 	// TODO
-// }
-
-// func (te *TableInsertCommitEntry) Marshal() (buf []byte, err error) {
-// 	// TODO
-// 	return
-// }

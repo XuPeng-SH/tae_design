@@ -93,7 +93,7 @@ func TestInsertNode(t *testing.T) {
 				h.Close()
 			}
 			for _, n := range nodes {
-				n.ToTransient()
+				// n.ToTransient()
 				n.Close()
 			}
 			atomic.AddUint64(&all, uint64(len(nodes)))
@@ -246,7 +246,7 @@ func TestIndex(t *testing.T) {
 
 func TestLoad(t *testing.T) {
 	dir := initTestPath(t)
-	tbl := makeTable(t, dir, 14, common.K*1000)
+	tbl := makeTable(t, dir, 14, common.K*2000)
 	defer tbl.driver.Close()
 	tbl.GetSchema().PrimaryKey = 13
 
@@ -282,12 +282,43 @@ func TestNodeCommand(t *testing.T) {
 	assert.Nil(t, err)
 
 	for i, inode := range tbl.inodes {
-		cmd, err := inode.MakeCommand()
+		cmd, entry, err := inode.MakeCommand(false)
 		assert.Nil(t, err)
 		if i == 0 {
-			assert.Equal(t, 2, len(cmd.(*ComposedCmd).Cmds))
+			assert.Equal(t, 2, len(cmd.(*AppendCmd).Cmds))
 		} else {
-			assert.Equal(t, 1, len(cmd.(*ComposedCmd).Cmds))
+			assert.Equal(t, 1, len(cmd.(*AppendCmd).Cmds))
 		}
+		if entry != nil {
+			entry.WaitDone()
+			entry.Free()
+		}
+		t.Log(cmd.String())
 	}
+}
+
+func TestBuildCommand(t *testing.T) {
+	dir := initTestPath(t)
+	tbl := makeTable(t, dir, 14, common.K*2000)
+	defer tbl.driver.Close()
+	tbl.GetSchema().PrimaryKey = 13
+
+	bat := mock.MockBatch(tbl.GetSchema().Types(), 55000)
+	err := tbl.Append(bat)
+	assert.Nil(t, err)
+
+	err = tbl.RangeDeleteLocalRows(100, 200)
+	assert.Nil(t, err)
+
+	t.Log(tbl.nodesMgr.String())
+	cmd, entries, err := tbl.buildCommitCmd()
+	assert.Nil(t, err)
+	tbl.Close()
+	assert.Equal(t, 0, tbl.nodesMgr.Count())
+	t.Log(cmd.String())
+	for _, e := range entries {
+		e.WaitDone()
+		e.Free()
+	}
+	t.Log(tbl.nodesMgr.String())
 }

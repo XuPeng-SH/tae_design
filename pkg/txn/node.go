@@ -60,7 +60,7 @@ type InsertNode interface {
 	GetSpace() uint32
 	Rows() uint32
 	GetValue(col int, row uint32) (interface{}, error)
-	MakeCommand() (TxnCmd, error)
+	MakeCommand(bool) (TxnCmd, NodeEntry, error)
 }
 
 type insertNode struct {
@@ -87,22 +87,28 @@ func NewInsertNode(tbl Table, mgr base.INodeManager, id common.ID, driver NodeDr
 	return impl
 }
 
-func (n *insertNode) MakeCommand() (cmd TxnCmd, err error) {
-	composedCmd := NewComposedCmd()
-	if n.lsn != 0 {
+func (n *insertNode) MakeCommand(forceFlush bool) (cmd TxnCmd, entry NodeEntry, err error) {
+	if n.data == nil {
+		return
+	}
+	composedCmd := NewAppendCmd(n)
+	if n.lsn == 0 && forceFlush {
+		entry = n.execUnload()
+	}
+	if n.lsn == 0 {
+		batCmd := NewBatchCmd(n.data, n.table.GetSchema().Types())
+		composedCmd.AddCmd(batCmd)
+	} else {
 		ptrCmd := new(PointerCmd)
 		ptrCmd.Lsn = n.lsn
 		ptrCmd.Group = GroupUC
 		composedCmd.AddCmd(ptrCmd)
-	} else {
-		batchCmd := NewBatchCmd(n.data, n.table.GetSchema().Types())
-		composedCmd.AddCmd(batchCmd)
 	}
 	if n.deletes != nil {
 		delCmd := NewDeleteBitmapCmd(n.deletes)
 		composedCmd.AddCmd(delCmd)
 	}
-	return composedCmd, nil
+	return composedCmd, entry, nil
 }
 
 func (n *insertNode) Type() NodeType { return NTInsert }
@@ -158,7 +164,20 @@ func (n *insertNode) OnLoad() {
 	// v, err := n.GetValue(n.table.GetSchema().PrimaryKey, 10)
 }
 
+func (n *insertNode) Close() error {
+	n.ToTransient()
+	return n.Node.Close()
+}
+
 func (n *insertNode) OnUnload() {
+	entry := n.execUnload()
+	if entry != nil {
+		entry.WaitDone()
+		entry.Free()
+	}
+}
+
+func (n *insertNode) execUnload() (entry NodeEntry) {
 	if n.IsTransient() || n.table.IsCommitted() || n.table.IsRollbacked() {
 		return
 	}
@@ -168,16 +187,17 @@ func (n *insertNode) OnUnload() {
 	if n.data == nil {
 		return
 	}
-	e := n.makeLogEntry()
-	if seq, err := n.driver.AppendEntry(GroupUC, e); err != nil {
+	entry = n.makeLogEntry()
+	if seq, err := n.driver.AppendEntry(GroupUC, entry); err != nil {
 		panic(err)
 	} else {
 		atomic.StoreUint64(&n.lsn, seq)
 		id := n.GetID()
 		logrus.Infof("Unloading lsn=%d id=%s", seq, id.SegmentString())
 	}
-	e.WaitDone()
-	e.Free()
+	// e.WaitDone()
+	// e.Free()
+	return
 }
 
 func (n *insertNode) PrepareAppend(data *gbat.Batch, offset uint32) uint32 {

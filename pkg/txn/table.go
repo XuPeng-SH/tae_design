@@ -43,7 +43,7 @@ type Table interface {
 type txnTable struct {
 	*TxnState
 	inodes     []InsertNode
-	appendable InsertNode
+	appendable base.INodeHandle
 	driver     NodeDriver
 	id         uint64
 	schema     *metadata.Schema
@@ -76,13 +76,31 @@ func (tbl *txnTable) GetID() uint64 {
 	return tbl.id
 }
 
+func (tbl *txnTable) Close() error {
+	var err error
+	if tbl.appendable != nil {
+		if tbl.appendable.Close(); err != nil {
+			return err
+		}
+	}
+	for _, node := range tbl.inodes {
+		if err = node.Close(); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func (tbl *txnTable) registerInsertNode() error {
+	if tbl.appendable != nil {
+		tbl.appendable.Close()
+	}
 	id := common.ID{
 		TableID:   tbl.id,
 		SegmentID: uint64(len(tbl.inodes)),
 	}
 	n := NewInsertNode(tbl, tbl.nodesMgr, id, tbl.driver)
-	tbl.appendable = n
+	tbl.appendable = tbl.nodesMgr.Pin(n)
 	tbl.inodes = append(tbl.inodes, n)
 	return nil
 }
@@ -98,31 +116,26 @@ func (tbl *txnTable) Append(data *batch.Batch) error {
 	offset := uint32(0)
 	length := uint32(vector.Length(data.Vecs[0]))
 	for {
-		h := tbl.nodesMgr.Pin(tbl.appendable)
-		if h == nil {
-			panic("unexpected")
-		}
-		toAppend := tbl.appendable.PrepareAppend(data, offset)
+		h := tbl.appendable
+		n := h.GetNode().(*insertNode)
+		toAppend := n.PrepareAppend(data, offset)
 		size := EstimateSize(data, offset, toAppend)
 		logrus.Infof("Offset=%d, ToAppend=%d, EstimateSize=%d", offset, toAppend, size)
-		err := tbl.appendable.Expand(size, func() error {
-			appended, err = tbl.appendable.Append(data, offset)
+		err := n.Expand(size, func() error {
+			appended, err = n.Append(data, offset)
 			return err
 		})
 		if err != nil {
 			logrus.Info(tbl.nodesMgr.String())
 			logrus.Error(err)
-			h.Close()
 			break
 		}
-		space := tbl.appendable.GetSpace()
+		space := n.GetSpace()
 		logrus.Infof("Appended: %d, Space:%d", appended, space)
 		start := tbl.rows
 		if err = tbl.index.BatchInsert(data.Vecs[tbl.schema.PrimaryKey], int(offset), int(appended), start, false); err != nil {
-			h.Close()
 			break
 		}
-		h.Close()
 		offset += appended
 		tbl.rows += appended
 		if space == 0 {
@@ -240,22 +253,33 @@ func (tbl *txnTable) GetLocalValue(row uint32, col uint16) (interface{}, error) 
 // 	return
 // }
 
-// func (tbl *txnTable) buildCommitCmd() (cmd TxnCmd, err error) {
-// 	composedCmd := NewComposedCmd()
+func (tbl *txnTable) buildCommitCmd() (cmd TxnCmd, entries []NodeEntry, err error) {
+	composedCmd := NewComposedCmd()
 
-// 	for i, inode := range tbl.inodes {
-// 		h := tbl.nodesMgr.Pin(inode)
-// 		if h == nil {
-// 			panic("not expected")
-// 		}
-// 		if i == len(tbl.inodes)-1 {
-
-// 		}
-// 		// composedCmd.AddCmd()
-// 		h.Close()
-// 	}
-// 	return
-// }
+	for i, inode := range tbl.inodes {
+		h := tbl.nodesMgr.Pin(inode)
+		if h == nil {
+			panic("not expected")
+		}
+		forceFlush := (i < len(tbl.inodes)-1)
+		cmd, entry, err := inode.MakeCommand(forceFlush)
+		if err != nil {
+			return cmd, entries, err
+		}
+		if cmd == nil {
+			inode.ToTransient()
+			h.Close()
+			inode.Close()
+			continue
+		}
+		if entry != nil {
+			entries = append(entries, entry)
+		}
+		composedCmd.AddCmd(cmd)
+		h.Close()
+	}
+	return composedCmd, entries, err
+}
 
 // func (tbl *txnTable) PrepareCommit() error {
 // 	err := tbl.ToCommitting()
