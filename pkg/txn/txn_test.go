@@ -282,7 +282,7 @@ func TestNodeCommand(t *testing.T) {
 	assert.Nil(t, err)
 
 	for i, inode := range tbl.inodes {
-		cmd, entry, err := inode.MakeCommand(false)
+		cmd, entry, err := inode.MakeCommand(uint32(i), false)
 		assert.Nil(t, err)
 		if i == 0 {
 			assert.Equal(t, 2, len(cmd.(*AppendCmd).Cmds))
@@ -311,7 +311,8 @@ func TestBuildCommand(t *testing.T) {
 	assert.Nil(t, err)
 
 	t.Log(tbl.nodesMgr.String())
-	cmd, entries, err := tbl.buildCommitCmd()
+	cmdSeq := uint32(1)
+	cmd, entries, err := tbl.buildCommitCmd(&cmdSeq)
 	assert.Nil(t, err)
 	tbl.Close()
 	assert.Equal(t, 0, tbl.nodesMgr.Count())

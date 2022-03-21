@@ -16,8 +16,13 @@ const (
 	CmdDeleteBitmap
 	CmdBatch
 	CmdComposed
+	CmdCustomized
+)
 
-	CmdAppend
+const (
+	CmdAppend int16 = CmdCustomized + iota
+	CmdUpdate
+	CmdDelete
 )
 
 type TxnCmd interface {
@@ -27,6 +32,15 @@ type TxnCmd interface {
 	Unmarshal([]byte) error
 	GetType() int16
 	String() string
+}
+
+type CustomizedCmd interface {
+	GetID() uint32
+}
+
+func IsCustomizedCmd(cmd TxnCmd) bool {
+	ctype := cmd.GetType()
+	return ctype >= CmdCustomized
 }
 
 type BaseCmd struct{}
@@ -53,7 +67,20 @@ type ComposedCmd struct {
 	Cmds []TxnCmd
 }
 
+type BaseCustomizedCmd struct {
+	ID   uint32
+	Impl TxnCmd
+}
+
+func NewBaseCustomizedCmd(id uint32, impl TxnCmd) *BaseCustomizedCmd {
+	return &BaseCustomizedCmd{
+		ID:   id,
+		Impl: impl,
+	}
+}
+
 type AppendCmd struct {
+	*BaseCustomizedCmd
 	ComposedCmd
 	Node InsertNode
 }
@@ -77,14 +104,22 @@ func NewComposedCmd() *ComposedCmd {
 	}
 }
 
-func NewAppendCmd(node InsertNode) *AppendCmd {
-	return &AppendCmd{
+func NewAppendCmd(id uint32, node InsertNode) *AppendCmd {
+	impl := &AppendCmd{
 		ComposedCmd: *NewComposedCmd(),
 		Node:        node,
 	}
+	impl.BaseCustomizedCmd = NewBaseCustomizedCmd(id, impl)
+	return impl
 }
 
-func (e *AppendCmd) GetType() int16 { return CmdAppend }
+func NewEmptyAppendCmd() *AppendCmd {
+	return NewAppendCmd(0, nil)
+}
+
+func (c *BaseCustomizedCmd) GetID() uint32 {
+	return c.ID
+}
 
 func (e *PointerCmd) GetType() int16 {
 	return CmdPointer
@@ -267,12 +302,54 @@ func (cc *ComposedCmd) AddCmd(cmd TxnCmd) {
 	cc.Cmds = append(cc.Cmds, cmd)
 }
 
-func (cc *ComposedCmd) String() string {
-	s := fmt.Sprintf("ComposedCmd: Cnt=%d", len(cc.Cmds))
+func (cc *ComposedCmd) ToString(prefix string) string {
+	s := fmt.Sprintf("%sComposedCmd: Cnt=%d", prefix, len(cc.Cmds))
 	for _, cmd := range cc.Cmds {
-		s = fmt.Sprintf("%s\n\t%s", s, cmd.String())
+		s = fmt.Sprintf("%s\n%s\t%s", s, prefix, cmd.String())
 	}
 	return s
+}
+
+func (cc *ComposedCmd) String() string {
+	return cc.ToString("")
+}
+
+func (c *AppendCmd) String() string {
+	s := fmt.Sprintf("AppendCmd: ID=%d", c.ID)
+	s = fmt.Sprintf("%s\n%s", s, c.ComposedCmd.ToString("\t"))
+	return s
+}
+
+func (e *AppendCmd) GetType() int16 { return CmdAppend }
+func (c *AppendCmd) WriteTo(w io.Writer) (err error) {
+	if err = binary.Write(w, binary.BigEndian, c.ID); err != nil {
+		return
+	}
+	err = c.ComposedCmd.WriteTo(w)
+	return err
+}
+
+func (c *AppendCmd) ReadFrom(r io.Reader) (err error) {
+	if err = binary.Read(r, binary.BigEndian, &c.ID); err != nil {
+		return
+	}
+	err = c.ComposedCmd.ReadFrom(r)
+	return
+}
+
+func (c *AppendCmd) Marshal() (buf []byte, err error) {
+	var bbuf bytes.Buffer
+	if err = c.WriteTo(&bbuf); err != nil {
+		return
+	}
+	buf = bbuf.Bytes()
+	return
+}
+
+func (c *AppendCmd) Unmarshal(buf []byte) error {
+	bbuf := bytes.NewBuffer(buf)
+	err := c.ReadFrom(bbuf)
+	return err
 }
 
 func BuildCommandFrom(r io.Reader) (cmd TxnCmd, err error) {
@@ -290,7 +367,7 @@ func BuildCommandFrom(r io.Reader) (cmd TxnCmd, err error) {
 	case CmdComposed:
 		cmd = new(ComposedCmd)
 	case CmdAppend:
-		cmd = NewAppendCmd(nil)
+		cmd = NewEmptyAppendCmd()
 	default:
 		panic(fmt.Sprintf("not support cmd type: %d", cmdType))
 	}

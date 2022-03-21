@@ -253,7 +253,7 @@ func (tbl *txnTable) GetLocalValue(row uint32, col uint16) (interface{}, error) 
 // 	return
 // }
 
-func (tbl *txnTable) buildCommitCmd() (cmd TxnCmd, entries []NodeEntry, err error) {
+func (tbl *txnTable) buildCommitCmd(cmdSeq *uint32) (cmd TxnCmd, entries []NodeEntry, err error) {
 	composedCmd := NewComposedCmd()
 
 	for i, inode := range tbl.inodes {
@@ -262,10 +262,11 @@ func (tbl *txnTable) buildCommitCmd() (cmd TxnCmd, entries []NodeEntry, err erro
 			panic("not expected")
 		}
 		forceFlush := (i < len(tbl.inodes)-1)
-		cmd, entry, err := inode.MakeCommand(forceFlush)
+		cmd, entry, err := inode.MakeCommand(*cmdSeq, forceFlush)
 		if err != nil {
 			return cmd, entries, err
 		}
+		*cmdSeq += uint32(1)
 		if cmd == nil {
 			inode.ToTransient()
 			h.Close()

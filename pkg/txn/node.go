@@ -60,7 +60,7 @@ type InsertNode interface {
 	GetSpace() uint32
 	Rows() uint32
 	GetValue(col int, row uint32) (interface{}, error)
-	MakeCommand(bool) (TxnCmd, NodeEntry, error)
+	MakeCommand(uint32, bool) (TxnCmd, NodeEntry, error)
 }
 
 type insertNode struct {
@@ -87,11 +87,11 @@ func NewInsertNode(tbl Table, mgr base.INodeManager, id common.ID, driver NodeDr
 	return impl
 }
 
-func (n *insertNode) MakeCommand(forceFlush bool) (cmd TxnCmd, entry NodeEntry, err error) {
+func (n *insertNode) MakeCommand(id uint32, forceFlush bool) (cmd TxnCmd, entry NodeEntry, err error) {
 	if n.data == nil {
 		return
 	}
-	composedCmd := NewAppendCmd(n)
+	composedCmd := NewAppendCmd(id, n)
 	if n.lsn == 0 && forceFlush {
 		entry = n.execUnload()
 	}
@@ -118,7 +118,6 @@ func (n *insertNode) makeLogEntry() NodeEntry {
 	buf, err := cmd.Marshal()
 	e := entry.GetBase()
 	e.SetType(ETInsertNode)
-	// buf, err := MarshalBatch(n.data)
 	if err != nil {
 		panic(err)
 	}
