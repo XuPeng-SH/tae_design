@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"testing"
 
-	"github.com/RoaringBitmap/roaring/roaring64"
+	"github.com/RoaringBitmap/roaring"
 	"github.com/matrixorigin/matrixone/pkg/vm/engine/aoe/storage/metadata/v1"
 	"github.com/matrixorigin/matrixone/pkg/vm/engine/aoe/storage/mock"
 	"github.com/stretchr/testify/assert"
@@ -32,9 +32,9 @@ func TestPointerCmd(t *testing.T) {
 }
 
 // func TestDeletesCmd(t *testing.T) {
-// 	deletes := make(map[uint32]*roaring64.Bitmap)
+// 	deletes := make(map[uint32]*roaring.Bitmap)
 // 	for i := 0; i < 10; i++ {
-// 		deletes[uint32(i)] = roaring64.NewBitmap()
+// 		deletes[uint32(i)] = roaring.NewBitmap()
 // 		deletes[uint32(i)].Add(uint64(i)*2 + 1)
 // 	}
 // 	cmd := MakeDeletesCmd(deletes)
@@ -73,8 +73,8 @@ func TestComposedCmd(t *testing.T) {
 		bat, err := CopyToIBatch(data)
 		assert.Nil(t, err)
 		batCmd := NewBatchCmd(bat, schema.Types())
-		del := roaring64.NewBitmap()
-		del.Add(uint64(i))
+		del := roaring.NewBitmap()
+		del.Add(uint32(i))
 		delCmd := NewDeleteBitmapCmd(del)
 		comp := NewComposedCmd()
 		comp.AddCmd(batCmd)

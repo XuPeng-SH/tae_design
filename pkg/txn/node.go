@@ -5,10 +5,10 @@ import (
 	"fmt"
 	"sync/atomic"
 
+	"github.com/RoaringBitmap/roaring"
 	"github.com/jiangxinmeng1/logstore/pkg/entry"
 	"github.com/sirupsen/logrus"
 
-	"github.com/RoaringBitmap/roaring/roaring64"
 	gbat "github.com/matrixorigin/matrixone/pkg/container/batch"
 	gvec "github.com/matrixorigin/matrixone/pkg/container/vector"
 
@@ -69,7 +69,7 @@ type insertNode struct {
 	data    batch.IBatch
 	lsn     uint64
 	typ     NodeState
-	deletes *roaring64.Bitmap
+	deletes *roaring.Bitmap
 	rows    uint32
 	table   Table
 }
@@ -264,7 +264,7 @@ func (n *insertNode) GetValue(col int, row uint32) (interface{}, error) {
 
 func (n *insertNode) RangeDelete(start, end uint32) error {
 	if n.deletes == nil {
-		n.deletes = roaring64.New()
+		n.deletes = roaring.New()
 	}
 	n.deletes.AddRange(uint64(start), uint64(end)+1)
 	return nil
@@ -274,7 +274,7 @@ func (n *insertNode) IsRowDeleted(row uint32) bool {
 	if n.deletes == nil {
 		return false
 	}
-	return n.deletes.Contains(uint64(row))
+	return n.deletes.Contains(row)
 }
 
 func (n *insertNode) PrintDeletes() string {

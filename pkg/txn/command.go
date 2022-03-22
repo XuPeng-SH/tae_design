@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/RoaringBitmap/roaring/roaring64"
+	"github.com/RoaringBitmap/roaring"
 	"github.com/matrixorigin/matrixone/pkg/container/types"
 	"github.com/matrixorigin/matrixone/pkg/vm/engine/aoe/storage/container/batch"
 )
@@ -53,7 +53,7 @@ type PointerCmd struct {
 
 type DeleteBitmapCmd struct {
 	BaseCmd
-	Bitmap *roaring64.Bitmap
+	Bitmap *roaring.Bitmap
 }
 
 type BatchCmd struct {
@@ -85,7 +85,7 @@ type AppendCmd struct {
 	Node InsertNode
 }
 
-func NewDeleteBitmapCmd(bitmap *roaring64.Bitmap) *DeleteBitmapCmd {
+func NewDeleteBitmapCmd(bitmap *roaring.Bitmap) *DeleteBitmapCmd {
 	return &DeleteBitmapCmd{
 		Bitmap: bitmap,
 	}
@@ -173,7 +173,7 @@ func (e *DeleteBitmapCmd) GetType() int16 {
 }
 
 func (e *DeleteBitmapCmd) ReadFrom(r io.Reader) (err error) {
-	e.Bitmap = roaring64.NewBitmap()
+	e.Bitmap = roaring.NewBitmap()
 	_, err = e.Bitmap.ReadFrom(r)
 	return
 }
