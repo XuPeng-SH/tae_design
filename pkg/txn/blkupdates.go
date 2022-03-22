@@ -52,6 +52,30 @@ func (n *blockUpdates) UpdateLocked(row uint32, colIdx uint16, v interface{}) er
 	return col.UpdateLocked(row, v)
 }
 
+func (n *blockUpdates) GetColumnUpdatesLocked(colIdx uint16) *columnUpdates {
+	return n.cols[colIdx]
+}
+
+func (n *blockUpdates) MergeColumnLocked(o *blockUpdates, colIdx uint16) error {
+	if o.localDeletes != nil {
+		if n.localDeletes == nil {
+			n.localDeletes = roaring.NewBitmap()
+		}
+		n.localDeletes.Or(o.localDeletes)
+	}
+	col := o.cols[colIdx]
+	if col == nil {
+		return nil
+	}
+	currCol := n.cols[colIdx]
+	if currCol == nil {
+		currCol = NewColumnUpdates(n.id, n.rwlocker)
+		n.cols[colIdx] = currCol
+	}
+	currCol.MergeLocked(col)
+	return nil
+}
+
 func (n *blockUpdates) MergeLocked(o *blockUpdates) error {
 	if o.localDeletes != nil {
 		if n.localDeletes == nil {
