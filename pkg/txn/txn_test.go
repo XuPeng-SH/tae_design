@@ -332,7 +332,7 @@ func TestUpdateNode(t *testing.T) {
 	start := time.Now()
 	ecnt := 100
 	for i, _ := range nodes {
-		node := NewUpdateNode(target, nil, nil)
+		node := NewUpdateNode(&target, nil, nil, nil, nil)
 		nodes[i] = node
 		for j := i * ecnt; j < i*ecnt+ecnt; j++ {
 			node.Update(uint32(j), j)
@@ -340,7 +340,7 @@ func TestUpdateNode(t *testing.T) {
 	}
 	t.Log(time.Since(start))
 	start = time.Now()
-	node := NewUpdateNode(target, nil, nil)
+	node := NewUpdateNode(&target, nil, nil, nil, nil)
 	for _, n := range nodes {
 		node.MergeLocked(n)
 	}

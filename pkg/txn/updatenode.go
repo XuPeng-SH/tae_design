@@ -15,23 +15,30 @@ var (
 )
 
 type updateNode struct {
-	rwlock  *sync.RWMutex
-	schema  *metadata.Schema
-	target  common.ID
-	txnMask *roaring.Bitmap
-	txnVals map[uint32]interface{}
+	rwlock       *sync.RWMutex
+	schema       *metadata.Schema
+	target       *common.ID
+	txnMask      *roaring.Bitmap
+	txnVals      map[uint32]interface{}
+	localDeletes *roaring.Bitmap
+	baseDeletes  *roaring.Bitmap
 }
 
-func NewUpdateNode(target common.ID, schema *metadata.Schema, rwlock *sync.RWMutex) *updateNode {
+func NewUpdateNode(target *common.ID, schema *metadata.Schema, baseDeletes *roaring.Bitmap, deltaDeletes *roaring.Bitmap, rwlock *sync.RWMutex) *updateNode {
 	if rwlock == nil {
 		rwlock = &sync.RWMutex{}
 	}
+	if deltaDeletes == nil {
+		deltaDeletes = roaring.NewBitmap()
+	}
 	return &updateNode{
-		rwlock:  rwlock,
-		schema:  schema,
-		target:  target,
-		txnMask: roaring.NewBitmap(),
-		txnVals: make(map[uint32]interface{}),
+		rwlock:       rwlock,
+		schema:       schema,
+		target:       target,
+		txnMask:      roaring.NewBitmap(),
+		txnVals:      make(map[uint32]interface{}),
+		localDeletes: deltaDeletes,
+		baseDeletes:  baseDeletes,
 	}
 }
 
@@ -43,6 +50,9 @@ func (n *updateNode) Update(row uint32, v interface{}) error {
 }
 
 func (n *updateNode) UpdateLocked(row uint32, v interface{}) error {
+	if (n.baseDeletes != nil && n.baseDeletes.Contains(row)) || n.localDeletes.Contains(row) {
+		return TxnWWConflictErr
+	}
 	if _, ok := n.txnVals[row]; ok {
 		return TxnWWConflictErr
 	}
@@ -51,7 +61,18 @@ func (n *updateNode) UpdateLocked(row uint32, v interface{}) error {
 	return nil
 }
 
+func (n *updateNode) DeleteLocked(start uint32, end uint32) error {
+	for i := start; i <= end; i++ {
+		if (n.baseDeletes != nil && n.baseDeletes.Contains(i)) || n.localDeletes.Contains(i) {
+			return TxnWWConflictErr
+		}
+	}
+	n.localDeletes.AddRange(uint64(start), uint64(end+1))
+	return nil
+}
+
 func (n *updateNode) MergeLocked(o *updateNode) error {
+	n.localDeletes.Or(o.localDeletes)
 	for k, v := range o.txnVals {
 		n.txnMask.Add(k)
 		n.txnVals[k] = v
@@ -60,6 +81,6 @@ func (n *updateNode) MergeLocked(o *updateNode) error {
 }
 
 // TODO
-func (n *updateNode) ApplyUpdates(vec *gvec.Vector, deletes *roaring.Bitmap) *gvec.Vector {
+func (n *updateNode) ApplyUpdates(vec *gvec.Vector) *gvec.Vector {
 	return nil
 }
