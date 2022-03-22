@@ -620,6 +620,12 @@ type UpdateNode struct {
 
 <img src="https://user-images.githubusercontent.com/39627130/156788303-4fd2a2e4-6975-493e-8b5f-16f156fdc9dc.png" height="80%" width="80%" />
 
+##### Version Chain
+
+<img src="https://user-images.githubusercontent.com/39627130/159515818-ddbd5317-0e15-4d3e-8c49-a7edc0ebaef1.png" height="70%" width="70%" />
+
+**TODO**
+
 #### DDL
 A transaction usually contains multiple **DDL** and **DML** statements. As mentioned in [Catalog](#Catalog), **Catalog** has its own transaction mechanism, and the transaction of the **TAE** contains both **DDL** and **DML**, so we take the transaction of the **Catalog** as a sub-transaction of the **TAE** transaction.
 
