@@ -13,18 +13,18 @@ var (
 	TxnWWConflictErr = errors.New("tae: w-w conflict error")
 )
 
-type columnNode struct {
+type columnUpdates struct {
 	rwlock  *sync.RWMutex
 	target  *common.ID
 	txnMask *roaring.Bitmap
 	txnVals map[uint32]interface{}
 }
 
-func NewColumnNode(target *common.ID, rwlock *sync.RWMutex) *columnNode {
+func NewColumnUpdates(target *common.ID, rwlock *sync.RWMutex) *columnUpdates {
 	if rwlock == nil {
 		rwlock = &sync.RWMutex{}
 	}
-	return &columnNode{
+	return &columnUpdates{
 		rwlock:  rwlock,
 		target:  target,
 		txnMask: roaring.NewBitmap(),
@@ -32,14 +32,14 @@ func NewColumnNode(target *common.ID, rwlock *sync.RWMutex) *columnNode {
 	}
 }
 
-func (n *columnNode) Update(row uint32, v interface{}) error {
+func (n *columnUpdates) Update(row uint32, v interface{}) error {
 	n.rwlock.Lock()
 	err := n.UpdateLocked(row, v)
 	n.rwlock.Unlock()
 	return err
 }
 
-func (n *columnNode) UpdateLocked(row uint32, v interface{}) error {
+func (n *columnUpdates) UpdateLocked(row uint32, v interface{}) error {
 	if _, ok := n.txnVals[row]; ok {
 		return TxnWWConflictErr
 	}
@@ -48,7 +48,7 @@ func (n *columnNode) UpdateLocked(row uint32, v interface{}) error {
 	return nil
 }
 
-func (n *columnNode) MergeLocked(o *columnNode) error {
+func (n *columnUpdates) MergeLocked(o *columnUpdates) error {
 	for k, v := range o.txnVals {
 		n.txnMask.Add(k)
 		n.txnVals[k] = v
@@ -57,6 +57,6 @@ func (n *columnNode) MergeLocked(o *columnNode) error {
 }
 
 // TODO
-func (n *columnNode) ApplyUpdates(vec *gvec.Vector) *gvec.Vector {
+func (n *columnUpdates) ApplyToColumn(vec *gvec.Vector, deletes *roaring.Bitmap) *gvec.Vector {
 	return nil
 }

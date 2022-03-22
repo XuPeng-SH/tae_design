@@ -8,29 +8,29 @@ import (
 	"github.com/matrixorigin/matrixone/pkg/vm/engine/aoe/storage/metadata/v1"
 )
 
-type blockNode struct {
+type blockUpdates struct {
 	rwlocker     *sync.RWMutex
 	schema       *metadata.Schema
 	id           *common.ID
-	cols         map[uint16]*columnNode
+	cols         map[uint16]*columnUpdates
 	baseDeletes  *roaring.Bitmap
 	localDeletes *roaring.Bitmap
 }
 
-func NewBlockNode(id *common.ID, schema *metadata.Schema, rwlocker *sync.RWMutex, baseDeletes *roaring.Bitmap) *blockNode {
+func NewBlockUpdates(id *common.ID, schema *metadata.Schema, rwlocker *sync.RWMutex, baseDeletes *roaring.Bitmap) *blockUpdates {
 	if rwlocker == nil {
 		rwlocker = new(sync.RWMutex)
 	}
-	return &blockNode{
+	return &blockUpdates{
 		id:          id,
 		schema:      schema,
 		rwlocker:    rwlocker,
-		cols:        make(map[uint16]*columnNode),
+		cols:        make(map[uint16]*columnUpdates),
 		baseDeletes: baseDeletes,
 	}
 }
 
-func (n *blockNode) DeleteLocked(start, end uint32) error {
+func (n *blockUpdates) DeleteLocked(start, end uint32) error {
 	for i := start; i <= end; i++ {
 		if (n.baseDeletes != nil && n.baseDeletes.Contains(i)) || n.localDeletes.Contains(i) {
 			return TxnWWConflictErr
@@ -40,19 +40,19 @@ func (n *blockNode) DeleteLocked(start, end uint32) error {
 	return nil
 }
 
-func (n *blockNode) UpdateLocked(row uint32, colIdx uint16, v interface{}) error {
+func (n *blockUpdates) UpdateLocked(row uint32, colIdx uint16, v interface{}) error {
 	if (n.baseDeletes != nil && n.baseDeletes.Contains(row)) || n.localDeletes.Contains(row) {
 		return TxnWWConflictErr
 	}
 	col, ok := n.cols[colIdx]
 	if !ok {
-		col = NewColumnNode(n.id, n.rwlocker)
+		col = NewColumnUpdates(n.id, n.rwlocker)
 		n.cols[colIdx] = col
 	}
 	return col.UpdateLocked(row, v)
 }
 
-func (n *blockNode) MergeLocked(o *blockNode) error {
+func (n *blockUpdates) MergeLocked(o *blockUpdates) error {
 	if o.localDeletes != nil {
 		if n.localDeletes == nil {
 			n.localDeletes = roaring.NewBitmap()
@@ -62,7 +62,7 @@ func (n *blockNode) MergeLocked(o *blockNode) error {
 	for colIdx, col := range o.cols {
 		currCol := n.cols[colIdx]
 		if currCol == nil {
-			currCol = NewColumnNode(n.id, n.rwlocker)
+			currCol = NewColumnUpdates(n.id, n.rwlocker)
 			n.cols[colIdx] = currCol
 		}
 		currCol.MergeLocked(col)
