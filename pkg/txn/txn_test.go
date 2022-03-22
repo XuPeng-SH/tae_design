@@ -324,15 +324,15 @@ func TestBuildCommand(t *testing.T) {
 	t.Log(tbl.nodesMgr.String())
 }
 
-func TestUpdateNode(t *testing.T) {
+func TestColumnNode(t *testing.T) {
 	ncnt := 1000
-	nodes := make([]*updateNode, ncnt)
+	nodes := make([]*columnNode, ncnt)
 
 	target := common.ID{}
 	start := time.Now()
 	ecnt := 100
 	for i, _ := range nodes {
-		node := NewUpdateNode(&target, nil, nil, nil, nil)
+		node := NewColumnNode(&target, nil)
 		nodes[i] = node
 		for j := i * ecnt; j < i*ecnt+ecnt; j++ {
 			node.Update(uint32(j), j)
@@ -340,7 +340,7 @@ func TestUpdateNode(t *testing.T) {
 	}
 	t.Log(time.Since(start))
 	start = time.Now()
-	node := NewUpdateNode(&target, nil, nil, nil, nil)
+	node := NewColumnNode(&target, nil)
 	for _, n := range nodes {
 		node.MergeLocked(n)
 	}
