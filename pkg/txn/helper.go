@@ -155,7 +155,147 @@ func GetValue(col *gvec.Vector, row uint32) interface{} {
 	}
 	return nil
 }
+func SetFixSizeTypeValue(col *gvec.Vector, row uint32, val interface{}) error {
+	vals := col.Col
+	switch col.Typ.Oid {
+	case types.T_int8:
+		data := vals.([]int8)
+		data[row] = val.(int8)
+		col.Col = data
+	case types.T_int16:
+		data := vals.([]int16)
+		data[row] = val.(int16)
+		col.Col = data
+	case types.T_int32:
+		data := vals.([]int32)
+		data[row] = val.(int32)
+		col.Col = data
+	case types.T_int64:
+		data := vals.([]int64)
+		data[row] = val.(int64)
+		col.Col = data
+	case types.T_uint8:
+		data := vals.([]uint8)
+		data[row] = val.(uint8)
+		col.Col = data
+	case types.T_uint16:
+		data := vals.([]uint16)
+		data[row] = val.(uint16)
+		col.Col = data
+	case types.T_uint32:
+		data := vals.([]uint32)
+		data[row] = val.(uint32)
+		col.Col = data
+	case types.T_uint64:
+		data := vals.([]uint64)
+		data[row] = val.(uint64)
+		col.Col = data
+	case types.T_decimal:
+		data := vals.([]types.Decimal)
+		data[row] = val.(types.Decimal)
+		col.Col = data
+	case types.T_float32:
+		data := vals.([]float32)
+		data[row] = val.(float32)
+		col.Col = data
+	case types.T_float64:
+		data := vals.([]float64)
+		data[row] = val.(float64)
+		col.Col = data
+	case types.T_date:
+		data := vals.([]types.Date)
+		data[row] = val.(types.Date)
+		col.Col = data
+	case types.T_datetime:
+		data := vals.([]types.Datetime)
+		data[row] = val.(types.Datetime)
+		col.Col = data
+	case types.T_char, types.T_varchar, types.T_json:
+		// data := vals.(*types.Bytes)
+		// s := data.Offsets[row]
+		// e := data.Lengths[row]
+		// return string(data.Data[s:e])
+	default:
+		return vector.VecTypeNotSupportErr
+	}
+	return nil
+}
 
+func DeleteFixSizeTypeValue(col *gvec.Vector, row uint32) error {
+	vals := col.Col
+	switch col.Typ.Oid {
+	case types.T_int8:
+		data := vals.([]int8)
+		data = append(data[:row], data[row+1:]...)
+		col.Col = data
+	case types.T_int16:
+		data := vals.([]int16)
+		data = append(data[:row], data[row+1:]...)
+		col.Col = data
+	case types.T_int32:
+		data := vals.([]int32)
+		data = append(data[:row], data[row+1:]...)
+		col.Col = data
+	case types.T_int64:
+		data := vals.([]int64)
+		data = append(data[:row], data[row+1:]...)
+		col.Col = data
+	case types.T_uint8:
+		data := vals.([]uint8)
+		data = append(data[:row], data[row+1:]...)
+		col.Col = data
+	case types.T_uint16:
+		data := vals.([]uint16)
+		data = append(data[:row], data[row+1:]...)
+		col.Col = data
+	case types.T_uint32:
+		data := vals.([]uint32)
+		data = append(data[:row], data[row+1:]...)
+		col.Col = data
+	case types.T_uint64:
+		data := vals.([]uint64)
+		data = append(data[:row], data[row+1:]...)
+		col.Col = data
+	case types.T_decimal:
+		data := vals.([]types.Decimal)
+		data = append(data[:row], data[row+1:]...)
+		col.Col = data
+	case types.T_float32:
+		data := vals.([]float32)
+		data = append(data[:row], data[row+1:]...)
+		col.Col = data
+	case types.T_float64:
+		data := vals.([]float64)
+		data = append(data[:row], data[row+1:]...)
+		col.Col = data
+	case types.T_date:
+		data := vals.([]types.Date)
+		data = append(data[:row], data[row+1:]...)
+		col.Col = data
+	case types.T_datetime:
+		data := vals.([]types.Datetime)
+		data = append(data[:row], data[row+1:]...)
+		col.Col = data
+	case types.T_char, types.T_varchar, types.T_json:
+		// data := vals.(*types.Bytes)
+		// s := data.Offsets[row]
+		// e := data.Lengths[row]
+		// return string(data.Data[s:e])
+	default:
+		return vector.VecTypeNotSupportErr
+	}
+	return nil
+}
+
+func UpdateOffsets(data *types.Bytes, start, end int) {
+	if start == -1 {
+		data.Offsets[0] = 0
+		start++
+	}
+	for i := start; i < end; i++ {
+		data.Offsets[i+1] = data.Offsets[i] + data.Lengths[i]
+	}
+}
 func SplitBatch(bat *gbat.Batch, cnt int) []*gbat.Batch {
 	if cnt == 1 {
 		return []*gbat.Batch{bat}

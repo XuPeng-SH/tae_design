@@ -1,14 +1,20 @@
 package txn
 
 import (
+	"fmt"
 	"math/rand"
 	"os"
 	"path/filepath"
+	"strconv"
 	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
 
+	"github.com/RoaringBitmap/roaring"
+	"github.com/RoaringBitmap/roaring/roaring64"
+	"github.com/matrixorigin/matrixone/pkg/container/nulls"
+	"github.com/matrixorigin/matrixone/pkg/container/types"
 	gvec "github.com/matrixorigin/matrixone/pkg/container/vector"
 	"github.com/matrixorigin/matrixone/pkg/vm/engine/aoe/storage/common"
 	"github.com/matrixorigin/matrixone/pkg/vm/engine/aoe/storage/metadata/v1"
@@ -347,4 +353,63 @@ func TestColumnNode(t *testing.T) {
 	t.Log(time.Since(start))
 	assert.Equal(t, ncnt*ecnt, int(node.txnMask.GetCardinality()))
 	assert.Equal(t, ncnt*ecnt, len(node.txnVals))
+}
+func TestApplyUpdateNode(t *testing.T) {
+	target := common.ID{}
+	deletes:=&roaring.Bitmap{}
+	deletes.Add(1)
+	node:=NewColumnUpdates(&target,nil)
+	node.Update(0,[]byte("update"))
+	deletes.AddRange(3,4)
+
+	vec:=&gvec.Vector{}
+	vec.Typ.Oid=types.T_varchar
+	col:=&types.Bytes{
+		Data: make([]byte, 0),
+		Offsets: make([]uint32, 0),
+		Lengths: make([]uint32, 0),
+	}
+	for i:=0;i<5;i++{
+		col.Offsets = append(col.Offsets, uint32(len(col.Data)))
+		data:="val"+strconv.Itoa(i)
+		col.Data=append(col.Data, []byte(data)...)
+		col.Lengths = append(col.Lengths, uint32(len(data)))
+	}
+	vec.Col=col
+
+	vec.Nsp=&nulls.Nulls{}
+	vec.Nsp.Np=&roaring64.Bitmap{}
+	vec.Nsp.Np.Add(2)
+	// vec.Nsp.Np.Add(1)
+	// vec.Nsp.Np.Add(3)
+	vec.Nsp.Np.Add(4)
+	// vec.Nsp.Np.Add(0)
+
+	fmt.Printf("%s\n%v\n->\n",vec.Col,vec.Nsp.Np)
+	res:=node.ApplyToColumn(vec,deletes)
+	fmt.Printf("%s\n%v\n",res.Col,res.Nsp.Np)
+}
+
+func TestApplyUpdateNode2(t *testing.T) {
+	target := common.ID{}
+	deletes:=&roaring.Bitmap{}
+	deletes.Add(1)
+	node:=NewColumnUpdates(&target,nil,)
+	node.Update(0,int8(8))
+	deletes.AddRange(2,4)
+
+	vec:=&gvec.Vector{}
+	vec.Typ.Oid=types.T_int8
+	vec.Col=[]int8{1,2,3,4}
+
+	vec.Nsp=&nulls.Nulls{}
+	vec.Nsp.Np=&roaring64.Bitmap{}
+	vec.Nsp.Np.Add(2)
+	vec.Nsp.Np.Add(1)
+	vec.Nsp.Np.Add(3)
+	vec.Nsp.Np.Add(0)
+
+	fmt.Printf("%v\n%v\n->\n",vec.Col,vec.Nsp.Np)
+	res:=node.ApplyToColumn(vec,deletes)
+	fmt.Printf("%v\n%v\n",res.Col,res.Nsp.Np)
 }
