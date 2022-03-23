@@ -32,9 +32,12 @@ func NewBlockUpdates(id *common.ID, schema *metadata.Schema, rwlocker *sync.RWMu
 
 func (n *blockUpdates) DeleteLocked(start, end uint32) error {
 	for i := start; i <= end; i++ {
-		if (n.baseDeletes != nil && n.baseDeletes.Contains(i)) || n.localDeletes.Contains(i) {
+		if (n.baseDeletes != nil && n.baseDeletes.Contains(i)) || (n.localDeletes != nil && n.localDeletes.Contains(i)) {
 			return TxnWWConflictErr
 		}
+	}
+	if n.localDeletes == nil {
+		n.localDeletes = roaring.NewBitmap()
 	}
 	n.localDeletes.AddRange(uint64(start), uint64(end+1))
 	return nil

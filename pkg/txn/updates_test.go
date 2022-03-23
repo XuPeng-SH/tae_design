@@ -125,12 +125,103 @@ func insertLink(node, head *testUpdateNode) *testUpdateNode {
 	return head
 }
 
-func loopLink(t *testing.T, head *testUpdateNode, fn func(node *testUpdateNode)) {
+func loopLink(t *testing.T, head *testUpdateNode, fn func(node *testUpdateNode) bool) {
 	curr := head
 	for curr != nil {
-		fn(curr)
+		goNext := fn(curr)
+		if !goNext {
+			break
+		}
 		curr = curr.next
 	}
+}
+
+func findHead(n *testUpdateNode) *testUpdateNode {
+	head := n
+	for head.prev != nil {
+		head = head.prev
+	}
+	return head
+}
+
+func TestUpdatesMerge(t *testing.T) {
+	id := common.ID{}
+	var head *testUpdateNode
+	cnt1 := 11
+	cnt2 := 10
+	nodes := make([]*testUpdateNode, 0)
+	for i := 0; i < cnt1+cnt2; i++ {
+		nid := id.Next()
+		start := uint64(i) * 2
+		node := newTestUpdateNode(0, nid, uint64(i)*2, nil)
+		node.updates.DeleteLocked(uint32(i)*10, uint32(i+1)*10-1)
+		err := node.updates.UpdateLocked(uint32(i+1)*10000, 0, (i+1)*10000)
+		if i < cnt1 {
+			node.commit(start + 1)
+		} else {
+			nodes = append(nodes, node)
+		}
+		assert.Nil(t, err)
+		head = insertLink(node, head)
+	}
+
+	makeMerge := func() *testUpdateNode {
+		var merge *testUpdateNode
+		loopLink(t, head, func(n *testUpdateNode) bool {
+			if n.isMergedNode() {
+				return false
+			}
+			if !n.hasCommitted() {
+				return true
+			}
+			if merge == nil {
+				merge = newTestUpdateNode(1, n.id, n.startTs, nil)
+				merge.commit(n.commitTs)
+			}
+			merge.updates.MergeLocked(n.updates)
+			return true
+		})
+		return merge
+	}
+
+	merge := makeMerge()
+	insertLink(merge, head)
+	t.Log(merge.updates.localDeletes.String())
+	assert.Equal(t, cnt1*10, int(merge.updates.localDeletes.GetCardinality()))
+	assert.Equal(t, cnt1, int(merge.updates.cols[0].txnMask.GetCardinality()))
+
+	commitTs := head.startTs + uint64(100)
+	for i := len(nodes) - 1; i >= 0; i-- {
+		n := nodes[i]
+		if n.hasCommitted() {
+			continue
+		}
+		n.commit(commitTs)
+		commitTs++
+		sortNodes(n)
+	}
+
+	head = findHead(head)
+
+	cnt := 0
+	loopLink(t, head, func(n *testUpdateNode) bool {
+		if n.hasCommitted() && !n.isMergedNode() {
+			cnt++
+		}
+		return true
+	})
+	assert.Equal(t, cnt1+cnt2, cnt)
+
+	merge = makeMerge()
+	head = findHead(head)
+	insertLink(merge, head)
+	head = findHead(head)
+	loopLink(t, head, func(n *testUpdateNode) bool {
+		t.Log(n.repr())
+		return true
+	})
+	assert.Equal(t, cnt2*10, int(merge.updates.localDeletes.GetCardinality()))
+	assert.Equal(t, cnt2, int(merge.updates.cols[0].txnMask.GetCardinality()))
 }
 
 func TestUpdates(t *testing.T) {
@@ -145,8 +236,10 @@ func TestUpdates(t *testing.T) {
 		nodes = append(nodes, node)
 	}
 
-	loopLink(t, head, func(node *testUpdateNode) {
+	head = findHead(head)
+	loopLink(t, head, func(node *testUpdateNode) bool {
 		t.Log(node.repr())
+		return true
 	})
 	now := time.Now()
 	commitTs := (committed + 1) * 10
@@ -160,15 +253,13 @@ func TestUpdates(t *testing.T) {
 	mergeNode := newTestUpdateNode(1, nodes[mergeIdx].id, nodes[mergeIdx].startTs, nil)
 	mergeNode.commit(nodes[mergeIdx].commitTs)
 
-	head = nodes[0]
-	for head.prev != nil {
-		head = head.prev
-	}
+	head = findHead(nodes[0])
 
 	insertLink(mergeNode, head)
 
-	loopLink(t, head, func(node *testUpdateNode) {
+	loopLink(t, head, func(node *testUpdateNode) bool {
 		t.Log(node.repr())
+		return true
 	})
 	t.Log(time.Since(now))
 	assert.Equal(t, mergeNode.next, nodes[mergeIdx])
