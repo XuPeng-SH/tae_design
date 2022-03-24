@@ -1,6 +1,8 @@
 package txn
 
 import (
+	"encoding/binary"
+	"io"
 	"sync"
 
 	"github.com/RoaringBitmap/roaring"
@@ -49,7 +51,7 @@ func (n *blockUpdates) UpdateLocked(row uint32, colIdx uint16, v interface{}) er
 	}
 	col, ok := n.cols[colIdx]
 	if !ok {
-		col = NewColumnUpdates(n.id, n.rwlocker)
+		col = NewColumnUpdates(n.id, n.schema.ColDefs[colIdx], n.rwlocker)
 		n.cols[colIdx] = col
 	}
 	return col.UpdateLocked(row, v)
@@ -72,7 +74,7 @@ func (n *blockUpdates) MergeColumnLocked(o *blockUpdates, colIdx uint16) error {
 	}
 	currCol := n.cols[colIdx]
 	if currCol == nil {
-		currCol = NewColumnUpdates(n.id, n.rwlocker)
+		currCol = NewColumnUpdates(n.id, n.schema.ColDefs[colIdx], n.rwlocker)
 		n.cols[colIdx] = currCol
 	}
 	currCol.MergeLocked(col)
@@ -89,10 +91,83 @@ func (n *blockUpdates) MergeLocked(o *blockUpdates) error {
 	for colIdx, col := range o.cols {
 		currCol := n.cols[colIdx]
 		if currCol == nil {
-			currCol = NewColumnUpdates(n.id, n.rwlocker)
+			currCol = NewColumnUpdates(n.id, n.schema.ColDefs[colIdx], n.rwlocker)
 			n.cols[colIdx] = currCol
 		}
 		currCol.MergeLocked(col)
 	}
 	return nil
+}
+
+func (n *blockUpdates) ReadFrom(r io.Reader) error {
+	buf := make([]byte, IDSize)
+	var err error
+	if _, err = r.Read(buf); err != nil {
+		return err
+	}
+	n.id = UnmarshalID(buf)
+	deleteCnt := uint32(0)
+	if err = binary.Read(r, binary.BigEndian, &deleteCnt); err != nil {
+		return err
+	}
+	if deleteCnt != 0 {
+		buf = make([]byte, deleteCnt)
+		if _, err = r.Read(buf); err != nil {
+			return err
+		}
+	}
+	colCnt := uint16(0)
+	if err = binary.Read(r, binary.BigEndian, &colCnt); err != nil {
+		return err
+	}
+	for i := uint16(0); i < colCnt; i++ {
+		colIdx := uint16(0)
+		if err = binary.Read(r, binary.BigEndian, &colIdx); err != nil {
+			return err
+		}
+		col := NewColumnUpdates(nil, nil, n.rwlocker)
+		if err = col.ReadFrom(r); err != nil {
+			return err
+		}
+	}
+	return err
+}
+
+func (n *blockUpdates) WriteTo(w io.Writer) error {
+	_, err := w.Write(MarshalID(n.id))
+	if err != nil {
+		return err
+	}
+	if n.localDeletes == nil {
+		if err = binary.Write(w, binary.BigEndian, uint32(0)); err != nil {
+			return err
+		}
+	} else {
+		buf, err := n.localDeletes.ToBytes()
+		if err != nil {
+			return err
+		}
+		if err = binary.Write(w, binary.BigEndian, uint32(len(buf))); err != nil {
+			return err
+		}
+		if _, err = w.Write(buf); err != nil {
+			return err
+		}
+	}
+	if err = binary.Write(w, binary.BigEndian, uint16(len(n.cols))); err != nil {
+		return err
+	}
+	for colIdx, col := range n.cols {
+		if err = binary.Write(w, binary.BigEndian, colIdx); err != nil {
+			return err
+		}
+		if err = col.WriteTo(w); err != nil {
+			return err
+		}
+	}
+	return err
+}
+
+func (n *blockUpdates) MakeCommand(id uint32, forceFlush bool) (cmd TxnCmd, entry NodeEntry, err error) {
+	return
 }

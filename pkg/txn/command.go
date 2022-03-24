@@ -25,6 +25,23 @@ const (
 	CmdDelete
 )
 
+type CmdFactory func() TxnCmd
+
+var cmdFactories = map[int16]CmdFactory{
+	CmdPointer:      func() TxnCmd { return new(PointerCmd) },
+	CmdDeleteBitmap: func() TxnCmd { return new(DeleteBitmapCmd) },
+	CmdBatch:        func() TxnCmd { return new(BatchCmd) },
+	CmdComposed:     func() TxnCmd { return new(ComposedCmd) },
+}
+
+func RegisterCmdFactory(cmdType int16, factory CmdFactory) {
+	_, ok := cmdFactories[cmdType]
+	if ok {
+		panic(fmt.Sprintf("duplicate cmd type: %d", cmdType))
+	}
+	cmdFactories[cmdType] = factory
+}
+
 type TxnCmd interface {
 	WriteTo(io.Writer) error
 	ReadFrom(io.Reader) error
@@ -79,12 +96,6 @@ func NewBaseCustomizedCmd(id uint32, impl TxnCmd) *BaseCustomizedCmd {
 	}
 }
 
-type AppendCmd struct {
-	*BaseCustomizedCmd
-	ComposedCmd
-	Node InsertNode
-}
-
 func NewDeleteBitmapCmd(bitmap *roaring.Bitmap) *DeleteBitmapCmd {
 	return &DeleteBitmapCmd{
 		Bitmap: bitmap,
@@ -102,19 +113,6 @@ func NewComposedCmd() *ComposedCmd {
 	return &ComposedCmd{
 		Cmds: make([]TxnCmd, 0),
 	}
-}
-
-func NewAppendCmd(id uint32, node InsertNode) *AppendCmd {
-	impl := &AppendCmd{
-		ComposedCmd: *NewComposedCmd(),
-		Node:        node,
-	}
-	impl.BaseCustomizedCmd = NewBaseCustomizedCmd(id, impl)
-	return impl
-}
-
-func NewEmptyAppendCmd() *AppendCmd {
-	return NewAppendCmd(0, nil)
 }
 
 func (c *BaseCustomizedCmd) GetID() uint32 {
@@ -314,63 +312,18 @@ func (cc *ComposedCmd) String() string {
 	return cc.ToString("")
 }
 
-func (c *AppendCmd) String() string {
-	s := fmt.Sprintf("AppendCmd: ID=%d", c.ID)
-	s = fmt.Sprintf("%s\n%s", s, c.ComposedCmd.ToString("\t"))
-	return s
-}
-
-func (e *AppendCmd) GetType() int16 { return CmdAppend }
-func (c *AppendCmd) WriteTo(w io.Writer) (err error) {
-	if err = binary.Write(w, binary.BigEndian, c.ID); err != nil {
-		return
-	}
-	err = c.ComposedCmd.WriteTo(w)
-	return err
-}
-
-func (c *AppendCmd) ReadFrom(r io.Reader) (err error) {
-	if err = binary.Read(r, binary.BigEndian, &c.ID); err != nil {
-		return
-	}
-	err = c.ComposedCmd.ReadFrom(r)
-	return
-}
-
-func (c *AppendCmd) Marshal() (buf []byte, err error) {
-	var bbuf bytes.Buffer
-	if err = c.WriteTo(&bbuf); err != nil {
-		return
-	}
-	buf = bbuf.Bytes()
-	return
-}
-
-func (c *AppendCmd) Unmarshal(buf []byte) error {
-	bbuf := bytes.NewBuffer(buf)
-	err := c.ReadFrom(bbuf)
-	return err
-}
-
 func BuildCommandFrom(r io.Reader) (cmd TxnCmd, err error) {
 	var cmdType int16
 	if err = binary.Read(r, binary.BigEndian, &cmdType); err != nil {
 		return
 	}
-	switch cmdType {
-	case CmdPointer:
-		cmd = new(PointerCmd)
-	case CmdDeleteBitmap:
-		cmd = new(DeleteBitmapCmd)
-	case CmdBatch:
-		cmd = new(BatchCmd)
-	case CmdComposed:
-		cmd = new(ComposedCmd)
-	case CmdAppend:
-		cmd = NewEmptyAppendCmd()
-	default:
-		panic(fmt.Sprintf("not support cmd type: %d", cmdType))
+
+	factory := cmdFactories[cmdType]
+	if factory == nil {
+		panic(fmt.Sprintf("no factory found for cmd: %d", cmdType))
 	}
+
+	cmd = factory()
 	err = cmd.ReadFrom(r)
 	return
 }

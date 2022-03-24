@@ -9,10 +9,38 @@ import (
 	"github.com/matrixorigin/matrixone/pkg/container/types"
 	gvec "github.com/matrixorigin/matrixone/pkg/container/vector"
 	"github.com/matrixorigin/matrixone/pkg/encoding"
+	"github.com/matrixorigin/matrixone/pkg/vm/engine/aoe/storage/common"
 	"github.com/matrixorigin/matrixone/pkg/vm/engine/aoe/storage/container/batch"
 	"github.com/matrixorigin/matrixone/pkg/vm/engine/aoe/storage/container/vector"
 	"github.com/sirupsen/logrus"
 )
+
+const (
+	IDSize = 8 + 8 + 8 + 4 + 2 + 1
+)
+
+func MarshalID(id *common.ID) []byte {
+	var w bytes.Buffer
+	binary.Write(&w, binary.BigEndian, id.TableID)
+	binary.Write(&w, binary.BigEndian, id.SegmentID)
+	binary.Write(&w, binary.BigEndian, id.BlockID)
+	binary.Write(&w, binary.BigEndian, id.PartID)
+	binary.Write(&w, binary.BigEndian, id.Idx)
+	binary.Write(&w, binary.BigEndian, id.Iter)
+	return w.Bytes()
+}
+
+func UnmarshalID(buf []byte) *common.ID {
+	r := bytes.NewBuffer(buf)
+	id := common.ID{}
+	binary.Read(r, binary.BigEndian, &id.TableID)
+	binary.Read(r, binary.BigEndian, &id.SegmentID)
+	binary.Read(r, binary.BigEndian, &id.BlockID)
+	binary.Read(r, binary.BigEndian, &id.PartID)
+	binary.Read(r, binary.BigEndian, &id.Idx)
+	binary.Read(r, binary.BigEndian, &id.Iter)
+	return &id
+}
 
 func MarshalBatch(types []types.Type, data batch.IBatch) ([]byte, error) {
 	var buf []byte
@@ -101,6 +129,59 @@ func UnmarshalBatchFrom(r io.Reader) (vecTypes []types.Type, bat batch.IBatch, e
 
 	bat, err = batch.NewBatch(attrs, cols)
 	return
+}
+
+func AppendValue(vec *gvec.Vector, v interface{}) {
+	switch vec.Typ.Oid {
+	case types.T_int8:
+		vvals := vec.Col.([]int8)
+		vec.Col = append(vvals, v.(int8))
+	case types.T_int16:
+		vvals := vec.Col.([]int16)
+		vec.Col = append(vvals, v.(int16))
+	case types.T_int32:
+		vvals := vec.Col.([]int32)
+		vec.Col = append(vvals, v.(int32))
+	case types.T_int64:
+		vvals := vec.Col.([]int64)
+		vec.Col = append(vvals, v.(int64))
+	case types.T_uint8:
+		vvals := vec.Col.([]uint8)
+		vec.Col = append(vvals, v.(uint8))
+	case types.T_uint16:
+		vvals := vec.Col.([]uint16)
+		vec.Col = append(vvals, v.(uint16))
+	case types.T_uint32:
+		vvals := vec.Col.([]uint32)
+		vec.Col = append(vvals, v.(uint32))
+	case types.T_uint64:
+		vvals := vec.Col.([]uint64)
+		vec.Col = append(vvals, v.(uint64))
+	case types.T_decimal:
+		vvals := vec.Col.([]types.Decimal)
+		vec.Col = append(vvals, v.(types.Decimal))
+	case types.T_float32:
+		vvals := vec.Col.([]float32)
+		vec.Col = append(vvals, v.(float32))
+	case types.T_float64:
+		vvals := vec.Col.([]float64)
+		vec.Col = append(vvals, v.(float64))
+	case types.T_date:
+		vvals := vec.Col.([]types.Date)
+		vec.Col = append(vvals, v.(types.Date))
+	case types.T_datetime:
+		vvals := vec.Col.([]types.Datetime)
+		vec.Col = append(vvals, v.(types.Datetime))
+	case types.T_char, types.T_varchar, types.T_json:
+		vvals := vec.Col.(*types.Bytes)
+		offset := len(vvals.Data)
+		length := len(v.([]byte))
+		vvals.Data = append(vvals.Data, v.([]byte)...)
+		vvals.Offsets = append(vvals.Offsets, uint32(offset))
+		vvals.Lengths = append(vvals.Lengths, uint32(length))
+	default:
+		panic("not expected")
+	}
 }
 
 func GetValue(col *gvec.Vector, row uint32) interface{} {

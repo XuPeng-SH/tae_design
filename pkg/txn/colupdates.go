@@ -1,7 +1,9 @@
 package txn
 
 import (
+	"encoding/binary"
 	"errors"
+	"io"
 	"sync"
 
 	"github.com/RoaringBitmap/roaring"
@@ -10,6 +12,7 @@ import (
 	"github.com/matrixorigin/matrixone/pkg/container/types"
 	gvec "github.com/matrixorigin/matrixone/pkg/container/vector"
 	"github.com/matrixorigin/matrixone/pkg/vm/engine/aoe/storage/common"
+	"github.com/matrixorigin/matrixone/pkg/vm/engine/aoe/storage/metadata/v1"
 )
 
 var (
@@ -18,21 +21,99 @@ var (
 
 type columnUpdates struct {
 	rwlock  *sync.RWMutex
+	colDef  *metadata.ColDef
 	target  *common.ID
 	txnMask *roaring.Bitmap
 	txnVals map[uint32]interface{}
 }
 
-func NewColumnUpdates(target *common.ID, rwlock *sync.RWMutex) *columnUpdates {
+func NewColumnUpdates(target *common.ID, colDef *metadata.ColDef, rwlock *sync.RWMutex) *columnUpdates {
 	if rwlock == nil {
 		rwlock = &sync.RWMutex{}
 	}
 	return &columnUpdates{
 		rwlock:  rwlock,
+		colDef:  colDef,
 		target:  target,
 		txnMask: roaring.NewBitmap(),
 		txnVals: make(map[uint32]interface{}),
 	}
+}
+
+// TODO: rewrite
+func (n *columnUpdates) ReadFrom(r io.Reader) error {
+	buf := make([]byte, IDSize)
+	if _, err := r.Read(buf); err != nil {
+		return err
+	}
+	n.target = UnmarshalID(buf)
+	n.txnMask = roaring.New()
+
+	length := uint32(0)
+	if err := binary.Read(r, binary.BigEndian, &length); err != nil {
+		return err
+	}
+	buf = make([]byte, length)
+	if _, err := r.Read(buf); err != nil {
+		return err
+	}
+	if err := n.txnMask.UnmarshalBinary(buf); err != nil {
+		return err
+	}
+	if err := binary.Read(r, binary.BigEndian, &length); err != nil {
+		return err
+	}
+	buf = make([]byte, length)
+	if _, err := r.Read(buf); err != nil {
+		return err
+	}
+	vals := gvec.Vector{}
+	if err := vals.Read(buf); err != nil {
+		return err
+	}
+	it := n.txnMask.Iterator()
+	for it.HasNext() {
+		row := it.Next()
+		v := GetValue(&vals, row)
+		n.txnVals[row] = v
+	}
+	return nil
+}
+
+// TODO: rewrite later
+func (n *columnUpdates) WriteTo(w io.Writer) error {
+	_, err := w.Write(MarshalID(n.target))
+	if err != nil {
+		return err
+	}
+
+	buf, err := n.txnMask.ToBytes()
+	if err != nil {
+		return err
+	}
+	if err = binary.Write(w, binary.BigEndian, uint32(len(buf))); err != nil {
+		return err
+	}
+
+	if _, err = w.Write(buf); err != nil {
+		return err
+	}
+
+	col := gvec.New(n.colDef.Type)
+	it := n.txnMask.Iterator()
+	for it.HasNext() {
+		row := it.Next()
+		AppendValue(col, n.txnVals[row])
+	}
+	buf, err = col.Show()
+	if err != nil {
+		return err
+	}
+	if err = binary.Write(w, binary.BigEndian, uint32(len(buf))); err != nil {
+		return err
+	}
+	_, err = w.Write(buf)
+	return err
 }
 
 func (n *columnUpdates) Update(row uint32, v interface{}) error {
@@ -84,7 +165,7 @@ func (n *columnUpdates) ApplyToColumn(vec *gvec.Vector, deletes *roaring.Bitmap)
 				val := n.txnVals[row].([]byte)
 				suffix := data.Data[data.Offsets[row]+data.Lengths[row]:]
 				data.Lengths[row] = uint32(len(val))
-				val=append(val, suffix...)
+				val = append(val, suffix...)
 				data.Data = append(data.Data[:data.Offsets[row]], val...)
 				pre = int(row)
 				if vec.Nsp.Np.Contains(uint64(row)) {
@@ -137,8 +218,8 @@ func (n *columnUpdates) ApplyToColumn(vec *gvec.Vector, deletes *roaring.Bitmap)
 				currRow := row - uint32(deleted)
 				if pre != -1 {
 					if int(currRow) == len(data.Lengths)-1 {
-					UpdateOffsets(data, pre-1, int(currRow))
-					}else {
+						UpdateOffsets(data, pre-1, int(currRow))
+					} else {
 						UpdateOffsets(data, pre-1, int(currRow)+1)
 					}
 				}
@@ -149,7 +230,7 @@ func (n *columnUpdates) ApplyToColumn(vec *gvec.Vector, deletes *roaring.Bitmap)
 				} else {
 					data.Data = append(data.Data[:data.Offsets[currRow]], data.Data[data.Offsets[currRow+1]:]...)
 					data.Lengths = append(data.Lengths[:currRow], data.Lengths[currRow+1:]...)
-					data.Offsets = append(data.Offsets[:currRow], data.Offsets[currRow+1:]...) 
+					data.Offsets = append(data.Offsets[:currRow], data.Offsets[currRow+1:]...)
 				}
 				var n uint64
 				if nspIterator.HasNext() {

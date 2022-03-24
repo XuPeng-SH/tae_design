@@ -1,6 +1,7 @@
 package txn
 
 import (
+	"bytes"
 	"fmt"
 	"math/rand"
 	"os"
@@ -337,79 +338,95 @@ func TestColumnNode(t *testing.T) {
 	target := common.ID{}
 	start := time.Now()
 	ecnt := 100
+	schema := metadata.MockSchema(2)
 	for i, _ := range nodes {
-		node := NewColumnUpdates(&target, nil)
+		node := NewColumnUpdates(&target, schema.ColDefs[0], nil)
 		nodes[i] = node
 		for j := i * ecnt; j < i*ecnt+ecnt; j++ {
-			node.Update(uint32(j), j)
+			node.Update(uint32(j), int32(j))
 		}
 	}
 	t.Log(time.Since(start))
 	start = time.Now()
-	node := NewColumnUpdates(&target, nil)
+	node := NewColumnUpdates(&target, schema.ColDefs[0], nil)
 	for _, n := range nodes {
 		node.MergeLocked(n)
 	}
 	t.Log(time.Since(start))
 	assert.Equal(t, ncnt*ecnt, int(node.txnMask.GetCardinality()))
 	assert.Equal(t, ncnt*ecnt, len(node.txnVals))
+
+	var w bytes.Buffer
+	err := node.WriteTo(&w)
+	assert.Nil(t, err)
+
+	buf := w.Bytes()
+	r := bytes.NewBuffer(buf)
+	n2 := NewColumnUpdates(nil, nil, nil)
+	err = n2.ReadFrom(r)
+	assert.Nil(t, err)
+	assert.Equal(t, node.txnMask.GetCardinality(), n2.txnMask.GetCardinality())
+	assert.Equal(t, node.txnVals, n2.txnVals)
 }
+
 func TestApplyUpdateNode(t *testing.T) {
 	target := common.ID{}
-	deletes:=&roaring.Bitmap{}
+	deletes := &roaring.Bitmap{}
 	deletes.Add(1)
-	node:=NewColumnUpdates(&target,nil)
-	node.Update(0,[]byte("update"))
-	deletes.AddRange(3,4)
+	schema := metadata.MockSchema(2)
+	node := NewColumnUpdates(&target, schema.ColDefs[0], nil)
+	node.Update(0, []byte("update"))
+	deletes.AddRange(3, 4)
 
-	vec:=&gvec.Vector{}
-	vec.Typ.Oid=types.T_varchar
-	col:=&types.Bytes{
-		Data: make([]byte, 0),
+	vec := &gvec.Vector{}
+	vec.Typ.Oid = types.T_varchar
+	col := &types.Bytes{
+		Data:    make([]byte, 0),
 		Offsets: make([]uint32, 0),
 		Lengths: make([]uint32, 0),
 	}
-	for i:=0;i<5;i++{
+	for i := 0; i < 5; i++ {
 		col.Offsets = append(col.Offsets, uint32(len(col.Data)))
-		data:="val"+strconv.Itoa(i)
-		col.Data=append(col.Data, []byte(data)...)
+		data := "val" + strconv.Itoa(i)
+		col.Data = append(col.Data, []byte(data)...)
 		col.Lengths = append(col.Lengths, uint32(len(data)))
 	}
-	vec.Col=col
+	vec.Col = col
 
-	vec.Nsp=&nulls.Nulls{}
-	vec.Nsp.Np=&roaring64.Bitmap{}
+	vec.Nsp = &nulls.Nulls{}
+	vec.Nsp.Np = &roaring64.Bitmap{}
 	vec.Nsp.Np.Add(2)
 	// vec.Nsp.Np.Add(1)
 	// vec.Nsp.Np.Add(3)
 	vec.Nsp.Np.Add(4)
 	// vec.Nsp.Np.Add(0)
 
-	fmt.Printf("%s\n%v\n->\n",vec.Col,vec.Nsp.Np)
-	res:=node.ApplyToColumn(vec,deletes)
-	fmt.Printf("%s\n%v\n",res.Col,res.Nsp.Np)
+	fmt.Printf("%s\n%v\n->\n", vec.Col, vec.Nsp.Np)
+	res := node.ApplyToColumn(vec, deletes)
+	fmt.Printf("%s\n%v\n", res.Col, res.Nsp.Np)
 }
 
 func TestApplyUpdateNode2(t *testing.T) {
 	target := common.ID{}
-	deletes:=&roaring.Bitmap{}
+	deletes := &roaring.Bitmap{}
 	deletes.Add(1)
-	node:=NewColumnUpdates(&target,nil,)
-	node.Update(0,int8(8))
-	deletes.AddRange(2,4)
+	schema := metadata.MockSchema(2)
+	node := NewColumnUpdates(&target, schema.ColDefs[0], nil)
+	node.Update(0, int8(8))
+	deletes.AddRange(2, 4)
 
-	vec:=&gvec.Vector{}
-	vec.Typ.Oid=types.T_int8
-	vec.Col=[]int8{1,2,3,4}
+	vec := &gvec.Vector{}
+	vec.Typ.Oid = types.T_int8
+	vec.Col = []int8{1, 2, 3, 4}
 
-	vec.Nsp=&nulls.Nulls{}
-	vec.Nsp.Np=&roaring64.Bitmap{}
+	vec.Nsp = &nulls.Nulls{}
+	vec.Nsp.Np = &roaring64.Bitmap{}
 	vec.Nsp.Np.Add(2)
 	vec.Nsp.Np.Add(1)
 	vec.Nsp.Np.Add(3)
 	vec.Nsp.Np.Add(0)
 
-	fmt.Printf("%v\n%v\n->\n",vec.Col,vec.Nsp.Np)
-	res:=node.ApplyToColumn(vec,deletes)
-	fmt.Printf("%v\n%v\n",res.Col,res.Nsp.Np)
+	fmt.Printf("%v\n%v\n->\n", vec.Col, vec.Nsp.Np)
+	res := node.ApplyToColumn(vec, deletes)
+	fmt.Printf("%v\n%v\n", res.Col, res.Nsp.Np)
 }

@@ -1,12 +1,14 @@
 package txn
 
 import (
+	"bytes"
 	"fmt"
 	"testing"
 	"time"
 
 	"github.com/RoaringBitmap/roaring"
 	"github.com/matrixorigin/matrixone/pkg/vm/engine/aoe/storage/common"
+	"github.com/matrixorigin/matrixone/pkg/vm/engine/aoe/storage/metadata/v1"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -20,13 +22,13 @@ type testUpdateNode struct {
 	id       *common.ID
 }
 
-func newTestUpdateNode(ntype int8, id *common.ID, start uint64, deletes *roaring.Bitmap) *testUpdateNode {
+func newTestUpdateNode(ntype int8, schema *metadata.Schema, id *common.ID, start uint64, deletes *roaring.Bitmap) *testUpdateNode {
 	return &testUpdateNode{
 		id:       id,
 		ntype:    ntype,
 		startTs:  start,
 		commitTs: ^uint64(0),
-		updates:  NewBlockUpdates(id, nil, nil, deletes),
+		updates:  NewBlockUpdates(id, schema, nil, deletes),
 	}
 }
 
@@ -150,10 +152,11 @@ func TestUpdatesMerge(t *testing.T) {
 	cnt1 := 11
 	cnt2 := 10
 	nodes := make([]*testUpdateNode, 0)
+	schema := metadata.MockSchema(1)
 	for i := 0; i < cnt1+cnt2; i++ {
 		nid := id.Next()
 		start := uint64(i) * 2
-		node := newTestUpdateNode(0, nid, uint64(i)*2, nil)
+		node := newTestUpdateNode(0, schema, nid, uint64(i)*2, nil)
 		node.updates.DeleteLocked(uint32(i)*10, uint32(i+1)*10-1)
 		err := node.updates.UpdateLocked(uint32(i+1)*10000, 0, (i+1)*10000)
 		if i < cnt1 {
@@ -175,7 +178,7 @@ func TestUpdatesMerge(t *testing.T) {
 				return true
 			}
 			if merge == nil {
-				merge = newTestUpdateNode(1, n.id, n.startTs, nil)
+				merge = newTestUpdateNode(1, schema, n.id, n.startTs, nil)
 				merge.commit(n.commitTs)
 			}
 			merge.updates.MergeLocked(n.updates)
@@ -228,10 +231,11 @@ func TestUpdates(t *testing.T) {
 	id := common.ID{}
 	committed := 10
 	nodes := make([]*testUpdateNode, 0)
+	schema := metadata.MockSchema(1)
 	var head *testUpdateNode
 	for i := 0; i < committed; i++ {
 		nid := id.Next()
-		node := newTestUpdateNode(0, nid, uint64(committed-i)*10, nil)
+		node := newTestUpdateNode(0, schema, nid, uint64(committed-i)*10, nil)
 		head = insertLink(node, head)
 		nodes = append(nodes, node)
 	}
@@ -250,7 +254,7 @@ func TestUpdates(t *testing.T) {
 		sortNodes(nodes[i])
 	}
 
-	mergeNode := newTestUpdateNode(1, nodes[mergeIdx].id, nodes[mergeIdx].startTs, nil)
+	mergeNode := newTestUpdateNode(1, schema, nodes[mergeIdx].id, nodes[mergeIdx].startTs, nil)
 	mergeNode.commit(nodes[mergeIdx].commitTs)
 
 	head = findHead(nodes[0])
@@ -263,4 +267,17 @@ func TestUpdates(t *testing.T) {
 	})
 	t.Log(time.Since(now))
 	assert.Equal(t, mergeNode.next, nodes[mergeIdx])
+
+	var w bytes.Buffer
+	err := mergeNode.updates.WriteTo(&w)
+	assert.Nil(t, err)
+
+	m1 := mergeNode.updates
+	buf := w.Bytes()
+	r := bytes.NewBuffer(buf)
+	m2 := NewBlockUpdates(nil, nil, nil, nil)
+	err = m2.ReadFrom(r)
+	assert.Equal(t, *m1.id, *m2.id)
+	// assert.True(t, m1.localDeletes.Equals(m2.localDeletes))
+	assert.Equal(t, len(m1.cols), len(m2.cols))
 }
