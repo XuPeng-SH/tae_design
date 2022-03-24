@@ -169,5 +169,6 @@ func (n *blockUpdates) WriteTo(w io.Writer) error {
 }
 
 func (n *blockUpdates) MakeCommand(id uint32, forceFlush bool) (cmd TxnCmd, entry NodeEntry, err error) {
+	cmd = NewUpdateCmd(id, n)
 	return
 }

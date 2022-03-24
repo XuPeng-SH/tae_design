@@ -280,4 +280,16 @@ func TestUpdates(t *testing.T) {
 	assert.Equal(t, *m1.id, *m2.id)
 	// assert.True(t, m1.localDeletes.Equals(m2.localDeletes))
 	assert.Equal(t, len(m1.cols), len(m2.cols))
+
+	cmd, _, _ := mergeNode.updates.MakeCommand(1, false)
+	w.Reset()
+	err = cmd.WriteTo(&w)
+	assert.Nil(t, err)
+
+	buf = w.Bytes()
+	r = bytes.NewBuffer(buf)
+
+	cmd2, err := BuildCommandFrom(r)
+	assert.Nil(t, err)
+	assert.NotNil(t, cmd2)
 }
