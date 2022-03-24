@@ -1,6 +1,7 @@
 package txn
 
 import (
+	"errors"
 	"fmt"
 
 	"github.com/matrixorigin/matrixone/pkg/container/batch"
@@ -11,6 +12,10 @@ import (
 	"github.com/matrixorigin/matrixone/pkg/vm/engine/aoe/storage/metadata/v1"
 	"github.com/matrixorigin/matrixone/pkg/vm/engine/aoe/storage/mutation/buffer/base"
 	"github.com/sirupsen/logrus"
+)
+
+var (
+	ErrDuplicateNode = errors.New("tae: duplicate node")
 )
 
 type TransactionState interface {
@@ -44,6 +49,7 @@ type txnTable struct {
 	*TxnState
 	inodes     []InsertNode
 	appendable base.INodeHandle
+	updates    map[common.ID]*blockUpdates
 	driver     NodeDriver
 	id         uint64
 	schema     *metadata.Schema
@@ -64,6 +70,7 @@ func NewTable(txnState *TxnState, id uint64, schema *metadata.Schema, driver Nod
 		driver:   driver,
 		index:    NewSimpleTableIndex(),
 		TxnState: txnState,
+		updates:  make(map[common.ID]*blockUpdates),
 	}
 	return tbl
 }
@@ -102,6 +109,16 @@ func (tbl *txnTable) registerInsertNode() error {
 	n := NewInsertNode(tbl, tbl.nodesMgr, id, tbl.driver)
 	tbl.appendable = tbl.nodesMgr.Pin(n)
 	tbl.inodes = append(tbl.inodes, n)
+	return nil
+}
+
+func (tbl *txnTable) AddUpdateNode(node *blockUpdates) error {
+	id := *node.GetID()
+	updates := tbl.updates[id]
+	if updates != nil {
+		return ErrDuplicateNode
+	}
+	tbl.updates[id] = node
 	return nil
 }
 
@@ -278,6 +295,14 @@ func (tbl *txnTable) buildCommitCmd(cmdSeq *uint32) (cmd TxnCmd, entries []NodeE
 		}
 		composedCmd.AddCmd(cmd)
 		h.Close()
+	}
+	for _, updates := range tbl.updates {
+		updateCmd, _, err := updates.MakeCommand(*cmdSeq, false)
+		if err != nil {
+			return cmd, entries, err
+		}
+		composedCmd.AddCmd(updateCmd)
+		*cmdSeq += uint32(1)
 	}
 	return composedCmd, entries, err
 }

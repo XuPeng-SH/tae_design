@@ -32,6 +32,8 @@ func NewBlockUpdates(id *common.ID, schema *metadata.Schema, rwlocker *sync.RWMu
 	}
 }
 
+func (n *blockUpdates) GetID() *common.ID { return n.id }
+
 func (n *blockUpdates) DeleteLocked(start, end uint32) error {
 	for i := start; i <= end; i++ {
 		if (n.baseDeletes != nil && n.baseDeletes.Contains(i)) || (n.localDeletes != nil && n.localDeletes.Contains(i)) {
