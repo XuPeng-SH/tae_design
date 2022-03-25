@@ -7,9 +7,11 @@ import (
 )
 
 type Store struct {
-	tables   map[uint64]Table
-	driver   NodeDriver
-	nodesMgr base.INodeManager
+	tables     map[uint64]Table
+	driver     NodeDriver
+	nodesMgr   base.INodeManager
+	dbIndex    map[string]uint64
+	tableIndex map[string]uint64
 }
 
 func NewStore() *Store {
@@ -34,11 +36,15 @@ func (store *Store) InitTable(id uint64, schema *metadata.Schema) error {
 		return ErrDuplicateNode
 	}
 	store.tables[id] = NewTable(nil, id, schema, store.driver, store.nodesMgr)
+	store.tableIndex[schema.Name] = id
 	return nil
 }
 
 func (store *Store) Append(id uint64, data *batch.Batch) error {
 	table := store.tables[id]
+	if table.IsDeleted() {
+		return ErrNotFound
+	}
 	return table.Append(data)
 }
 

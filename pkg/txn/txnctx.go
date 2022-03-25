@@ -3,6 +3,7 @@ package txn
 import (
 	"fmt"
 	"sync"
+	"tae/pkg/iface"
 )
 
 const (
@@ -36,6 +37,14 @@ func NewTxnCtx(rwlocker *sync.RWMutex, id, start uint64, info []byte) *TxnCtx {
 		CommitTS: UncommitTS,
 		Info:     info,
 	}
+}
+
+func (ctx *TxnCtx) GetID() uint64      { return ctx.ID }
+func (ctx *TxnCtx) GetInfo() []byte    { return ctx.Info }
+func (ctx *TxnCtx) GetStartTS() uint64 { return ctx.StartTS }
+
+func (ctx *TxnCtx) Compare(o iface.TxnReader) int {
+	return 0
 }
 
 func (ctx *TxnCtx) IsActiveLocked() bool {

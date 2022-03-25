@@ -2,6 +2,7 @@ package txn
 
 import (
 	"sync"
+	"tae/pkg/iface"
 
 	"github.com/matrixorigin/matrixone/pkg/vm/engine/aoe/storage/common"
 	"github.com/matrixorigin/matrixone/pkg/vm/engine/aoe/storage/logstore/sm"
@@ -12,13 +13,13 @@ type TxnManager struct {
 	sync.RWMutex
 	sm.ClosedState
 	sm.StateMachine
-	Active           map[uint64]*Transaction
+	Active           map[uint64]iface.AsyncTxn
 	IdAlloc, TsAlloc *common.IdAlloctor
 }
 
 func NewTxnManager() *TxnManager {
 	mgr := &TxnManager{
-		Active:  make(map[uint64]*Transaction),
+		Active:  make(map[uint64]iface.AsyncTxn),
 		IdAlloc: common.NewIdAlloctor(1),
 		TsAlloc: common.NewIdAlloctor(1),
 	}
@@ -45,24 +46,22 @@ func (mgr *TxnManager) StartTxn(info []byte) *Transaction {
 	return txn
 }
 
+func (mgr *TxnManager) GetTxn(id uint64) iface.AsyncTxn {
+	mgr.RLock()
+	defer mgr.RUnlock()
+	return mgr.Active[id]
+}
+
 func (mgr *TxnManager) OnOpTxn(op *OpTxn) {
 	mgr.EnqueueRecevied(op)
 }
 
-func (mgr *TxnManager) onPreparCommit(txn *Transaction) {
-	logrus.Infof("Prepare Committing %d", txn.Ctx.ID)
-	if txn.PrepareCommitFn != nil {
-		txn.Err = txn.PrepareCommitFn(txn)
-	}
-	if txn.Err != nil {
-		return
-	}
-	txn.Err = txn.PreapreCommit()
+func (mgr *TxnManager) onPreparCommit(txn iface.AsyncTxn) {
+	txn.SetError(txn.PreapreCommit())
 }
 
-func (mgr *TxnManager) onPreparRollback(txn *Transaction) {
-	logrus.Infof("Prepare Rollbacking %d", txn.Ctx.ID)
-	txn.Err = txn.PreapreRollback()
+func (mgr *TxnManager) onPreparRollback(txn iface.AsyncTxn) {
+	txn.SetError(txn.PreapreRollback())
 }
 
 // TODO
@@ -73,18 +72,18 @@ func (mgr *TxnManager) onPreparing(items ...interface{}) {
 		mgr.Lock()
 		op.Txn.Lock()
 		if op.Op == OpCommit {
-			op.Txn.Ctx.ToCommittingLocked(ts)
+			op.Txn.ToCommittingLocked(ts)
 		} else if op.Op == OpRollback {
-			op.Txn.Ctx.ToRollbackingLocked(ts)
+			op.Txn.ToRollbackingLocked(ts)
 		}
 		op.Txn.Unlock()
 		mgr.Unlock()
 		if op.Op == OpCommit {
 			mgr.onPreparCommit(op.Txn)
-			if op.Txn.Err != nil {
+			if op.Txn.GetError() != nil {
 				op.Op = OpRollback
 				op.Txn.Lock()
-				op.Txn.Ctx.ToRollbackingLocked(ts)
+				op.Txn.ToRollbackingLocked(ts)
 				op.Txn.Unlock()
 				mgr.onPreparRollback(op.Txn)
 			}
@@ -99,7 +98,7 @@ func (mgr *TxnManager) onPreparing(items ...interface{}) {
 func (mgr *TxnManager) onCommit(items ...interface{}) {
 	for _, item := range items {
 		op := item.(*OpTxn)
-		op.Txn.Done()
-		logrus.Infof("%d Committed", op.Txn.Ctx.ID)
+		op.Txn.WaitDone()
+		logrus.Infof("%s Done", op.Repr())
 	}
 }

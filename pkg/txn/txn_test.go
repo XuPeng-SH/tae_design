@@ -439,29 +439,29 @@ func TestTxnManager1(t *testing.T) {
 	lock := sync.Mutex{}
 	seqs := make([]int, 0)
 
-	txn.PrepareCommitFn = func(i *Transaction) error {
+	txn.SetPrepareCommitFn(func(i interface{}) error {
 		time.Sleep(time.Millisecond * 100)
 		lock.Lock()
 		seqs = append(seqs, 2)
 		lock.Unlock()
 		return nil
-	}
+	})
 
 	var wg sync.WaitGroup
 	short := func() {
 		defer wg.Done()
 		txn2 := mgr.StartTxn(nil)
-		txn2.PrepareCommitFn = func(i *Transaction) error {
+		txn2.SetPrepareCommitFn(func(i interface{}) error {
 			lock.Lock()
 			seqs = append(seqs, 4)
 			lock.Unlock()
 			return nil
-		}
+		})
 		time.Sleep(10 * time.Millisecond)
 		lock.Lock()
 		seqs = append(seqs, 1)
 		lock.Unlock()
-		txn.WaitIfCommitting()
+		txn.GetTxnState(true)
 		lock.Lock()
 		seqs = append(seqs, 3)
 		lock.Unlock()
@@ -478,4 +478,12 @@ func TestTxnManager1(t *testing.T) {
 	defer mgr.Stop()
 	expected := []int{1, 2, 3, 4}
 	assert.Equal(t, expected, seqs)
+}
+
+func TestTransaction1(t *testing.T) {
+	mgr := NewTxnManager()
+	mgr.Start()
+	defer mgr.Stop()
+
+	// txn1 := mgr.StartTxn(nil)
 }

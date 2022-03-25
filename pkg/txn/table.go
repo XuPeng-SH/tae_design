@@ -19,19 +19,8 @@ var (
 	ErrDuplicateNode = errors.New("tae: duplicate node")
 )
 
-type TransactionState interface {
-	ToCommitting() error
-	ToCommitted() error
-	ToRollbacking() error
-	ToRollbacked() error
-	IsUncommitted() bool
-	IsCommitted() bool
-	IsRollbacked() bool
-}
-
 type Table interface {
 	io.Closer
-	TransactionState
 	GetSchema() *metadata.Schema
 	GetID() uint64
 	Append(data *batch.Batch) error
@@ -44,6 +33,7 @@ type Table interface {
 	BatchDedupLocal(data *gbat.Batch) error
 	BatchDedupLocalByCol(col *gvec.Vector) error
 	AddUpdateNode(*blockUpdates) error
+	IsDeleted() bool
 	// Commit() error
 	// Rollback() error
 }
@@ -76,6 +66,11 @@ func NewTable(txnState *TxnState, id uint64, schema *metadata.Schema, driver Nod
 		updates:  make(map[common.ID]*blockUpdates),
 	}
 	return tbl
+}
+
+func (tbl *txnTable) IsDeleted() bool {
+	// TODO
+	return false
 }
 
 func (tbl *txnTable) GetSchema() *metadata.Schema {

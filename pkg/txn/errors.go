@@ -8,4 +8,7 @@ var (
 	ErrTxnNotRollbacking   = errors.New("tae: txn not rollbacking")
 	ErrTxnNotActive        = errors.New("tae: txn not active")
 	ErrTxnCannotRollback   = errors.New("tae: txn cannot txn rollback")
+
+	ErrNotFound   = errors.New("tae: not found")
+	ErrDuplicated = errors.New("tae: duplicated ")
 )

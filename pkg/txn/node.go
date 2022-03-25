@@ -177,7 +177,7 @@ func (n *insertNode) OnUnload() {
 }
 
 func (n *insertNode) execUnload() (entry NodeEntry) {
-	if n.IsTransient() || n.table.IsCommitted() || n.table.IsRollbacked() {
+	if n.IsTransient() {
 		return
 	}
 	if atomic.LoadUint64(&n.lsn) != 0 {

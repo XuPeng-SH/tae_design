@@ -1,17 +1,11 @@
 package txn
 
 import (
-	"errors"
 	"sync"
 
 	"github.com/matrixorigin/matrixone/pkg/container/types"
 	gvec "github.com/matrixorigin/matrixone/pkg/container/vector"
 	"github.com/matrixorigin/matrixone/pkg/vm/engine/aoe/storage/container/vector"
-)
-
-var (
-	ErrNotFound   = errors.New("tae: not found error")
-	ErrDuplicated = errors.New("tae: duplicated error")
 )
 
 type TableIndex interface {

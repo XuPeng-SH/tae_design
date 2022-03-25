@@ -1,7 +1,11 @@
 package txn
 
 import (
+	"fmt"
 	"sync"
+	"tae/pkg/iface"
+
+	"github.com/sirupsen/logrus"
 )
 
 type OpType int8
@@ -12,19 +16,27 @@ const (
 )
 
 type OpTxn struct {
-	Txn *Transaction
+	Txn iface.AsyncTxn
 	Op  OpType
+}
+
+func (txn *OpTxn) Repr() string {
+	if txn.Op == OpCommit {
+		return fmt.Sprintf("[Commit][Txn-%d]", txn.Txn.GetID())
+	} else {
+		return fmt.Sprintf("[Rollback][Txn-%d]", txn.Txn.GetID())
+	}
 }
 
 type Transaction struct {
 	sync.RWMutex
 	sync.WaitGroup
+	*TxnCtx
 	Mgr             *TxnManager
 	Store           *Store
-	Ctx             *TxnCtx
 	Err             error
 	DoneCond        sync.Cond
-	PrepareCommitFn func(*Transaction) error
+	PrepareCommitFn func(interface{}) error
 }
 
 func NewTxn(mgr *TxnManager, txnId uint64, start uint64, info []byte) *Transaction {
@@ -32,10 +44,15 @@ func NewTxn(mgr *TxnManager, txnId uint64, start uint64, info []byte) *Transacti
 		Mgr:   mgr,
 		Store: NewStore(),
 	}
-	txn.Ctx = NewTxnCtx(&txn.RWMutex, txnId, start, info)
+	txn.TxnCtx = NewTxnCtx(&txn.RWMutex, txnId, start, info)
 	txn.DoneCond = *sync.NewCond(txn)
 	return txn
 }
+
+func (txn *Transaction) SetError(err error) { txn.Err = err }
+func (txn *Transaction) GetError() error    { return txn.Err }
+
+func (txn *Transaction) SetPrepareCommitFn(fn func(interface{}) error) { txn.PrepareCommitFn = fn }
 
 func (txn *Transaction) Commit() error {
 	txn.Add(1)
@@ -59,32 +76,61 @@ func (txn *Transaction) Rollback() error {
 
 func (txn *Transaction) Done() {
 	txn.DoneCond.L.Lock()
-	txn.Ctx.ToCommittedLocked()
+	txn.ToCommittedLocked()
 	txn.WaitGroup.Done()
 	txn.DoneCond.Broadcast()
 	txn.DoneCond.L.Unlock()
 }
 
-func (txn *Transaction) WaitIfCommitting() {
+func (txn *Transaction) IsTerminated() bool {
+	state := txn.GetTxnState(false)
+	return state == TxnStateCommitted || state == TxnStateRollbacked
+}
+
+func (txn *Transaction) GetTxnState(waitIfcommitting bool) int32 {
 	txn.RLock()
-	if txn.Ctx.State != TxnStateCommitting {
+	state := txn.State
+	if !waitIfcommitting {
 		txn.RUnlock()
-		return
+		return state
+	}
+	if state != TxnStateCommitting {
+		txn.RUnlock()
+		return state
 	}
 	txn.RUnlock()
 	txn.DoneCond.L.Lock()
-	if txn.Ctx.State != TxnStateCommitting {
+	state = txn.State
+	if state != TxnStateCommitting {
 		txn.DoneCond.L.Unlock()
-		return
+		return state
 	}
 	txn.DoneCond.Wait()
 	txn.DoneCond.L.Unlock()
+	return state
 }
 
 func (txn *Transaction) PreapreCommit() error {
-	return nil
+	logrus.Infof("Prepare Committing %d", txn.ID)
+	var err error
+	if txn.PrepareCommitFn != nil {
+		err = txn.PrepareCommitFn(txn)
+	}
+	if err != nil {
+		return err
+	}
+	// TODO
+	return txn.Err
 }
 
 func (txn *Transaction) PreapreRollback() error {
+	logrus.Infof("Prepare Rollbacking %d", txn.ID)
 	return nil
+}
+
+func (txn *Transaction) WaitDone() error {
+	// TODO
+	logrus.Infof("Wait txn %d done", txn.ID)
+	txn.Done()
+	return txn.Err
 }
