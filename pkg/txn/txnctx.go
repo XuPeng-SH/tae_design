@@ -2,42 +2,82 @@ package txn
 
 import (
 	"fmt"
-	"sync/atomic"
+	"sync"
 )
 
 const (
 	UncommitTS = ^uint64(0)
 )
 
+const (
+	TxnStateActive int32 = iota
+	TxnStateCommitting
+	TxnStateRollbacking
+	TxnStateCommitted
+	TxnStateRollbacked
+)
+
 type TxnCtx struct {
+	*sync.RWMutex
 	ID                uint64
 	StartTS, CommitTS uint64
 	Info              []byte
-	Rollbacked        int32
+	State             int32
 }
 
-func (ctx *TxnCtx) IsTerminated() bool {
-	return UncommitTS != atomic.LoadUint64(&ctx.StartTS)
+func NewTxnCtx(rwlocker *sync.RWMutex, id, start uint64, info []byte) *TxnCtx {
+	if rwlocker == nil {
+		rwlocker = new(sync.RWMutex)
+	}
+	return &TxnCtx{
+		ID:       id,
+		RWMutex:  rwlocker,
+		StartTS:  start,
+		CommitTS: UncommitTS,
+		Info:     info,
+	}
 }
 
-func (ctx *TxnCtx) HasRollbacked() bool {
-	return atomic.LoadInt32(&ctx.Rollbacked) != 0
+func (ctx *TxnCtx) IsActiveLocked() bool {
+	return ctx.CommitTS == UncommitTS
 }
 
-func (ctx *TxnCtx) Commit(ts uint64) error {
+func (ctx *TxnCtx) ToCommittingLocked(ts uint64) error {
 	if ts <= ctx.StartTS {
 		panic(fmt.Sprintf("start ts %d should be less than commit ts %d", ctx.StartTS, ts))
 	}
-	if !atomic.CompareAndSwapUint64(&ctx.CommitTS, UncommitTS, ts) {
-		return ErrTxnAlreadyCommitted
+	if ctx.CommitTS != UncommitTS {
+		return ErrTxnNotActive
 	}
+	ctx.CommitTS = ts
+	ctx.State = TxnStateCommitting
 	return nil
 }
 
-func (ctx *TxnCtx) Rollback(ts uint64) error {
-	if err := ctx.Commit(ts); err != nil {
-		return err
+func (ctx *TxnCtx) ToCommittedLocked() error {
+	if ctx.State != TxnStateCommitting {
+		return ErrTxnNotCommitting
 	}
-	atomic.StoreInt32(&ctx.Rollbacked, int32(1))
+	ctx.State = TxnStateCommitted
+	return nil
+}
+
+func (ctx *TxnCtx) ToRollbackingLocked(ts uint64) error {
+	if ts <= ctx.StartTS {
+		panic(fmt.Sprintf("start ts %d should be less than commit ts %d", ctx.StartTS, ts))
+	}
+	if ctx.CommitTS != UncommitTS {
+		return ErrTxnNotActive
+	}
+	ctx.CommitTS = ts
+	ctx.State = TxnStateRollbacking
+	return nil
+}
+
+func (ctx *TxnCtx) ToRollbackedLocked() error {
+	if ctx.State != TxnStateRollbacking {
+		return ErrTxnNotRollbacking
+	}
+	ctx.State = TxnStateRollbacked
 	return nil
 }

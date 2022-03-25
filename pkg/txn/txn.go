@@ -3,6 +3,7 @@ package txn
 import "sync"
 
 type Transaction struct {
+	sync.RWMutex
 	sync.WaitGroup
 	Mgr   *TxnManager
 	Store *Store
@@ -11,21 +12,17 @@ type Transaction struct {
 }
 
 func NewTxn(mgr *TxnManager, txnId uint64, start uint64, info []byte) *Transaction {
-	return &Transaction{
+	txn := &Transaction{
 		Mgr:   mgr,
 		Store: NewStore(),
-		Ctx: &TxnCtx{
-			ID:       txnId,
-			StartTS:  start,
-			CommitTS: UncommitTS,
-			Info:     info,
-		},
 	}
+	txn.Ctx = NewTxnCtx(&txn.RWMutex, txnId, start, info)
+	return txn
 }
 
-func (txn *Transaction) IsTerminated() bool {
-	return txn.Ctx.IsTerminated()
-}
+// func (txn *Transaction) IsTerminated() bool {
+// 	return txn.Ctx.IsTerminated()
+// }
 
 // TODO: just a demo
 func (txn *Transaction) Commit() error {

@@ -54,12 +54,18 @@ func (mgr *TxnManager) onPrepareCommit(items ...interface{}) {
 	for _, item := range items {
 		txn := item.(*Transaction)
 		ts := mgr.TsAlloc.Alloc()
-		txn.Ctx.Commit(ts)
-		logrus.Infof("Committing %d", txn.Ctx.ID)
-		txn.Done()
+		txn.Ctx.ToCommittingLocked(ts)
+		logrus.Infof("Prepare Committing %d", txn.Ctx.ID)
+		mgr.EnqueueCheckpoint(txn)
 	}
 }
 
 // TODO
 func (mgr *TxnManager) onCommit(items ...interface{}) {
+	for _, item := range items {
+		txn := item.(*Transaction)
+		txn.Ctx.ToCommittedLocked()
+		txn.Done()
+		logrus.Infof("%d Committed", txn.Ctx.ID)
+	}
 }
