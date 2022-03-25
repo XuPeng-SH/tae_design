@@ -435,6 +435,34 @@ func TestTxnManager1(t *testing.T) {
 	mgr := NewTxnManager()
 	mgr.Start()
 	txn := mgr.StartTxn(nil)
+
+	seqs := make([]int, 0)
+
+	txn.PrepareCommitFn = func(i *Transaction) error {
+		time.Sleep(time.Millisecond * 100)
+		seqs = append(seqs, 2)
+		return nil
+	}
+
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		txn2 := mgr.StartTxn(nil)
+		txn2.PrepareCommitFn = func(i *Transaction) error {
+			seqs = append(seqs, 4)
+			return nil
+		}
+		time.Sleep(10 * time.Millisecond)
+		seqs = append(seqs, 1)
+		txn.WaitIfCommitting()
+		seqs = append(seqs, 3)
+		txn2.Commit()
+	}()
+
 	txn.Commit()
+	wg.Wait()
 	defer mgr.Stop()
+	expected := []int{1, 2, 3, 4}
+	assert.Equal(t, expected, seqs)
 }
