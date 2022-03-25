@@ -430,3 +430,11 @@ func TestApplyUpdateNode2(t *testing.T) {
 	res := node.ApplyToColumn(vec, deletes)
 	fmt.Printf("%v\n%v\n", res.Col, res.Nsp.Np)
 }
+
+func TestTxnManager1(t *testing.T) {
+	mgr := NewTxnManager()
+	mgr.Start()
+	txn := mgr.StartTxn(nil)
+	txn.Commit()
+	defer mgr.Stop()
+}

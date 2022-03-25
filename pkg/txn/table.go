@@ -3,6 +3,7 @@ package txn
 import (
 	"errors"
 	"fmt"
+	"io"
 
 	"github.com/matrixorigin/matrixone/pkg/container/batch"
 	gbat "github.com/matrixorigin/matrixone/pkg/container/batch"
@@ -29,6 +30,7 @@ type TransactionState interface {
 }
 
 type Table interface {
+	io.Closer
 	TransactionState
 	GetSchema() *metadata.Schema
 	GetID() uint64
@@ -41,6 +43,7 @@ type Table interface {
 	Rows() uint32
 	BatchDedupLocal(data *gbat.Batch) error
 	BatchDedupLocalByCol(col *gvec.Vector) error
+	AddUpdateNode(*blockUpdates) error
 	// Commit() error
 	// Rollback() error
 }
