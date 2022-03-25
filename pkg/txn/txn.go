@@ -4,6 +4,18 @@ import (
 	"sync"
 )
 
+type OpType int8
+
+const (
+	OpCommit = iota
+	OpRollback
+)
+
+type OpTxn struct {
+	Txn *Transaction
+	Op  OpType
+}
+
 type Transaction struct {
 	sync.RWMutex
 	sync.WaitGroup
@@ -25,14 +37,22 @@ func NewTxn(mgr *TxnManager, txnId uint64, start uint64, info []byte) *Transacti
 	return txn
 }
 
-// func (txn *Transaction) IsTerminated() bool {
-// 	return txn.Ctx.IsTerminated()
-// }
-
-// TODO: just a demo
 func (txn *Transaction) Commit() error {
 	txn.Add(1)
-	txn.Mgr.OnCommitTxn(txn)
+	txn.Mgr.OnOpTxn(&OpTxn{
+		Txn: txn,
+		Op:  OpCommit,
+	})
+	txn.Wait()
+	return txn.Err
+}
+
+func (txn *Transaction) Rollback() error {
+	txn.Add(1)
+	txn.Mgr.OnOpTxn(&OpTxn{
+		Txn: txn,
+		Op:  OpRollback,
+	})
 	txn.Wait()
 	return txn.Err
 }
@@ -59,4 +79,12 @@ func (txn *Transaction) WaitIfCommitting() {
 	}
 	txn.DoneCond.Wait()
 	txn.DoneCond.L.Unlock()
+}
+
+func (txn *Transaction) PreapreCommit() error {
+	return nil
+}
+
+func (txn *Transaction) PreapreRollback() error {
+	return nil
 }

@@ -66,8 +66,8 @@ func (ctx *TxnCtx) ToRollbackingLocked(ts uint64) error {
 	if ts <= ctx.StartTS {
 		panic(fmt.Sprintf("start ts %d should be less than commit ts %d", ctx.StartTS, ts))
 	}
-	if ctx.CommitTS != UncommitTS {
-		return ErrTxnNotActive
+	if (ctx.State != TxnStateActive) && (ctx.State != TxnStateCommitting) {
+		return ErrTxnCannotRollback
 	}
 	ctx.CommitTS = ts
 	ctx.State = TxnStateRollbacking

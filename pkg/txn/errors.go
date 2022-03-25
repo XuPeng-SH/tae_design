@@ -7,4 +7,5 @@ var (
 	ErrTxnNotCommitting    = errors.New("tae: txn not commiting")
 	ErrTxnNotRollbacking   = errors.New("tae: txn not rollbacking")
 	ErrTxnNotActive        = errors.New("tae: txn not active")
+	ErrTxnCannotRollback   = errors.New("tae: txn cannot txn rollback")
 )

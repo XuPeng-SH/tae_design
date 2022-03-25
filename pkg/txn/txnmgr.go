@@ -22,13 +22,13 @@ func NewTxnManager() *TxnManager {
 		IdAlloc: common.NewIdAlloctor(1),
 		TsAlloc: common.NewIdAlloctor(1),
 	}
-	pqueue := sm.NewSafeQueue(10000, 200, mgr.onPrepareCommit)
+	pqueue := sm.NewSafeQueue(10000, 200, mgr.onPreparing)
 	cqueue := sm.NewSafeQueue(10000, 200, mgr.onCommit)
 	mgr.StateMachine = sm.NewStateMachine(new(sync.WaitGroup), mgr, pqueue, cqueue)
 	return mgr
 }
 
-func (mgr *TxnManager) InitStartCtx(prevTxnId uint64, prevTs uint64) error {
+func (mgr *TxnManager) Init(prevTxnId uint64, prevTs uint64) error {
 	mgr.IdAlloc.SetStart(prevTxnId)
 	mgr.TsAlloc.SetStart(prevTs)
 	return nil
@@ -45,29 +45,61 @@ func (mgr *TxnManager) StartTxn(info []byte) *Transaction {
 	return txn
 }
 
-func (mgr *TxnManager) OnCommitTxn(txn *Transaction) {
-	mgr.EnqueueRecevied(txn)
+func (mgr *TxnManager) OnOpTxn(op *OpTxn) {
+	mgr.EnqueueRecevied(op)
+}
+
+func (mgr *TxnManager) onPreparCommit(txn *Transaction) {
+	logrus.Infof("Prepare Committing %d", txn.Ctx.ID)
+	if txn.PrepareCommitFn != nil {
+		txn.Err = txn.PrepareCommitFn(txn)
+	}
+	if txn.Err != nil {
+		return
+	}
+	txn.Err = txn.PreapreCommit()
+}
+
+func (mgr *TxnManager) onPreparRollback(txn *Transaction) {
+	logrus.Infof("Prepare Rollbacking %d", txn.Ctx.ID)
+	txn.Err = txn.PreapreRollback()
 }
 
 // TODO
-func (mgr *TxnManager) onPrepareCommit(items ...interface{}) {
+func (mgr *TxnManager) onPreparing(items ...interface{}) {
 	for _, item := range items {
-		txn := item.(*Transaction)
+		op := item.(*OpTxn)
 		ts := mgr.TsAlloc.Alloc()
-		txn.Ctx.ToCommittingLocked(ts)
-		logrus.Infof("Prepare Committing %d", txn.Ctx.ID)
-		if txn.PrepareCommitFn != nil {
-			txn.Err = txn.PrepareCommitFn(txn)
+		mgr.Lock()
+		op.Txn.Lock()
+		if op.Op == OpCommit {
+			op.Txn.Ctx.ToCommittingLocked(ts)
+		} else if op.Op == OpRollback {
+			op.Txn.Ctx.ToRollbackingLocked(ts)
 		}
-		mgr.EnqueueCheckpoint(txn)
+		op.Txn.Unlock()
+		mgr.Unlock()
+		if op.Op == OpCommit {
+			mgr.onPreparCommit(op.Txn)
+			if op.Txn.Err != nil {
+				op.Op = OpRollback
+				op.Txn.Lock()
+				op.Txn.Ctx.ToRollbackingLocked(ts)
+				op.Txn.Unlock()
+				mgr.onPreparRollback(op.Txn)
+			}
+		} else {
+			mgr.onPreparRollback(op.Txn)
+		}
+		mgr.EnqueueCheckpoint(op)
 	}
 }
 
 // TODO
 func (mgr *TxnManager) onCommit(items ...interface{}) {
 	for _, item := range items {
-		txn := item.(*Transaction)
-		txn.Done()
-		logrus.Infof("%d Committed", txn.Ctx.ID)
+		op := item.(*OpTxn)
+		op.Txn.Done()
+		logrus.Infof("%d Committed", op.Txn.Ctx.ID)
 	}
 }
