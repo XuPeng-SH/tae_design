@@ -10,6 +10,7 @@ import (
 type TxnReader interface {
 	GetID() uint64
 	GetStartTS() uint64
+	GetCommitTS() uint64
 	GetInfo() []byte
 	IsTerminated() bool
 	Compare(o TxnReader) int

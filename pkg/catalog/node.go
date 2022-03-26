@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"sync"
 	"tae/pkg/common"
+	"tae/pkg/iface"
 
 	"github.com/google/btree"
 )
@@ -100,10 +101,30 @@ func (n *nodeList) Length() int {
 // 	return n.GetNext().(*nameNode).GetTable()
 // }
 
-func (n *nodeList) GetDBEntry() *DBEntry {
+func (n *nodeList) GetDBNode() *DLNode {
 	n.rwlocker.RLock()
 	defer n.rwlocker.RUnlock()
-	return n.GetNext().(*nameNode).GetDBEntry()
+	return n.GetNext().(*nameNode).GetDBNode()
+}
+
+func (n *nodeList) TxnGetDBNodeLocked(txnCtx iface.TxnReader) *DLNode {
+	var dn *DLNode
+	fn := func(nn *nameNode) bool {
+		dlNode := nn.GetDBNode()
+		entry := dlNode.payload.(*DBEntry)
+		if entry.IsSameTxn(txnCtx.GetStartTS()) {
+			dn = dlNode
+			return false
+		} else {
+			if entry.CreateAt != 0 && entry.CreateAt <= txnCtx.GetStartTS() {
+				dn = dlNode
+				return false
+			}
+		}
+		return true
+	}
+	n.ForEachNodes(fn)
+	return dn
 }
 
 func (n *nodeList) PString(level PPLevel) string {
@@ -142,7 +163,7 @@ func newNameNode(host interface{}, id uint64) *nameNode {
 	}
 }
 
-func (n *nameNode) GetDBEntry() *DBEntry {
+func (n *nameNode) GetDBNode() *DLNode {
 	if n == nil {
 		return nil
 	}

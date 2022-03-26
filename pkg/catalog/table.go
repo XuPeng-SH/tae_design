@@ -5,15 +5,28 @@ import "tae/pkg/iface"
 type TableEntry struct {
 	*BaseEntry
 	db      *DBEntry
-	entries map[uint64]*SegmentEntry
+	entries map[uint64]*DLNode
 	link    *Link
 }
 
+// func (entry *TableEntry) ToLogEntry() LogEntry {
+
+// }
+
 func (entry *TableEntry) addEntryLocked(segment *SegmentEntry) {
-	entry.entries[segment.GetID()] = segment
-	entry.link.Insert(segment)
+	n := entry.link.Insert(segment)
+	entry.entries[segment.GetID()] = n
 }
 
-func (entry *TableEntry) AddEntry(txn iface.AsyncTxn) {
+func (entry *TableEntry) deleteEntryLocked(segment *SegmentEntry) error {
+	if n, ok := entry.entries[segment.GetID()]; !ok {
+		return ErrNotFound
+	} else {
+		entry.link.Delete(n)
+	}
+	return nil
+}
+
+func (entry *TableEntry) prepareAddEntry(txn iface.AsyncTxn) {
 
 }

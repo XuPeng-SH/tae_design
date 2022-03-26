@@ -39,9 +39,10 @@ func NewTxnCtx(rwlocker *sync.RWMutex, id, start uint64, info []byte) *TxnCtx {
 	}
 }
 
-func (ctx *TxnCtx) GetID() uint64      { return ctx.ID }
-func (ctx *TxnCtx) GetInfo() []byte    { return ctx.Info }
-func (ctx *TxnCtx) GetStartTS() uint64 { return ctx.StartTS }
+func (ctx *TxnCtx) GetID() uint64       { return ctx.ID }
+func (ctx *TxnCtx) GetInfo() []byte     { return ctx.Info }
+func (ctx *TxnCtx) GetStartTS() uint64  { return ctx.StartTS }
+func (ctx *TxnCtx) GetCommitTS() uint64 { return ctx.CommitTS }
 
 func (ctx *TxnCtx) Compare(o iface.TxnReader) int {
 	return 0
