@@ -1,6 +1,11 @@
 package iface
 
-import "sync"
+import (
+	"sync"
+
+	"github.com/matrixorigin/matrixone/pkg/container/vector"
+	"github.com/matrixorigin/matrixone/pkg/vm/engine/aoe/storage/container/batch"
+)
 
 type TxnReader interface {
 	GetID() uint64
@@ -10,6 +15,13 @@ type TxnReader interface {
 	Compare(o TxnReader) int
 	GetTxnState(waitIfcommitting bool) int32
 	GetError() error
+}
+
+type TxnStore interface {
+	BatchDedup(uint64, *vector.Vector) error
+	RegisterTable(interface{}) error
+	GetTableByName(db, table string) (interface{}, error)
+	Append(uint64, *batch.Batch)
 }
 
 type TxnChanger interface {
