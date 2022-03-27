@@ -16,12 +16,6 @@ func initTestPath(t *testing.T) string {
 	return dir
 }
 
-// type testTxnCtx struct {
-// 	id uint64
-// 	startTs uint64
-
-// }
-
 func TestCreateDB1(t *testing.T) {
 	dir := initTestPath(t)
 	catalog := MockCatalog(dir, "mock", nil)
@@ -55,8 +49,8 @@ func TestCreateDB1(t *testing.T) {
 	_, err = catalog.AddDBEntry(name, txn2)
 	assert.Equal(t, txn.TxnWWConflictErr, err)
 
-	nn := catalog.txnGetNodeByNameLocked(db1.name, txn1)
-	assert.NotNil(t, nn)
+	_, err = catalog.GetDBEntry(db1.name, txn1)
+	assert.Nil(t, err)
 
 	txn1.Commit()
 
@@ -90,11 +84,11 @@ func TestCreateDB1(t *testing.T) {
 
 	txn4 := txnMgr.StartTxn(nil)
 
-	nn = catalog.txnGetNodeByNameLocked(db1.name, txn4)
-	assert.NotNil(t, nn)
-	assert.Equal(t, db1, nn.payload.(*DBEntry))
+	e, err := catalog.GetDBEntry(db1.name, txn4)
+	assert.NotNil(t, e)
+	assert.Equal(t, db1, e)
 	// t.Logf("%d:%d", txn4.GetStartTS(), txn4.GetCommitTS())
-	t.Log(nn.payload.(*DBEntry).String())
+	t.Log(e.String())
 }
 
 // func TestCreateDB2(t *testing.T) {

@@ -98,6 +98,16 @@ func (catalog *Catalog) txnGetNodeByNameLocked(name string, txnCtx iface.TxnRead
 	return node.TxnGetDBNodeLocked(txnCtx)
 }
 
+func (catalog *Catalog) GetDBEntry(name string, txnCtx iface.TxnReader) (*DBEntry, error) {
+	catalog.RLock()
+	n := catalog.txnGetNodeByNameLocked(name, txnCtx)
+	catalog.RUnlock()
+	if n == nil {
+		return nil, ErrNotFound
+	}
+	return n.payload.(*DBEntry), nil
+}
+
 func (catalog *Catalog) DeleteDBEntry(name string, txnCtx iface.TxnReader) (deleted *DBEntry, err error) {
 	catalog.Lock()
 	defer catalog.Unlock()
