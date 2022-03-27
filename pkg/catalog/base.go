@@ -54,7 +54,7 @@ func (e *BaseEntry) DoCompre(oe *BaseEntry) int {
 	if ecommitted && oecommitted {
 		return CompareUint64(e.CreateAt, oe.CreateAt)
 	}
-	return CompareUint64(e.CreateStartTS, oe.CreateCommitTS)
+	return CompareUint64(e.CreateStartTS, oe.CreateStartTS)
 }
 
 func (e *BaseEntry) IsSameTxn(ts uint64) bool {

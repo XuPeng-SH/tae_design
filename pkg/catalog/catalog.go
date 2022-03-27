@@ -79,7 +79,7 @@ func (catalog *Catalog) addEntryLocked(database *DBEntry) error {
 	return nil
 }
 
-func (catalog *Catalog) deleteEntryLocked(database *DBEntry) error {
+func (catalog *Catalog) removeEntryLocked(database *DBEntry) error {
 	if n, ok := catalog.entries[database.GetID()]; !ok {
 		return ErrNotFound
 	} else {
@@ -108,7 +108,7 @@ func (catalog *Catalog) GetDBEntry(name string, txnCtx iface.TxnReader) (*DBEntr
 	return n.payload.(*DBEntry), nil
 }
 
-func (catalog *Catalog) DeleteDBEntry(name string, txnCtx iface.TxnReader) (deleted *DBEntry, err error) {
+func (catalog *Catalog) DropDBEntry(name string, txnCtx iface.TxnReader) (deleted *DBEntry, err error) {
 	catalog.Lock()
 	defer catalog.Unlock()
 	dn := catalog.txnGetNodeByNameLocked(name, txnCtx)
@@ -124,7 +124,7 @@ func (catalog *Catalog) DeleteDBEntry(name string, txnCtx iface.TxnReader) (dele
 	return
 }
 
-func (catalog *Catalog) AddDBEntry(name string, txnCtx iface.TxnReader) (*DBEntry, error) {
+func (catalog *Catalog) CreateDBEntry(name string, txnCtx iface.TxnReader) (*DBEntry, error) {
 	var err error
 	catalog.RLock()
 	old := catalog.txnGetNodeByNameLocked(name, txnCtx)

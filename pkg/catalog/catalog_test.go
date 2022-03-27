@@ -29,7 +29,7 @@ func TestCreateDB1(t *testing.T) {
 	db1 := NewDBEntry(catalog, fmt.Sprintf("%s-%d", t.Name(), 1), txn1)
 
 	name := fmt.Sprintf("%s-%d", t.Name(), 1)
-	db1, err := catalog.AddDBEntry(name, txn1)
+	db1, err := catalog.CreateDBEntry(name, txn1)
 	assert.Nil(t, err)
 
 	assert.Equal(t, 1, len(catalog.entries))
@@ -41,12 +41,12 @@ func TestCreateDB1(t *testing.T) {
 	}, true)
 	assert.Equal(t, 1, cnt)
 
-	_, err = catalog.AddDBEntry(name, txn1)
+	_, err = catalog.CreateDBEntry(name, txn1)
 	assert.Equal(t, ErrDuplicate, err)
 
 	txn2 := txnMgr.StartTxn(nil)
 
-	_, err = catalog.AddDBEntry(name, txn2)
+	_, err = catalog.CreateDBEntry(name, txn2)
 	assert.Equal(t, txn.TxnWWConflictErr, err)
 
 	_, err = catalog.GetDBEntry(db1.name, txn1)
@@ -59,18 +59,18 @@ func TestCreateDB1(t *testing.T) {
 
 	assert.True(t, db1.HasStarted())
 
-	_, err = catalog.AddDBEntry(name, txn2)
+	_, err = catalog.CreateDBEntry(name, txn2)
 	assert.Equal(t, ErrDuplicate, err)
 
-	_, err = catalog.DeleteDBEntry(name, txn2)
+	_, err = catalog.DropDBEntry(name, txn2)
 	assert.Equal(t, ErrNotFound, err)
 
 	txn3 := txnMgr.StartTxn(nil)
-	_, err = catalog.DeleteDBEntry(name, txn3)
+	_, err = catalog.DropDBEntry(name, txn3)
 	assert.Nil(t, err)
 	assert.True(t, db1.IsDroppedUncommitted())
 
-	_, err = catalog.AddDBEntry(name, txn3)
+	_, err = catalog.CreateDBEntry(name, txn3)
 	assert.Nil(t, err)
 
 	// assert.Equal(t, 0, len(catalog.entries))
