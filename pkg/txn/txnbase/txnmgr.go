@@ -9,7 +9,7 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-type TxnStoreFactory = func() TxnStore
+type TxnStoreFactory = func() txnif.TxnStore
 
 type TxnManager struct {
 	sync.RWMutex

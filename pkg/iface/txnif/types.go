@@ -4,11 +4,10 @@ import (
 	"io"
 	"sync"
 
-	"github.com/matrixorigin/matrixone/pkg/vm/engine/aoe/storage/common"
-
 	"github.com/RoaringBitmap/roaring"
+	"github.com/matrixorigin/matrixone/pkg/container/batch"
 	"github.com/matrixorigin/matrixone/pkg/container/vector"
-	"github.com/matrixorigin/matrixone/pkg/vm/engine/aoe/storage/container/batch"
+	"github.com/matrixorigin/matrixone/pkg/vm/engine/aoe/storage/common"
 )
 
 type TxnReader interface {
@@ -22,7 +21,7 @@ type TxnReader interface {
 	GetError() error
 }
 
-type TxnStore interface {
+type TxnHandle interface {
 	BatchDedup(uint64, *vector.Vector) error
 	RegisterTable(interface{}) error
 	GetTableByName(db, table string) (interface{}, error)
@@ -81,4 +80,12 @@ type ColumnUpdates interface {
 	UpdateLocked(row uint32, v interface{}) error
 	MergeLocked(o ColumnUpdates) error
 	ApplyToColumn(vec *vector.Vector, deletes *roaring.Bitmap) *vector.Vector
+}
+
+type TxnStore interface {
+	io.Closer
+	Append(id uint64, data *batch.Batch) error
+	RangeDeleteLocalRows(id uint64, start, end uint32) error
+	UpdateLocalValue(id uint64, row uint32, col uint16, v interface{}) error
+	AddUpdateNode(id uint64, node BlockUpdates) error
 }

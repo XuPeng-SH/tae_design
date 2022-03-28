@@ -17,7 +17,7 @@ type txnStore struct {
 	tableIndex map[string]uint64
 }
 
-var DefaultTxnStoreFactory = func() txnbase.TxnStore { return NewStore() }
+var DefaultTxnStoreFactory = func() txnif.TxnStore { return NewStore() }
 
 func NewStore() *txnStore {
 	return &txnStore{

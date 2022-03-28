@@ -2,21 +2,11 @@ package txnbase
 
 import (
 	"fmt"
-	"io"
 	"sync"
 	"tae/pkg/iface/txnif"
 
-	"github.com/matrixorigin/matrixone/pkg/container/batch"
 	"github.com/sirupsen/logrus"
 )
-
-type TxnStore interface {
-	io.Closer
-	Append(id uint64, data *batch.Batch) error
-	RangeDeleteLocalRows(id uint64, start, end uint32) error
-	UpdateLocalValue(id uint64, row uint32, col uint16, v interface{}) error
-	AddUpdateNode(id uint64, node txnif.BlockUpdates) error
-}
 
 type OpType int8
 
@@ -43,13 +33,13 @@ type transaction struct {
 	sync.WaitGroup
 	*TxnCtx
 	Mgr             *TxnManager
-	txnStore        TxnStore
+	txnStore        txnif.TxnStore
 	Err             error
 	DoneCond        sync.Cond
 	PrepareCommitFn func(interface{}) error
 }
 
-func NewTxn(mgr *TxnManager, store TxnStore, txnId uint64, start uint64, info []byte) *transaction {
+func NewTxn(mgr *TxnManager, store txnif.TxnStore, txnId uint64, start uint64, info []byte) *transaction {
 	txn := &transaction{
 		Mgr:      mgr,
 		txnStore: store,
