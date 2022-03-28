@@ -5,6 +5,7 @@ import (
 	"sync"
 	"tae/pkg/common"
 	"tae/pkg/iface"
+	"tae/pkg/txn"
 
 	"github.com/google/btree"
 )
@@ -95,11 +96,11 @@ func (n *nodeList) Length() int {
 	return n.LengthLocked()
 }
 
-// func (n *nodeList) GetTable() *Table {
-// 	n.rwlocker.RLock()
-// 	defer n.rwlocker.RUnlock()
-// 	return n.GetNext().(*nameNode).GetTable()
-// }
+func (n *nodeList) GetTableNode() *DLNode {
+	n.rwlocker.RLock()
+	defer n.rwlocker.RUnlock()
+	return n.GetNext().(*nameNode).GetTableNode()
+}
 
 func (n *nodeList) GetDBNode() *DLNode {
 	n.rwlocker.RLock()
@@ -107,19 +108,82 @@ func (n *nodeList) GetDBNode() *DLNode {
 	return n.GetNext().(*nameNode).GetDBNode()
 }
 
+//          Create                  Deleted
+//            |                        |
+// --+------+-+------------+--+------+-+--+-------+--+----->
+//   |      | |            |  |      | |  |       |  |
+//   |      +-|------Txn2--|--+      | |  +--Txn5-|--+
+//   +--Txn1--+            +----Txn3-|-+          |
+//                                   +----Txn4----+
+// 1. Txn1 start and create a table "tb1"
+// 2. Txn2 start and cannot find "tb1".
+// 3. Txn1 commit
+// 4. Txn3 start and drop table "tb1"
+// 6. Txn4 start and can find "tb1"
+// 7. Txn3 commit
+// 8. Txn4 can still find "tb1"
+// 9. Txn5 start and cannot find "tb1"
 func (n *nodeList) TxnGetTableNodeLocked(txnCtx iface.TxnReader) *DLNode {
 	var dn *DLNode
-	fn := func(nn *nameNode) bool {
+	fn := func(nn *nameNode) (goNext bool) {
 		dlNode := nn.GetTableNode()
 		entry := dlNode.payload.(*TableEntry)
-		if entry.IsSameTxn(txnCtx.GetStartTS()) {
-			if entry.IsDroppedUncommitted() {
-				return false
+		goNext = true
+		// A txn is writing the entry
+		if entry.HasActiveTxn() {
+			// If the same txn is writing the entry:
+			// 1. The entry is dropped uncommitted, stop looping and return nothing
+			// 2. Otherwise, return the entry and stop looping.
+			if entry.IsSameTxn(txnCtx) {
+				if entry.IsDroppedUncommitted() {
+					goNext = false
+					return
+				}
+				dn = dlNode
+				goNext = false
+				return
 			}
-			dn = dlNode
-			return false
+			// If another txn is writing the entry, skip this entry and go to next
+			if !entry.HasCreated() && !entry.HasDropped() {
+				goNext = true
+				return
+			}
+
+			// If the entry is created before the txn start time:
+			// 1. The entry is not committing, return the entry and stop looping
+			// 2. The entry is committing:
+			//    2.1. If the entry's create ts is same with delete ts (create and drop in same txn). skip this entry and go to next
+			//    2.2. If the entry's delete ts is before the txn start time. Wait committing. If got committed, skip this entry and stop looping.
+			//         If got rollbacked, return this entry and stop looping
+			//    2.3. If the entry's delete ts is after the txn start time, return this entry and stop looping
+			if entry.CreateBefore(txnCtx.GetStartTS()) {
+				if !entry.IsCommitting() {
+					goNext = false
+					dn = dlNode
+					return
+				}
+				if entry.CreateAndDropInSameTxn() {
+					goNext = true
+					return
+				}
+				if entry.DeleteAfter(txnCtx.GetStartTS()) {
+					dn = dlNode
+					goNext = false
+					return
+				}
+				state := entry.Txn.GetTxnState(true)
+				if state == txn.TxnStateRollbacked {
+					dn = dlNode
+				}
+				goNext = false
+				return
+			}
 		} else {
-			if entry.CreateAt != 0 && entry.CreateAt <= txnCtx.GetStartTS() && (entry.DeleteAt == 0 || entry.DeleteAt > txnCtx.GetStartTS()) {
+			if entry.CreateAfter(txnCtx.GetStartTS()) {
+				return true
+			} else if entry.DeleteBefore(txnCtx.GetStartTS()) {
+				return false
+			} else {
 				dn = dlNode
 				return false
 			}
@@ -132,17 +196,53 @@ func (n *nodeList) TxnGetTableNodeLocked(txnCtx iface.TxnReader) *DLNode {
 
 func (n *nodeList) TxnGetDBNodeLocked(txnCtx iface.TxnReader) *DLNode {
 	var dn *DLNode
-	fn := func(nn *nameNode) bool {
+	fn := func(nn *nameNode) (goNext bool) {
 		dlNode := nn.GetDBNode()
 		entry := dlNode.payload.(*DBEntry)
-		if entry.IsSameTxn(txnCtx.GetStartTS()) {
-			if entry.IsDroppedUncommitted() {
-				return false
+		goNext = true
+		if entry.HasActiveTxn() {
+			if entry.IsSameTxn(txnCtx) {
+				if entry.IsDroppedUncommitted() {
+					goNext = false
+					return
+				}
+				dn = dlNode
+				goNext = false
 			}
-			dn = dlNode
-			return false
+
+			if !entry.HasCreated() && !entry.HasDropped() {
+				goNext = true
+				return
+			}
+
+			if entry.CreateBefore(txnCtx.GetStartTS()) {
+				if !entry.IsCommitting() {
+					goNext = false
+					dn = dlNode
+					return
+				}
+				if entry.CreateAndDropInSameTxn() {
+					goNext = false
+					return
+				}
+				if entry.DeleteAfter(txnCtx.GetStartTS()) {
+					dn = dlNode
+					goNext = false
+					return
+				}
+				state := entry.Txn.GetTxnState(true)
+				if state == txn.TxnStateRollbacked {
+					dn = dlNode
+				}
+				goNext = false
+				return
+			}
 		} else {
-			if entry.CreateAt != 0 && entry.CreateAt <= txnCtx.GetStartTS() {
+			if entry.CreateAfter(txnCtx.GetStartTS()) {
+				return true
+			} else if entry.DeleteBefore(txnCtx.GetStartTS()) {
+				return false
+			} else {
 				dn = dlNode
 				return false
 			}

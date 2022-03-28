@@ -54,10 +54,17 @@ func TestCreateDB1(t *testing.T) {
 
 	txn1.Commit()
 
-	err = db1.CommitStart(txn1.GetCommitTS())
+	// err = db1.CommitStart(txn1.GetCommitTS())
+	// assert.Nil(t, err)
+	err = db1.PrepareCommitLocked()
 	assert.Nil(t, err)
 
-	assert.True(t, db1.HasStarted())
+	assert.True(t, db1.HasCreated())
+	assert.True(t, db1.IsCommitting())
+
+	err = db1.Commit()
+	assert.Nil(t, err)
+	assert.False(t, db1.IsCommitting())
 
 	_, err = catalog.CreateDBEntry(name, txn2)
 	assert.Equal(t, ErrDuplicate, err)
@@ -76,7 +83,7 @@ func TestCreateDB1(t *testing.T) {
 	// assert.Equal(t, 0, len(catalog.entries))
 	cnt = 0
 	catalog.link.Loop(func(n *DLNode) bool {
-		t.Log(n.payload.(*DBEntry).String())
+		// t.Log(n.payload.(*DBEntry).String())
 		cnt++
 		return true
 	}, true)
@@ -87,8 +94,10 @@ func TestCreateDB1(t *testing.T) {
 	e, err := catalog.GetDBEntry(db1.name, txn4)
 	assert.NotNil(t, e)
 	assert.Equal(t, db1, e)
+
+	// txn3.Commit()
+	// e.PrepareCommitLocked()
 	// t.Logf("%d:%d", txn4.GetStartTS(), txn4.GetCommitTS())
-	t.Log(e.String())
 }
 
 //
@@ -144,12 +153,15 @@ func TestTableEntry1(t *testing.T) {
 	err = txn1.Commit()
 	assert.Nil(t, err)
 
-	err = db1.CommitStart(txn1.GetCommitTS())
+	err = db1.PrepareCommitLocked()
 	assert.Nil(t, err)
-	err = tb1.CommitStart(txn1.GetCommitTS())
+	err = tb1.PrepareCommitLocked()
 	assert.Nil(t, err)
 	t.Log(db1.String())
 	t.Log(tb1.String())
+
+	err = db1.Commit()
+	err = tb1.Commit()
 
 	_, err = catalog.DropDBEntry("db1", txn2)
 	assert.Equal(t, err, ErrNotFound)
@@ -177,7 +189,7 @@ func TestTableEntry1(t *testing.T) {
 	err = txn3.Commit()
 	assert.Nil(t, err)
 
-	err = tb1.CommitDrop(txn3.GetCommitTS())
+	err = tb1.PrepareCommitLocked()
 	assert.Nil(t, err)
 	t.Log(tb1.String())
 

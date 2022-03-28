@@ -82,8 +82,8 @@ func (txn *Transaction) Done() {
 	txn.DoneCond.L.Unlock()
 }
 
-func (txn *Transaction) IsTerminated() bool {
-	state := txn.GetTxnState(false)
+func (txn *Transaction) IsTerminated(waitIfcommitting bool) bool {
+	state := txn.GetTxnState(waitIfcommitting)
 	return state == TxnStateCommitted || state == TxnStateRollbacked
 }
 

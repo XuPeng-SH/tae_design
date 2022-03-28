@@ -8,7 +8,8 @@ import (
 )
 
 type DBEntry struct {
-	*BaseEntry
+	// *BaseEntry
+	*BaseEntry2
 	catalog *Catalog
 	name    string
 
@@ -22,10 +23,10 @@ type DBEntry struct {
 func NewDBEntry(catalog *Catalog, name string, txnCtx iface.TxnReader) *DBEntry {
 	id := catalog.NextDB()
 	e := &DBEntry{
-		BaseEntry: &BaseEntry{
-			CommitInfo: CommitInfo{
-				CreateStartTS:  txnCtx.GetStartTS(),
-				CreateCommitTS: UncommitTS,
+		BaseEntry2: &BaseEntry2{
+			CommitInfo2: CommitInfo2{
+				CurrOp: OpCreate,
+				Txn:    txnCtx,
 			},
 			RWMutex: new(sync.RWMutex),
 			ID:      id,
@@ -40,12 +41,15 @@ func NewDBEntry(catalog *Catalog, name string, txnCtx iface.TxnReader) *DBEntry 
 }
 
 func (e *DBEntry) Compare(o NodePayload) int {
-	oe := o.(*DBEntry).BaseEntry
+	oe := o.(*DBEntry).BaseEntry2
 	return e.DoCompre(oe)
 }
 
 func (e *DBEntry) String() string {
-	s := fmt.Sprintf("DB<%d>[\"%s\"]: [%d-%d],[%d-%d]", e.ID, e.name, e.CreateStartTS, e.CreateCommitTS, e.DropStartTS, e.DropCommitTS)
+	s := fmt.Sprintf("DB<%d>[\"%s\"]: [%d-%d]", e.ID, e.name, e.CreateAt, e.DeleteAt)
+	if e.Txn != nil {
+		s = fmt.Sprintf("%s, [%d-%d]", s, e.Txn.GetStartTS(), e.Txn.GetCommitTS())
+	}
 	return s
 }
 
@@ -90,17 +94,21 @@ func (e *DBEntry) CreateTableEntry(schema *Schema, txnCtx iface.TxnReader) (crea
 	old := e.txnGetNodeByNameLocked(schema.Name, txnCtx)
 	if old != nil {
 		oldE := old.payload.(*TableEntry)
-		if oldE.IsSameTxn(txnCtx.GetStartTS()) {
-			if !oldE.IsDroppedUncommitted() {
+		if oldE.Txn != nil {
+			if oldE.Txn.GetID() == txnCtx.GetID() {
+				if !oldE.IsDroppedUncommitted() {
+					err = ErrDuplicate
+				}
+			} else {
+				err = txn.TxnWWConflictErr
+			}
+		} else {
+			if !oldE.HasDropped() {
 				err = ErrDuplicate
 			}
-		} else if !oldE.HasStarted() {
-			err = txn.TxnWWConflictErr
-		} else if !oldE.IsDroppedCommitted() {
-			err = ErrDuplicate
 		}
 		if err != nil {
-			return nil, err
+			return
 		}
 	}
 	created = NewTableEntry(e, schema, txnCtx)
@@ -119,16 +127,20 @@ func (e *DBEntry) addEntryLocked(table *TableEntry) error {
 
 		nn.CreateNode(table.GetID())
 	} else {
-		old := nn.GetDBNode()
-		oldE := old.payload.(*DBEntry)
-		if table.IsSameTxn(oldE.BaseEntry.CreateStartTS) || table.IsSameTxn(oldE.BaseEntry.DropStartTS) {
-			if !oldE.IsDroppedUncommitted() {
+		old := nn.GetTableNode()
+		oldE := old.payload.(*TableEntry)
+		if oldE.Txn == nil {
+			if !oldE.HasDropped() {
 				return ErrDuplicate
 			}
-		} else if !oldE.HasStarted() {
-			return txn.TxnWWConflictErr
-		} else if !oldE.IsDroppedCommitted() {
-			return ErrDuplicate
+		} else {
+			if oldE.SameTxn(e.BaseEntry2) {
+				if !oldE.IsDroppedUncommitted() {
+					return ErrDuplicate
+				}
+			} else {
+				return txn.TxnWWConflictErr
+			}
 		}
 		n := e.link.Insert(table)
 		e.entries[table.GetID()] = n

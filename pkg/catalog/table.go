@@ -7,7 +7,7 @@ import (
 )
 
 type TableEntry struct {
-	*BaseEntry
+	*BaseEntry2
 	db      *DBEntry
 	schema  *Schema
 	entries map[uint64]*DLNode
@@ -17,10 +17,10 @@ type TableEntry struct {
 func NewTableEntry(db *DBEntry, schema *Schema, txnCtx iface.TxnReader) *TableEntry {
 	id := db.catalog.NextTable()
 	e := &TableEntry{
-		BaseEntry: &BaseEntry{
-			CommitInfo: CommitInfo{
-				CreateStartTS:  txnCtx.GetStartTS(),
-				CreateCommitTS: UncommitTS,
+		BaseEntry2: &BaseEntry2{
+			CommitInfo2: CommitInfo2{
+				Txn:    txnCtx,
+				CurrOp: OpCreate,
 			},
 			RWMutex: new(sync.RWMutex),
 			ID:      id,
@@ -50,11 +50,15 @@ func (entry *TableEntry) deleteEntryLocked(segment *SegmentEntry) error {
 }
 
 func (entry *TableEntry) Compare(o NodePayload) int {
-	oe := o.(*TableEntry).BaseEntry
+	oe := o.(*TableEntry).BaseEntry2
 	return entry.DoCompre(oe)
 }
 
 func (entry *TableEntry) String() string {
-	s := fmt.Sprintf("TABLE<%d>[\"%s\"]: [%d-%d],[%d-%d]", entry.ID, entry.schema.Name, entry.CreateStartTS, entry.CreateCommitTS, entry.DropStartTS, entry.DropCommitTS)
+	// s := fmt.Sprintf("TABLE<%d>[\"%s\"]: [%d-%d],[%d-%d]", entry.ID, entry.schema.Name, entry.CreateStartTS, entry.CreateCommitTS, entry.DropStartTS, entry.DropCommitTS)
+	s := fmt.Sprintf("TABLE<%d>[\"%s\"]: [%d-%d]", entry.ID, entry.schema.Name, entry.CreateAt, entry.DeleteAt)
+	if entry.Txn != nil {
+		s = fmt.Sprintf("%s, [%d-%d]", s, entry.Txn.GetStartTS(), entry.Txn.GetCommitTS())
+	}
 	return s
 }

@@ -50,7 +50,7 @@ func (catalog *Catalog) Close() error {
 	return catalog.store.Close()
 }
 
-func (catalog *Catalog) addEntryLocked(database *DBEntry) error {
+func (catalog *Catalog) addEntryLocked(database *DBEntry) (Waitable, error) {
 	nn := catalog.nameNodes[database.name]
 	if nn == nil {
 		n := catalog.link.Insert(database)
@@ -63,20 +63,29 @@ func (catalog *Catalog) addEntryLocked(database *DBEntry) error {
 	} else {
 		old := nn.GetDBNode()
 		oldE := old.payload.(*DBEntry)
-		if database.IsSameTxn(oldE.BaseEntry.CreateStartTS) || database.IsSameTxn(oldE.BaseEntry.DropStartTS) {
-			if !oldE.IsDroppedUncommitted() {
-				return ErrDuplicate
+		if !oldE.HasActiveTxn() {
+			if !oldE.HasDropped() {
+				return nil, ErrDuplicate
 			}
-		} else if !oldE.HasStarted() {
-			return txn.TxnWWConflictErr
-		} else if !oldE.IsDroppedCommitted() {
-			return ErrDuplicate
+		} else {
+			if oldE.IsSameTxn(database.Txn) {
+				if !oldE.IsDroppedUncommitted() {
+					return nil, ErrDuplicate
+				}
+			} else {
+				if !oldE.IsCommitting() {
+					return nil, txn.TxnWWConflictErr
+				}
+				if oldE.Txn.GetCommitTS() < database.Txn.GetStartTS() {
+					return &waitable{func() error { oldE.Txn.GetTxnState(true); return nil }}, nil
+				}
+			}
 		}
 		n := catalog.link.Insert(database)
 		catalog.entries[database.GetID()] = n
 		nn.CreateNode(database.GetID())
 	}
-	return nil
+	return nil, nil
 }
 
 func (catalog *Catalog) removeEntryLocked(database *DBEntry) error {
@@ -126,30 +135,45 @@ func (catalog *Catalog) DropDBEntry(name string, txnCtx iface.TxnReader) (delete
 
 func (catalog *Catalog) CreateDBEntry(name string, txnCtx iface.TxnReader) (*DBEntry, error) {
 	var err error
-	catalog.RLock()
+	catalog.Lock()
 	old := catalog.txnGetNodeByNameLocked(name, txnCtx)
 	if old != nil {
 		oldE := old.payload.(*DBEntry)
-		if oldE.IsSameTxn(txnCtx.GetStartTS()) {
-			if !oldE.IsDroppedUncommitted() {
+		if oldE.Txn != nil {
+			if oldE.Txn.GetID() == txnCtx.GetID() {
+				if !oldE.IsDroppedUncommitted() {
+					err = ErrDuplicate
+				}
+			} else {
+				err = txn.TxnWWConflictErr
+			}
+		} else {
+			if !oldE.HasDropped() {
 				err = ErrDuplicate
 			}
-		} else if !oldE.HasStarted() {
-			err = txn.TxnWWConflictErr
-		} else if !oldE.IsDroppedCommitted() {
-			err = ErrDuplicate
 		}
-		catalog.RUnlock()
 		if err != nil {
+			catalog.Unlock()
 			return nil, err
 		}
-	} else {
-		catalog.RUnlock()
 	}
 	entry := NewDBEntry(catalog, name, txnCtx)
-	catalog.Lock()
-	defer catalog.Unlock()
-	return entry, catalog.addEntryLocked(entry)
+	var w Waitable
+	for {
+		w, err = catalog.addEntryLocked(entry)
+		if w == nil {
+			break
+		}
+		catalog.Unlock()
+		err = w.Wait()
+		catalog.Lock()
+		if err != nil {
+			break
+		}
+	}
+	catalog.Unlock()
+
+	return entry, err
 }
 
 func (catalog *Catalog) MakeDBHandle(txnCtx iface.TxnReader) iface.Database {

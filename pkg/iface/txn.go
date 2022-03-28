@@ -12,7 +12,7 @@ type TxnReader interface {
 	GetStartTS() uint64
 	GetCommitTS() uint64
 	GetInfo() []byte
-	IsTerminated() bool
+	IsTerminated(bool) bool
 	Compare(o TxnReader) int
 	GetTxnState(waitIfcommitting bool) int32
 	GetError() error
