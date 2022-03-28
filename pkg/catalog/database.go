@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"sync"
 	"tae/pkg/iface"
-	"tae/pkg/txn"
 )
 
 type DBEntry struct {
@@ -100,7 +99,7 @@ func (e *DBEntry) CreateTableEntry(schema *Schema, txnCtx iface.TxnReader) (crea
 					err = ErrDuplicate
 				}
 			} else {
-				err = txn.TxnWWConflictErr
+				err = iface.TxnWWConflictErr
 			}
 		} else {
 			if !oldE.HasDropped() {
@@ -139,7 +138,7 @@ func (e *DBEntry) addEntryLocked(table *TableEntry) error {
 					return ErrDuplicate
 				}
 			} else {
-				return txn.TxnWWConflictErr
+				return iface.TxnWWConflictErr
 			}
 		}
 		n := e.link.Insert(table)

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"tae/pkg/iface"
 	"tae/pkg/txn"
 	"testing"
 
@@ -47,7 +48,7 @@ func TestCreateDB1(t *testing.T) {
 	txn2 := txnMgr.StartTxn(nil)
 
 	_, err = catalog.CreateDBEntry(name, txn2)
-	assert.Equal(t, txn.TxnWWConflictErr, err)
+	assert.Equal(t, iface.TxnWWConflictErr, err)
 
 	_, err = catalog.GetDBEntry(db1.name, txn1)
 	assert.Nil(t, err)
@@ -145,7 +146,7 @@ func TestTableEntry1(t *testing.T) {
 	assert.Equal(t, err, ErrNotFound)
 
 	_, err = catalog.CreateDBEntry("db1", txn2)
-	assert.Equal(t, err, txn.TxnWWConflictErr)
+	assert.Equal(t, err, iface.TxnWWConflictErr)
 
 	_, err = catalog.DropDBEntry("db1", txn2)
 	assert.Equal(t, err, ErrNotFound)
@@ -184,7 +185,7 @@ func TestTableEntry1(t *testing.T) {
 	assert.Nil(t, err)
 
 	_, err = db.DropTableEntry(schema.Name, txn4)
-	assert.Equal(t, txn.TxnWWConflictErr, err)
+	assert.Equal(t, iface.TxnWWConflictErr, err)
 
 	err = txn3.Commit()
 	assert.Nil(t, err)

@@ -3,7 +3,6 @@ package catalog
 import (
 	"sync"
 	"tae/pkg/iface"
-	"tae/pkg/txn"
 )
 
 const (
@@ -107,7 +106,7 @@ func (e *BaseEntry) DropEntryLocked(txnCtx iface.TxnReader) error {
 		return ErrValidation
 	}
 	if e.DropStartTS != 0 {
-		return txn.TxnWWConflictErr
+		return iface.TxnWWConflictErr
 	}
 	if e.HasStarted() {
 		if startTS <= e.CreateAt {

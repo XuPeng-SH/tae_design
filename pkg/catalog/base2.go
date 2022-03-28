@@ -3,7 +3,6 @@ package catalog
 import (
 	"sync"
 	"tae/pkg/iface"
-	"tae/pkg/txn"
 )
 
 type Waitable interface {
@@ -129,7 +128,7 @@ func (be *BaseEntry2) DropEntryLocked(txnCtx iface.TxnReader) error {
 		be.CurrOp = OpSoftDelete
 		return nil
 	}
-	return txn.TxnWWConflictErr
+	return iface.TxnWWConflictErr
 }
 
 func (be *BaseEntry2) SameTxn(o *BaseEntry2) bool {

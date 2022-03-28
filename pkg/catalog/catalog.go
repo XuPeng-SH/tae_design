@@ -3,7 +3,6 @@ package catalog
 import (
 	"sync"
 	"tae/pkg/iface"
-	"tae/pkg/txn"
 
 	"github.com/jiangxinmeng1/logstore/pkg/store"
 )
@@ -74,7 +73,7 @@ func (catalog *Catalog) addEntryLocked(database *DBEntry) (Waitable, error) {
 				}
 			} else {
 				if !oldE.IsCommitting() {
-					return nil, txn.TxnWWConflictErr
+					return nil, iface.TxnWWConflictErr
 				}
 				if oldE.Txn.GetCommitTS() < database.Txn.GetStartTS() {
 					return &waitable{func() error { oldE.Txn.GetTxnState(true); return nil }}, nil
@@ -145,7 +144,7 @@ func (catalog *Catalog) CreateDBEntry(name string, txnCtx iface.TxnReader) (*DBE
 					err = ErrDuplicate
 				}
 			} else {
-				err = txn.TxnWWConflictErr
+				err = iface.TxnWWConflictErr
 			}
 		} else {
 			if !oldE.HasDropped() {

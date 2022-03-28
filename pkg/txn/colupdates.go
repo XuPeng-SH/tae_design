@@ -2,9 +2,9 @@ package txn
 
 import (
 	"encoding/binary"
-	"errors"
 	"io"
 	"sync"
+	"tae/pkg/iface"
 
 	"github.com/RoaringBitmap/roaring"
 	"github.com/RoaringBitmap/roaring/roaring64"
@@ -13,10 +13,6 @@ import (
 	gvec "github.com/matrixorigin/matrixone/pkg/container/vector"
 	"github.com/matrixorigin/matrixone/pkg/vm/engine/aoe/storage/common"
 	"github.com/matrixorigin/matrixone/pkg/vm/engine/aoe/storage/metadata/v1"
-)
-
-var (
-	TxnWWConflictErr = errors.New("tae: w-w conflict error")
 )
 
 type columnUpdates struct {
@@ -125,7 +121,7 @@ func (n *columnUpdates) Update(row uint32, v interface{}) error {
 
 func (n *columnUpdates) UpdateLocked(row uint32, v interface{}) error {
 	if _, ok := n.txnVals[row]; ok {
-		return TxnWWConflictErr
+		return iface.TxnWWConflictErr
 	}
 	n.txnMask.Add(row)
 	n.txnVals[row] = v
