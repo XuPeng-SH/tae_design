@@ -5,7 +5,8 @@ import (
 	"os"
 	"path/filepath"
 	"tae/pkg/iface/txnif"
-	"tae/pkg/txn"
+	"tae/pkg/txn/txnbase"
+	"tae/pkg/txn/txnimpl"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -22,7 +23,7 @@ func TestCreateDB1(t *testing.T) {
 	catalog := MockCatalog(dir, "mock", nil)
 	defer catalog.Close()
 
-	txnMgr := txn.NewTxnManager(txn.DefaultTxnStoreFactory)
+	txnMgr := txnbase.NewTxnManager(txnimpl.DefaultTxnStoreFactory)
 	txnMgr.Start()
 	defer txnMgr.Stop()
 
@@ -120,7 +121,7 @@ func TestTableEntry1(t *testing.T) {
 	catalog := MockCatalog(dir, "mock", nil)
 	defer catalog.Close()
 
-	txnMgr := txn.NewTxnManager(txn.DefaultTxnStoreFactory)
+	txnMgr := txnbase.NewTxnManager(txnimpl.DefaultTxnStoreFactory)
 	txnMgr.Start()
 	defer txnMgr.Stop()
 

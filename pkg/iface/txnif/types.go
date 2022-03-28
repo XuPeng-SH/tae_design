@@ -1,8 +1,12 @@
 package txnif
 
 import (
+	"io"
 	"sync"
 
+	"github.com/matrixorigin/matrixone/pkg/vm/engine/aoe/storage/common"
+
+	"github.com/RoaringBitmap/roaring"
 	"github.com/matrixorigin/matrixone/pkg/container/vector"
 	"github.com/matrixorigin/matrixone/pkg/vm/engine/aoe/storage/container/batch"
 )
@@ -59,4 +63,22 @@ type SyncTxn interface {
 	TxnReader
 	TxnWriter
 	TxnChanger
+}
+
+type BlockUpdates interface {
+	GetID() *common.ID
+	DeleteLocked(start, end uint32) error
+	UpdateLocked(row uint32, colIdx uint16, v interface{}) error
+	GetColumnUpdatesLocked(colIdx uint16) ColumnUpdates
+	MergeColumnLocked(o BlockUpdates, colIdx uint16) error
+	ReadFrom(r io.Reader) error
+	WriteTo(w io.Writer) error
+}
+type ColumnUpdates interface {
+	ReadFrom(r io.Reader) error
+	WriteTo(w io.Writer) error
+	Update(row uint32, v interface{}) error
+	UpdateLocked(row uint32, v interface{}) error
+	MergeLocked(o ColumnUpdates) error
+	ApplyToColumn(vec *vector.Vector, deletes *roaring.Bitmap) *vector.Vector
 }

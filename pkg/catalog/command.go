@@ -2,7 +2,7 @@ package catalog
 
 import (
 	"io"
-	"tae/pkg/txn"
+	"tae/pkg/txn/txnbase"
 )
 
 const (
@@ -15,13 +15,13 @@ const (
 )
 
 func init() {
-	txn.RegisterCmdFactory(CmdCreateDatabase, func() txn.TxnCmd {
+	txnbase.RegisterCmdFactory(CmdCreateDatabase, func() txnbase.TxnCmd {
 		return newEmptyCreateDBCmd()
 	})
 }
 
 type createDBCmd struct {
-	*txn.BaseCustomizedCmd
+	*txnbase.BaseCustomizedCmd
 	entry *DBEntry
 }
 
@@ -33,7 +33,7 @@ func newCreateDBCmd(id uint32, entry *DBEntry) *createDBCmd {
 	impl := &createDBCmd{
 		entry: entry,
 	}
-	impl.BaseCustomizedCmd = txn.NewBaseCustomizedCmd(id, impl)
+	impl.BaseCustomizedCmd = txnbase.NewBaseCustomizedCmd(id, impl)
 	return impl
 }
 

@@ -2,7 +2,7 @@ package taedb
 
 import (
 	"tae/pkg/iface/txnif"
-	"tae/pkg/txn"
+	"tae/pkg/txn/txnbase"
 
 	"github.com/matrixorigin/matrixone/pkg/container/batch"
 	"github.com/matrixorigin/matrixone/pkg/vm/engine/aoe/storage/metadata/v1"
@@ -38,7 +38,7 @@ type taeTnxCtx struct {
 func (ctx *taeTnxCtx) GetID() uint64 { return ctx.id }
 
 type tae struct {
-	TxnMgr *txn.TxnManager
+	TxnMgr *txnbase.TxnManager
 }
 
 func (db *tae) GetTxn(ctx TxnCtx) (txnif.AsyncTxn, error) {
