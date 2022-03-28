@@ -22,7 +22,7 @@ func TestCreateDB1(t *testing.T) {
 	catalog := MockCatalog(dir, "mock", nil)
 	defer catalog.Close()
 
-	txnMgr := txn.NewTxnManager()
+	txnMgr := txn.NewTxnManager(txn.DefaultTxnStoreFactory)
 	txnMgr.Start()
 	defer txnMgr.Stop()
 
@@ -120,7 +120,7 @@ func TestTableEntry1(t *testing.T) {
 	catalog := MockCatalog(dir, "mock", nil)
 	defer catalog.Close()
 
-	txnMgr := txn.NewTxnManager()
+	txnMgr := txn.NewTxnManager(txn.DefaultTxnStoreFactory)
 	txnMgr.Start()
 	defer txnMgr.Stop()
 

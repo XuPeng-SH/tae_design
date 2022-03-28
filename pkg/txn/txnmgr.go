@@ -9,19 +9,23 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
+type TxnStoreFactory = func() TxnStore
+
 type TxnManager struct {
 	sync.RWMutex
 	sm.ClosedState
 	sm.StateMachine
 	Active           map[uint64]iface.AsyncTxn
 	IdAlloc, TsAlloc *common.IdAlloctor
+	TxnStoreFactory  TxnStoreFactory
 }
 
-func NewTxnManager() *TxnManager {
+func NewTxnManager(txnStoreFactory TxnStoreFactory) *TxnManager {
 	mgr := &TxnManager{
-		Active:  make(map[uint64]iface.AsyncTxn),
-		IdAlloc: common.NewIdAlloctor(1),
-		TsAlloc: common.NewIdAlloctor(1),
+		Active:          make(map[uint64]iface.AsyncTxn),
+		IdAlloc:         common.NewIdAlloctor(1),
+		TsAlloc:         common.NewIdAlloctor(1),
+		TxnStoreFactory: txnStoreFactory,
 	}
 	pqueue := sm.NewSafeQueue(10000, 200, mgr.onPreparing)
 	cqueue := sm.NewSafeQueue(10000, 200, mgr.onCommit)
@@ -41,7 +45,8 @@ func (mgr *TxnManager) StartTxn(info []byte) *Transaction {
 	txnId := mgr.IdAlloc.Alloc()
 	startTs := mgr.TsAlloc.Alloc()
 
-	txn := NewTxn(mgr, txnId, startTs, info)
+	store := mgr.TxnStoreFactory()
+	txn := NewTxn(mgr, store, txnId, startTs, info)
 	mgr.Active[txnId] = txn
 	return txn
 }

@@ -33,16 +33,16 @@ type Transaction struct {
 	sync.WaitGroup
 	*TxnCtx
 	Mgr             *TxnManager
-	Store           *Store
+	txnStore        TxnStore
 	Err             error
 	DoneCond        sync.Cond
 	PrepareCommitFn func(interface{}) error
 }
 
-func NewTxn(mgr *TxnManager, txnId uint64, start uint64, info []byte) *Transaction {
+func NewTxn(mgr *TxnManager, store TxnStore, txnId uint64, start uint64, info []byte) *Transaction {
 	txn := &Transaction{
-		Mgr:   mgr,
-		Store: NewStore(),
+		Mgr:      mgr,
+		txnStore: store,
 	}
 	txn.TxnCtx = NewTxnCtx(&txn.RWMutex, txnId, start, info)
 	txn.DoneCond = *sync.NewCond(txn)

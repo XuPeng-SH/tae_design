@@ -1,12 +1,22 @@
 package txn
 
 import (
+	"io"
+
 	"github.com/matrixorigin/matrixone/pkg/container/batch"
 	"github.com/matrixorigin/matrixone/pkg/vm/engine/aoe/storage/metadata/v1"
 	"github.com/matrixorigin/matrixone/pkg/vm/engine/aoe/storage/mutation/buffer/base"
 )
 
-type Store struct {
+type TxnStore interface {
+	io.Closer
+	Append(id uint64, data *batch.Batch) error
+	RangeDeleteLocalRows(id uint64, start, end uint32) error
+	UpdateLocalValue(id uint64, row uint32, col uint16, v interface{}) error
+	AddUpdateNode(id uint64, node BlockUpdates) error
+}
+
+type txnStore struct {
 	tables     map[uint64]Table
 	driver     NodeDriver
 	nodesMgr   base.INodeManager
@@ -14,13 +24,15 @@ type Store struct {
 	tableIndex map[string]uint64
 }
 
-func NewStore() *Store {
-	return &Store{
+var DefaultTxnStoreFactory = func() TxnStore { return NewStore() }
+
+func NewStore() *txnStore {
+	return &txnStore{
 		tables: make(map[uint64]Table),
 	}
 }
 
-func (store *Store) Close() error {
+func (store *txnStore) Close() error {
 	var err error
 	for _, table := range store.tables {
 		if err = table.Close(); err != nil {
@@ -30,7 +42,7 @@ func (store *Store) Close() error {
 	return err
 }
 
-func (store *Store) InitTable(id uint64, schema *metadata.Schema) error {
+func (store *txnStore) InitTable(id uint64, schema *metadata.Schema) error {
 	table := store.tables[id]
 	if table != nil {
 		return ErrDuplicateNode
@@ -40,7 +52,7 @@ func (store *Store) InitTable(id uint64, schema *metadata.Schema) error {
 	return nil
 }
 
-func (store *Store) Append(id uint64, data *batch.Batch) error {
+func (store *txnStore) Append(id uint64, data *batch.Batch) error {
 	table := store.tables[id]
 	if table.IsDeleted() {
 		return ErrNotFound
@@ -48,32 +60,32 @@ func (store *Store) Append(id uint64, data *batch.Batch) error {
 	return table.Append(data)
 }
 
-func (store *Store) RangeDeleteLocalRows(id uint64, start, end uint32) error {
+func (store *txnStore) RangeDeleteLocalRows(id uint64, start, end uint32) error {
 	table := store.tables[id]
 	return table.RangeDeleteLocalRows(start, end)
 }
 
-func (store *Store) UpdateLocalValue(id uint64, row uint32, col uint16, value interface{}) error {
+func (store *txnStore) UpdateLocalValue(id uint64, row uint32, col uint16, value interface{}) error {
 	table := store.tables[id]
 	return table.UpdateLocalValue(row, col, value)
 }
 
-func (store *Store) AddUpdateNode(id uint64, node *blockUpdates) error {
+func (store *txnStore) AddUpdateNode(id uint64, node BlockUpdates) error {
 	table := store.tables[id]
 	return table.AddUpdateNode(node)
 }
 
-// func (store *Store) FindKeys(db, table uint64, keys [][]byte) []uint32 {
+// func (store *txnStore) FindKeys(db, table uint64, keys [][]byte) []uint32 {
 // 	// TODO
 // 	return nil
 // }
 
-// func (store *Store) FindKey(db, table uint64, key []byte) uint32 {
+// func (store *txnStore) FindKey(db, table uint64, key []byte) uint32 {
 // 	// TODO
 // 	return 0
 // }
 
-// func (store *Store) HasKey(db, table uint64, key []byte) bool {
+// func (store *txnStore) HasKey(db, table uint64, key []byte) bool {
 // 	// TODO
 // 	return false
 // }
