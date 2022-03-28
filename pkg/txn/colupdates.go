@@ -15,6 +15,15 @@ import (
 	"github.com/matrixorigin/matrixone/pkg/vm/engine/aoe/storage/metadata/v1"
 )
 
+type ColumnUpdates interface {
+	ReadFrom(r io.Reader) error
+	WriteTo(w io.Writer) error
+	Update(row uint32, v interface{}) error
+	UpdateLocked(row uint32, v interface{}) error
+	MergeLocked(o ColumnUpdates) error
+	ApplyToColumn(vec *gvec.Vector, deletes *roaring.Bitmap) *gvec.Vector
+}
+
 type columnUpdates struct {
 	rwlock  *sync.RWMutex
 	colDef  *metadata.ColDef
@@ -128,8 +137,8 @@ func (n *columnUpdates) UpdateLocked(row uint32, v interface{}) error {
 	return nil
 }
 
-func (n *columnUpdates) MergeLocked(o *columnUpdates) error {
-	for k, v := range o.txnVals {
+func (n *columnUpdates) MergeLocked(o ColumnUpdates) error {
+	for k, v := range o.(*columnUpdates).txnVals {
 		n.txnMask.Add(k)
 		n.txnVals[k] = v
 	}

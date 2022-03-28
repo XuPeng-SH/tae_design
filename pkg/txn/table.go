@@ -32,7 +32,7 @@ type Table interface {
 	Rows() uint32
 	BatchDedupLocal(data *gbat.Batch) error
 	BatchDedupLocalByCol(col *gvec.Vector) error
-	AddUpdateNode(*blockUpdates) error
+	AddUpdateNode(BlockUpdates) error
 	IsDeleted() bool
 	// Commit() error
 	// Rollback() error
@@ -110,13 +110,13 @@ func (tbl *txnTable) registerInsertNode() error {
 	return nil
 }
 
-func (tbl *txnTable) AddUpdateNode(node *blockUpdates) error {
+func (tbl *txnTable) AddUpdateNode(node BlockUpdates) error {
 	id := *node.GetID()
 	updates := tbl.updates[id]
 	if updates != nil {
 		return ErrDuplicateNode
 	}
-	tbl.updates[id] = node
+	tbl.updates[id] = node.(*blockUpdates)
 	return nil
 }
 

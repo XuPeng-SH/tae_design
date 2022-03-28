@@ -11,6 +11,16 @@ import (
 	"github.com/matrixorigin/matrixone/pkg/vm/engine/aoe/storage/metadata/v1"
 )
 
+type BlockUpdates interface {
+	GetID() *common.ID
+	DeleteLocked(start, end uint32) error
+	UpdateLocked(row uint32, colIdx uint16, v interface{}) error
+	GetColumnUpdatesLocked(colIdx uint16) ColumnUpdates
+	MergeColumnLocked(o BlockUpdates, colIdx uint16) error
+	ReadFrom(r io.Reader) error
+	WriteTo(w io.Writer) error
+}
+
 type blockUpdates struct {
 	rwlocker     *sync.RWMutex
 	schema       *metadata.Schema
@@ -60,11 +70,12 @@ func (n *blockUpdates) UpdateLocked(row uint32, colIdx uint16, v interface{}) er
 	return col.UpdateLocked(row, v)
 }
 
-func (n *blockUpdates) GetColumnUpdatesLocked(colIdx uint16) *columnUpdates {
+func (n *blockUpdates) GetColumnUpdatesLocked(colIdx uint16) ColumnUpdates {
 	return n.cols[colIdx]
 }
 
-func (n *blockUpdates) MergeColumnLocked(o *blockUpdates, colIdx uint16) error {
+func (n *blockUpdates) MergeColumnLocked(ob BlockUpdates, colIdx uint16) error {
+	o := ob.(*blockUpdates)
 	if o.localDeletes != nil {
 		if n.localDeletes == nil {
 			n.localDeletes = roaring.NewBitmap()
