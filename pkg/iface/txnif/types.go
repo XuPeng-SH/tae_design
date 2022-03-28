@@ -19,6 +19,7 @@ type TxnReader interface {
 	Compare(o TxnReader) int
 	GetTxnState(waitIfcommitting bool) int32
 	GetError() error
+	GetStore() TxnStore
 }
 
 type TxnHandle interface {
@@ -84,8 +85,30 @@ type ColumnUpdates interface {
 
 type TxnStore interface {
 	io.Closer
+	BindTxn(AsyncTxn)
+
 	Append(id uint64, data *batch.Batch) error
 	RangeDeleteLocalRows(id uint64, start, end uint32) error
 	UpdateLocalValue(id uint64, row uint32, col uint16, v interface{}) error
 	AddUpdateNode(id uint64, node BlockUpdates) error
+
+	// CreateDBEntry(name string) error
+	// CreateTableEntry(databse string, def interface{}) error
+
+	// DropDBEntry(name string) error
+	// DropTableEntry(dbName, name string) error
+
+	AddTxnEntry(TxnEntry)
+
+	PrepareCommit() error
+	// PrepareRollback() error
+	Commit() error
+	// Rollback() error
+}
+
+type TxnEntry interface {
+	PrepareCommit() error
+	// PrepareRollback() error
+	Commit() error
+	// Rollback() error
 }

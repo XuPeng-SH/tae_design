@@ -10,11 +10,13 @@ import (
 )
 
 type txnStore struct {
+	txnbase.NoopTxnStore
 	tables     map[uint64]Table
 	driver     txnbase.NodeDriver
 	nodesMgr   base.INodeManager
 	dbIndex    map[string]uint64
 	tableIndex map[string]uint64
+	txn        txnif.AsyncTxn
 }
 
 var DefaultTxnStoreFactory = func() txnif.TxnStore { return NewStore() }
@@ -45,6 +47,10 @@ func (store *txnStore) InitTable(id uint64, schema *metadata.Schema) error {
 	return nil
 }
 
+func (store *txnStore) BindTxn(txn txnif.AsyncTxn) {
+	store.txn = txn
+}
+
 func (store *txnStore) Append(id uint64, data *batch.Batch) error {
 	table := store.tables[id]
 	if table.IsDeleted() {
@@ -67,6 +73,11 @@ func (store *txnStore) AddUpdateNode(id uint64, node txnif.BlockUpdates) error {
 	table := store.tables[id]
 	return table.AddUpdateNode(node)
 }
+
+// func (store *txnStore) PrepareRollback() error { return nil }
+// func (store *txnStore) PrepareCommit() error   { return nil }
+// func (store *txnStore) Rollback() error        { return nil }
+// func (store *txnStore) Commit() error          { return nil }
 
 // func (store *txnStore) FindKeys(db, table uint64, keys [][]byte) []uint32 {
 // 	// TODO

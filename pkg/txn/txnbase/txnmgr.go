@@ -47,6 +47,7 @@ func (mgr *TxnManager) StartTxn(info []byte) txnif.AsyncTxn {
 
 	store := mgr.TxnStoreFactory()
 	txn := NewTxn(mgr, store, txnId, startTs, info)
+	store.BindTxn(txn)
 	mgr.Active[txnId] = txn
 	return txn
 }

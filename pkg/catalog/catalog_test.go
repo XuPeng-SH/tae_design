@@ -11,6 +11,86 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+type testTxnStore struct {
+	txn txnif.TxnReader
+	txnbase.NoopTxnStore
+	catalog *Catalog
+	entries map[txnif.TxnEntry]bool
+}
+
+func (store *testTxnStore) AddTxnEntry(entry txnif.TxnEntry) {
+	store.entries[entry] = true
+}
+
+func (store *testTxnStore) BindTxn(txn txnif.AsyncTxn) {
+	store.txn = txn
+}
+
+func (store *testTxnStore) PrepareCommit() error {
+	for e, _ := range store.entries {
+		if err := e.PrepareCommit(); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (store *testTxnStore) Commit() error {
+	for e, _ := range store.entries {
+		if err := e.Commit(); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// func (store *testTxnStore) CreateDBEntry(name string) error {
+// 	entry, err := store.catalog.CreateDBEntry(name, store.txn)
+// 	if err != nil {
+// 		return err
+// 	}
+// 	store.entries[entry.BaseEntry2] = true
+// 	return nil
+// }
+
+// func (store *testTxnStore) CreateTableEntry(dbName string, def interface{}) error {
+// 	schema := def.(*Schema)
+// 	db, err := store.catalog.GetDBEntry(dbName, store.txn)
+// 	if err != nil {
+// 		return err
+// 	}
+// 	entry, err := db.CreateTableEntry(schema, store.txn)
+// 	if err != nil {
+// 		return err
+// 	}
+// 	store.entries[entry.BaseEntry2] = true
+// 	return nil
+// }
+
+// func (store *testTxnStore) DropDBEntry(name string) error {
+// 	entry, err := store.catalog.DropDBEntry(name, store.txn)
+// 	if err != nil {
+// 		return err
+// 	}
+
+// 	store.entries[entry.BaseEntry2] = true
+// 	return nil
+// }
+
+// func (store *testTxnStore) DropTableEntry(dbName, name string) error {
+// 	db, err := store.catalog.GetDBEntry(dbName, store.txn)
+// 	if err != nil {
+// 		return err
+// 	}
+// 	entry, err := db.DropTableEntry(name, store.txn)
+// 	if err != nil {
+// 		return err
+// 	}
+
+// 	store.entries[entry.BaseEntry2] = true
+// 	return nil
+// }
+
 func initTestPath(t *testing.T) string {
 	dir := filepath.Join("/tmp", t.Name())
 	os.RemoveAll(dir)
@@ -22,12 +102,17 @@ func TestCreateDB1(t *testing.T) {
 	catalog := MockCatalog(dir, "mock", nil)
 	defer catalog.Close()
 
-	txnMgr := txnbase.NewTxnManager(txnbase.NoopStoreFactory)
+	factory := func() txnif.TxnStore {
+		store := new(testTxnStore)
+		store.catalog = catalog
+		store.entries = make(map[txnif.TxnEntry]bool)
+		return store
+	}
+	txnMgr := txnbase.NewTxnManager(factory)
 	txnMgr.Start()
 	defer txnMgr.Stop()
 
 	txn1 := txnMgr.StartTxn(nil)
-	db1 := NewDBEntry(catalog, fmt.Sprintf("%s-%d", t.Name(), 1), txn1)
 
 	name := fmt.Sprintf("%s-%d", t.Name(), 1)
 	db1, err := catalog.CreateDBEntry(name, txn1)
@@ -57,7 +142,7 @@ func TestCreateDB1(t *testing.T) {
 
 	// err = db1.CommitStart(txn1.GetCommitTS())
 	// assert.Nil(t, err)
-	err = db1.PrepareCommitLocked()
+	err = db1.PrepareCommit()
 	assert.Nil(t, err)
 
 	assert.True(t, db1.HasCreated())
@@ -97,7 +182,7 @@ func TestCreateDB1(t *testing.T) {
 	assert.Equal(t, db1, e)
 
 	// txn3.Commit()
-	// e.PrepareCommitLocked()
+	// e.PrepareCommit()
 	// t.Logf("%d:%d", txn4.GetStartTS(), txn4.GetCommitTS())
 }
 
@@ -120,13 +205,20 @@ func TestTableEntry1(t *testing.T) {
 	catalog := MockCatalog(dir, "mock", nil)
 	defer catalog.Close()
 
-	txnMgr := txnbase.NewTxnManager(txnbase.NoopStoreFactory)
+	factory := func() txnif.TxnStore {
+		store := new(testTxnStore)
+		store.catalog = catalog
+		store.entries = make(map[txnif.TxnEntry]bool)
+		return store
+	}
+	txnMgr := txnbase.NewTxnManager(factory)
 	txnMgr.Start()
 	defer txnMgr.Stop()
 
 	txn1 := txnMgr.StartTxn(nil)
 	db1, err := catalog.CreateDBEntry("db1", txn1)
 	assert.Nil(t, err)
+	txn1.GetStore().AddTxnEntry(db1)
 	t.Log(db1.String())
 
 	schema := MockSchema(2)
@@ -134,6 +226,7 @@ func TestTableEntry1(t *testing.T) {
 	tb1, err := db1.CreateTableEntry(schema, txn1)
 	assert.Nil(t, err)
 	t.Log(tb1)
+	txn1.GetStore().AddTxnEntry(tb1)
 
 	_, err = db1.GetTableEntry(schema.Name, txn1)
 	assert.Nil(t, err)
@@ -154,15 +247,19 @@ func TestTableEntry1(t *testing.T) {
 	err = txn1.Commit()
 	assert.Nil(t, err)
 
-	err = db1.PrepareCommitLocked()
+	err = txn1.GetStore().PrepareCommit()
 	assert.Nil(t, err)
-	err = tb1.PrepareCommitLocked()
+	err = txn1.GetStore().Commit()
 	assert.Nil(t, err)
-	t.Log(db1.String())
-	t.Log(tb1.String())
+	// err = db1.PrepareCommit()
+	// assert.Nil(t, err)
+	// err = tb1.PrepareCommit()
+	// assert.Nil(t, err)
+	// t.Log(db1.String())
+	// t.Log(tb1.String())
 
-	err = db1.Commit()
-	err = tb1.Commit()
+	// err = db1.Commit()
+	// err = tb1.Commit()
 
 	_, err = catalog.DropDBEntry("db1", txn2)
 	assert.Equal(t, err, ErrNotFound)
@@ -190,7 +287,7 @@ func TestTableEntry1(t *testing.T) {
 	err = txn3.Commit()
 	assert.Nil(t, err)
 
-	err = tb1.PrepareCommitLocked()
+	err = tb1.PrepareCommit()
 	assert.Nil(t, err)
 	t.Log(tb1.String())
 

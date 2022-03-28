@@ -64,6 +64,10 @@ func (txn *transaction) Commit() error {
 	return txn.Err
 }
 
+func (txn *transaction) GetStore() txnif.TxnStore {
+	return txn.txnStore
+}
+
 func (txn *transaction) Rollback() error {
 	txn.Add(1)
 	txn.Mgr.OnOpTxn(&OpTxn{

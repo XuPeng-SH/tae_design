@@ -58,7 +58,7 @@ func (be *BaseEntry2) DoCompre(oe *BaseEntry2) int {
 	return r
 }
 
-func (be *BaseEntry2) PrepareCommitLocked() error {
+func (be *BaseEntry2) PrepareCommit() error {
 	if be.CreateAt == 0 {
 		be.CreateAt = be.Txn.GetCommitTS()
 	}
