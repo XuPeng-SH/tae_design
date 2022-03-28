@@ -151,3 +151,7 @@ func (catalog *Catalog) CreateDBEntry(name string, txnCtx iface.TxnReader) (*DBE
 	defer catalog.Unlock()
 	return entry, catalog.addEntryLocked(entry)
 }
+
+func (catalog *Catalog) MakeDBHandle(txnCtx iface.TxnReader) iface.Database {
+	return nil
+}

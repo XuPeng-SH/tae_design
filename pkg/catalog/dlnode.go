@@ -1,5 +1,7 @@
 package catalog
 
+import "sync"
+
 type Link struct {
 	head *DLNode
 	tail *DLNode
@@ -133,4 +135,38 @@ func LoopDLink(head *DLNode, fn func(node *DLNode) bool, reverse bool) {
 			curr = curr.next
 		}
 	}
+}
+
+type LinkIt struct {
+	linkLocker *sync.RWMutex
+	curr       *DLNode
+	nextFunc   func(*DLNode) *DLNode
+}
+
+func NewLinkIt(linkLocker *sync.RWMutex, link *Link, reverse bool) *LinkIt {
+	it := &LinkIt{
+		linkLocker: linkLocker,
+	}
+	if reverse {
+		it.nextFunc = func(n *DLNode) *DLNode {
+			return n.prev
+		}
+		it.curr = link.tail
+	} else {
+		it.nextFunc = func(n *DLNode) *DLNode {
+			return n.next
+		}
+		it.curr = link.head
+	}
+	return it
+}
+
+func (it *LinkIt) Valid() bool {
+	return it.curr != nil
+}
+
+func (it *LinkIt) Next() {
+	it.linkLocker.RLock()
+	it.curr = it.nextFunc(it.curr)
+	it.linkLocker.RUnlock()
 }
