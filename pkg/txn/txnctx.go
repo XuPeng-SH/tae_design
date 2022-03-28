@@ -6,18 +6,6 @@ import (
 	"tae/pkg/iface"
 )
 
-const (
-	UncommitTS = ^uint64(0)
-)
-
-const (
-	TxnStateActive int32 = iota
-	TxnStateCommitting
-	TxnStateRollbacking
-	TxnStateCommitted
-	TxnStateRollbacked
-)
-
 type TxnCtx struct {
 	*sync.RWMutex
 	ID                uint64
@@ -34,7 +22,7 @@ func NewTxnCtx(rwlocker *sync.RWMutex, id, start uint64, info []byte) *TxnCtx {
 		ID:       id,
 		RWMutex:  rwlocker,
 		StartTS:  start,
-		CommitTS: UncommitTS,
+		CommitTS: iface.UncommitTS,
 		Info:     info,
 	}
 }
@@ -49,26 +37,26 @@ func (ctx *TxnCtx) Compare(o iface.TxnReader) int {
 }
 
 func (ctx *TxnCtx) IsActiveLocked() bool {
-	return ctx.CommitTS == UncommitTS
+	return ctx.CommitTS == iface.UncommitTS
 }
 
 func (ctx *TxnCtx) ToCommittingLocked(ts uint64) error {
 	if ts <= ctx.StartTS {
 		panic(fmt.Sprintf("start ts %d should be less than commit ts %d", ctx.StartTS, ts))
 	}
-	if ctx.CommitTS != UncommitTS {
+	if ctx.CommitTS != iface.UncommitTS {
 		return ErrTxnNotActive
 	}
 	ctx.CommitTS = ts
-	ctx.State = TxnStateCommitting
+	ctx.State = iface.TxnStateCommitting
 	return nil
 }
 
 func (ctx *TxnCtx) ToCommittedLocked() error {
-	if ctx.State != TxnStateCommitting {
+	if ctx.State != iface.TxnStateCommitting {
 		return ErrTxnNotCommitting
 	}
-	ctx.State = TxnStateCommitted
+	ctx.State = iface.TxnStateCommitted
 	return nil
 }
 
@@ -76,18 +64,18 @@ func (ctx *TxnCtx) ToRollbackingLocked(ts uint64) error {
 	if ts <= ctx.StartTS {
 		panic(fmt.Sprintf("start ts %d should be less than commit ts %d", ctx.StartTS, ts))
 	}
-	if (ctx.State != TxnStateActive) && (ctx.State != TxnStateCommitting) {
+	if (ctx.State != iface.TxnStateActive) && (ctx.State != iface.TxnStateCommitting) {
 		return ErrTxnCannotRollback
 	}
 	ctx.CommitTS = ts
-	ctx.State = TxnStateRollbacking
+	ctx.State = iface.TxnStateRollbacking
 	return nil
 }
 
 func (ctx *TxnCtx) ToRollbackedLocked() error {
-	if ctx.State != TxnStateRollbacking {
+	if ctx.State != iface.TxnStateRollbacking {
 		return ErrTxnNotRollbacking
 	}
-	ctx.State = TxnStateRollbacked
+	ctx.State = iface.TxnStateRollbacked
 	return nil
 }

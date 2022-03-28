@@ -7,6 +7,18 @@ import (
 	"github.com/matrixorigin/matrixone/pkg/vm/engine/aoe/storage/container/batch"
 )
 
+const (
+	UncommitTS = ^uint64(0)
+)
+
+const (
+	TxnStateActive int32 = iota
+	TxnStateCommitting
+	TxnStateRollbacking
+	TxnStateCommitted
+	TxnStateRollbacked
+)
+
 type TxnReader interface {
 	GetID() uint64
 	GetStartTS() uint64

@@ -84,7 +84,7 @@ func (txn *Transaction) Done() {
 
 func (txn *Transaction) IsTerminated(waitIfcommitting bool) bool {
 	state := txn.GetTxnState(waitIfcommitting)
-	return state == TxnStateCommitted || state == TxnStateRollbacked
+	return state == iface.TxnStateCommitted || state == iface.TxnStateRollbacked
 }
 
 func (txn *Transaction) GetTxnState(waitIfcommitting bool) int32 {
@@ -94,14 +94,14 @@ func (txn *Transaction) GetTxnState(waitIfcommitting bool) int32 {
 		txn.RUnlock()
 		return state
 	}
-	if state != TxnStateCommitting {
+	if state != iface.TxnStateCommitting {
 		txn.RUnlock()
 		return state
 	}
 	txn.RUnlock()
 	txn.DoneCond.L.Lock()
 	state = txn.State
-	if state != TxnStateCommitting {
+	if state != iface.TxnStateCommitting {
 		txn.DoneCond.L.Unlock()
 		return state
 	}

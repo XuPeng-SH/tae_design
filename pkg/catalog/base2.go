@@ -40,7 +40,7 @@ func (be *BaseEntry2) IsCommitted() bool {
 		return true
 	}
 	state := be.Txn.GetTxnState(true)
-	return state == txn.TxnStateCommitted || state == txn.TxnStateRollbacked
+	return state == iface.TxnStateCommitted || state == iface.TxnStateRollbacked
 }
 
 func (be *BaseEntry2) GetID() uint64 { return be.ID }
@@ -165,7 +165,7 @@ func (be *BaseEntry2) IsSameTxn(ctx iface.TxnReader) bool {
 }
 
 func (be *BaseEntry2) IsCommitting() bool {
-	if be.Txn != nil && be.Txn.GetCommitTS() != txn.UncommitTS {
+	if be.Txn != nil && be.Txn.GetCommitTS() != iface.UncommitTS {
 		return true
 	}
 	return false

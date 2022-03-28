@@ -5,7 +5,6 @@ import (
 	"sync"
 	"tae/pkg/common"
 	"tae/pkg/iface"
-	"tae/pkg/txn"
 
 	"github.com/google/btree"
 )
@@ -172,7 +171,7 @@ func (n *nodeList) TxnGetTableNodeLocked(txnCtx iface.TxnReader) *DLNode {
 					return
 				}
 				state := entry.Txn.GetTxnState(true)
-				if state == txn.TxnStateRollbacked {
+				if state == iface.TxnStateRollbacked {
 					dn = dlNode
 				}
 				goNext = false
@@ -231,7 +230,7 @@ func (n *nodeList) TxnGetDBNodeLocked(txnCtx iface.TxnReader) *DLNode {
 					return
 				}
 				state := entry.Txn.GetTxnState(true)
-				if state == txn.TxnStateRollbacked {
+				if state == iface.TxnStateRollbacked {
 					dn = dlNode
 				}
 				goNext = false
