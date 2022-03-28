@@ -107,12 +107,38 @@ func (n *nodeList) GetDBNode() *DLNode {
 	return n.GetNext().(*nameNode).GetDBNode()
 }
 
+func (n *nodeList) TxnGetTableNodeLocked(txnCtx iface.TxnReader) *DLNode {
+	var dn *DLNode
+	fn := func(nn *nameNode) bool {
+		dlNode := nn.GetTableNode()
+		entry := dlNode.payload.(*TableEntry)
+		if entry.IsSameTxn(txnCtx.GetStartTS()) {
+			if entry.IsDroppedUncommitted() {
+				return false
+			}
+			dn = dlNode
+			return false
+		} else {
+			if entry.CreateAt != 0 && entry.CreateAt <= txnCtx.GetStartTS() && (entry.DeleteAt == 0 || entry.DeleteAt > txnCtx.GetStartTS()) {
+				dn = dlNode
+				return false
+			}
+		}
+		return true
+	}
+	n.ForEachNodes(fn)
+	return dn
+}
+
 func (n *nodeList) TxnGetDBNodeLocked(txnCtx iface.TxnReader) *DLNode {
 	var dn *DLNode
 	fn := func(nn *nameNode) bool {
 		dlNode := nn.GetDBNode()
 		entry := dlNode.payload.(*DBEntry)
 		if entry.IsSameTxn(txnCtx.GetStartTS()) {
+			if entry.IsDroppedUncommitted() {
+				return false
+			}
 			dn = dlNode
 			return false
 		} else {
@@ -170,9 +196,9 @@ func (n *nameNode) GetDBNode() *DLNode {
 	return n.host.(*Catalog).entries[n.Id]
 }
 
-// func (n *nameNode) GetTable() *Table {
-// 	if n == nil {
-// 		return nil
-// 	}
-// 	return n.host.(*DBEntry).TableSet[n.Id]
-// }
+func (n *nameNode) GetTableNode() *DLNode {
+	if n == nil {
+		return nil
+	}
+	return n.host.(*DBEntry).entries[n.Id]
+}

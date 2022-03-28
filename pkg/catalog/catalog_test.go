@@ -91,12 +91,99 @@ func TestCreateDB1(t *testing.T) {
 	t.Log(e.String())
 }
 
-// func TestCreateDB2(t *testing.T) {
-// 	dir := initTestPath(t)
-// 	catalog := MockCatalog(dir, "mock", nil)
-// 	defer catalog.Close()
+//
+// TXN1-S     TXN2-S      TXN1-C  TXN3-S TXN4-S  TXN3-C TXN5-S
+//  |            |           |      |      |       |      |                                Time
+// -+-+---+---+--+--+----+---+--+---+-+----+-+-----+------+-+------------------------------------>
+//    |   |   |     |    |      |     |      |              |
+//    |   |   |     |    |      |     |      |            [TXN5]: GET TBL [NOTFOUND]
+//    |   |   |     |    |      |     |    [TXN4]: GET TBL [OK] | DROP DB1-TB1 [W-W]
+//    |   |   |     |    |      |   [TXN3]: GET TBL [OK] | DROP DB1-TB1 [OK] | GET TBL [NOT FOUND]
+//    |   |   |     |    |    [TXN2]: DROP DB [NOTFOUND]
+//    |   |   |     |  [TXN2]: DROP DB [NOTFOUND]
+//    |   |   |   [TXN2]:  GET DB [NOTFOUND] | CREATE DB [W-W]
+//    |   | [TXN1]: CREATE DB1-TB1 [DUP]
+//    | [TXN1]: CREATE DB1-TB1 [OK] | GET TBL [OK]
+//  [TXN1]: CREATE DB1 [OK] | GET DB [OK]
+func TestTableEntry1(t *testing.T) {
+	dir := initTestPath(t)
+	catalog := MockCatalog(dir, "mock", nil)
+	defer catalog.Close()
 
-// 	txnMgr := txn.NewTxnManager()
-// 	txnMgr.Start()
-// 	defer txnMgr.Stop()
-// }
+	txnMgr := txn.NewTxnManager()
+	txnMgr.Start()
+	defer txnMgr.Stop()
+
+	txn1 := txnMgr.StartTxn(nil)
+	db1, err := catalog.CreateDBEntry("db1", txn1)
+	assert.Nil(t, err)
+	t.Log(db1.String())
+
+	schema := MockSchema(2)
+	schema.Name = "tb1"
+	tb1, err := db1.CreateTableEntry(schema, txn1)
+	assert.Nil(t, err)
+	t.Log(tb1)
+
+	_, err = db1.GetTableEntry(schema.Name, txn1)
+	assert.Nil(t, err)
+
+	_, err = db1.CreateTableEntry(schema, txn1)
+	assert.Equal(t, ErrDuplicate, err)
+
+	txn2 := txnMgr.StartTxn(nil)
+	_, err = catalog.GetDBEntry("db1", txn2)
+	assert.Equal(t, err, ErrNotFound)
+
+	_, err = catalog.CreateDBEntry("db1", txn2)
+	assert.Equal(t, err, txn.TxnWWConflictErr)
+
+	_, err = catalog.DropDBEntry("db1", txn2)
+	assert.Equal(t, err, ErrNotFound)
+
+	err = txn1.Commit()
+	assert.Nil(t, err)
+
+	err = db1.CommitStart(txn1.GetCommitTS())
+	assert.Nil(t, err)
+	err = tb1.CommitStart(txn1.GetCommitTS())
+	assert.Nil(t, err)
+	t.Log(db1.String())
+	t.Log(tb1.String())
+
+	_, err = catalog.DropDBEntry("db1", txn2)
+	assert.Equal(t, err, ErrNotFound)
+
+	txn3 := txnMgr.StartTxn(nil)
+	db, err := catalog.GetDBEntry("db1", txn3)
+	assert.Nil(t, err)
+
+	_, err = db.DropTableEntry(schema.Name, txn3)
+	assert.Nil(t, err)
+	t.Log(tb1.String())
+
+	_, err = db.GetTableEntry(schema.Name, txn3)
+	assert.Equal(t, ErrNotFound, err)
+
+	txn4 := txnMgr.StartTxn(nil)
+	db, err = catalog.GetDBEntry("db1", txn4)
+	assert.Nil(t, err)
+	_, err = db.GetTableEntry(schema.Name, txn4)
+	assert.Nil(t, err)
+
+	_, err = db.DropTableEntry(schema.Name, txn4)
+	assert.Equal(t, txn.TxnWWConflictErr, err)
+
+	err = txn3.Commit()
+	assert.Nil(t, err)
+
+	err = tb1.CommitDrop(txn3.GetCommitTS())
+	assert.Nil(t, err)
+	t.Log(tb1.String())
+
+	txn5 := txnMgr.StartTxn(nil)
+	db, err = catalog.GetDBEntry("db1", txn5)
+	assert.Nil(t, err)
+	_, err = db.GetTableEntry(schema.Name, txn5)
+	assert.Equal(t, ErrNotFound, err)
+}

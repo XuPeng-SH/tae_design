@@ -3,6 +3,7 @@ package catalog
 import (
 	"sync"
 	"tae/pkg/iface"
+	"tae/pkg/txn"
 )
 
 const (
@@ -91,13 +92,22 @@ func (e *BaseEntry) CommitStart(ts uint64) error {
 	return nil
 }
 
+func (e *BaseEntry) CommitDrop(ts uint64) error {
+	if e.HasDropped() {
+		panic("unexpected")
+	}
+	e.CommitInfo.DropCommitTS = ts
+	e.DeleteAt = ts
+	return nil
+}
+
 func (e *BaseEntry) DropEntryLocked(txnCtx iface.TxnReader) error {
 	startTS := txnCtx.GetStartTS()
 	if e.HasDropped() {
 		return ErrValidation
 	}
 	if e.DropStartTS != 0 {
-		return ErrValidation
+		return txn.TxnWWConflictErr
 	}
 	if e.HasStarted() {
 		if startTS <= e.CreateAt {
