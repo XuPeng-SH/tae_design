@@ -1,0 +1,14 @@
+package txnbase
+
+import "errors"
+
+var (
+	ErrTxnAlreadyCommitted = errors.New("tae: txn already committed")
+	ErrTxnNotCommitting    = errors.New("tae: txn not commiting")
+	ErrTxnNotRollbacking   = errors.New("tae: txn not rollbacking")
+	ErrTxnNotActive        = errors.New("tae: txn not active")
+	ErrTxnCannotRollback   = errors.New("tae: txn cannot txn rollback")
+
+	ErrNotFound   = errors.New("tae: not found")
+	ErrDuplicated = errors.New("tae: duplicated ")
+)
