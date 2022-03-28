@@ -39,7 +39,7 @@ func (mgr *TxnManager) Init(prevTxnId uint64, prevTs uint64) error {
 	return nil
 }
 
-func (mgr *TxnManager) StartTxn(info []byte) *Transaction {
+func (mgr *TxnManager) StartTxn(info []byte) iface.AsyncTxn {
 	mgr.Lock()
 	defer mgr.Unlock()
 	txnId := mgr.IdAlloc.Alloc()
