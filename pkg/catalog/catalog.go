@@ -3,6 +3,7 @@ package catalog
 import (
 	"sync"
 	"tae/pkg/iface"
+	"tae/pkg/iface/txnif"
 
 	"github.com/jiangxinmeng1/logstore/pkg/store"
 )
@@ -73,7 +74,7 @@ func (catalog *Catalog) addEntryLocked(database *DBEntry) (Waitable, error) {
 				}
 			} else {
 				if !oldE.IsCommitting() {
-					return nil, iface.TxnWWConflictErr
+					return nil, txnif.TxnWWConflictErr
 				}
 				if oldE.Txn.GetCommitTS() < database.Txn.GetStartTS() {
 					return &waitable{func() error { oldE.Txn.GetTxnState(true); return nil }}, nil
@@ -98,7 +99,7 @@ func (catalog *Catalog) removeEntryLocked(database *DBEntry) error {
 	return nil
 }
 
-func (catalog *Catalog) txnGetNodeByNameLocked(name string, txnCtx iface.TxnReader) *DLNode {
+func (catalog *Catalog) txnGetNodeByNameLocked(name string, txnCtx txnif.TxnReader) *DLNode {
 	node := catalog.nameNodes[name]
 	if node == nil {
 		return nil
@@ -106,7 +107,7 @@ func (catalog *Catalog) txnGetNodeByNameLocked(name string, txnCtx iface.TxnRead
 	return node.TxnGetDBNodeLocked(txnCtx)
 }
 
-func (catalog *Catalog) GetDBEntry(name string, txnCtx iface.TxnReader) (*DBEntry, error) {
+func (catalog *Catalog) GetDBEntry(name string, txnCtx txnif.TxnReader) (*DBEntry, error) {
 	catalog.RLock()
 	n := catalog.txnGetNodeByNameLocked(name, txnCtx)
 	catalog.RUnlock()
@@ -116,7 +117,7 @@ func (catalog *Catalog) GetDBEntry(name string, txnCtx iface.TxnReader) (*DBEntr
 	return n.payload.(*DBEntry), nil
 }
 
-func (catalog *Catalog) DropDBEntry(name string, txnCtx iface.TxnReader) (deleted *DBEntry, err error) {
+func (catalog *Catalog) DropDBEntry(name string, txnCtx txnif.TxnReader) (deleted *DBEntry, err error) {
 	catalog.Lock()
 	defer catalog.Unlock()
 	dn := catalog.txnGetNodeByNameLocked(name, txnCtx)
@@ -132,7 +133,7 @@ func (catalog *Catalog) DropDBEntry(name string, txnCtx iface.TxnReader) (delete
 	return
 }
 
-func (catalog *Catalog) CreateDBEntry(name string, txnCtx iface.TxnReader) (*DBEntry, error) {
+func (catalog *Catalog) CreateDBEntry(name string, txnCtx txnif.TxnReader) (*DBEntry, error) {
 	var err error
 	catalog.Lock()
 	old := catalog.txnGetNodeByNameLocked(name, txnCtx)
@@ -144,7 +145,7 @@ func (catalog *Catalog) CreateDBEntry(name string, txnCtx iface.TxnReader) (*DBE
 					err = ErrDuplicate
 				}
 			} else {
-				err = iface.TxnWWConflictErr
+				err = txnif.TxnWWConflictErr
 			}
 		} else {
 			if !oldE.HasDropped() {
@@ -175,6 +176,6 @@ func (catalog *Catalog) CreateDBEntry(name string, txnCtx iface.TxnReader) (*DBE
 	return entry, err
 }
 
-func (catalog *Catalog) MakeDBHandle(txnCtx iface.TxnReader) iface.Database {
+func (catalog *Catalog) MakeDBHandle(txnCtx txnif.TxnReader) iface.Database {
 	return nil
 }

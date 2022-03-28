@@ -4,7 +4,7 @@ import (
 	"encoding/binary"
 	"io"
 	"sync"
-	"tae/pkg/iface"
+	"tae/pkg/iface/txnif"
 
 	"github.com/RoaringBitmap/roaring"
 	"github.com/matrixorigin/matrixone/pkg/vm/engine/aoe/storage/common"
@@ -48,7 +48,7 @@ func (n *blockUpdates) GetID() *common.ID { return n.id }
 func (n *blockUpdates) DeleteLocked(start, end uint32) error {
 	for i := start; i <= end; i++ {
 		if (n.baseDeletes != nil && n.baseDeletes.Contains(i)) || (n.localDeletes != nil && n.localDeletes.Contains(i)) {
-			return iface.TxnWWConflictErr
+			return txnif.TxnWWConflictErr
 		}
 	}
 	if n.localDeletes == nil {
@@ -60,7 +60,7 @@ func (n *blockUpdates) DeleteLocked(start, end uint32) error {
 
 func (n *blockUpdates) UpdateLocked(row uint32, colIdx uint16, v interface{}) error {
 	if (n.baseDeletes != nil && n.baseDeletes.Contains(row)) || n.localDeletes.Contains(row) {
-		return iface.TxnWWConflictErr
+		return txnif.TxnWWConflictErr
 	}
 	col, ok := n.cols[colIdx]
 	if !ok {

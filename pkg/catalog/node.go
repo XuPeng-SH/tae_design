@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"sync"
 	"tae/pkg/common"
-	"tae/pkg/iface"
+	"tae/pkg/iface/txnif"
 
 	"github.com/google/btree"
 )
@@ -122,7 +122,7 @@ func (n *nodeList) GetDBNode() *DLNode {
 // 7. Txn3 commit
 // 8. Txn4 can still find "tb1"
 // 9. Txn5 start and cannot find "tb1"
-func (n *nodeList) TxnGetTableNodeLocked(txnCtx iface.TxnReader) *DLNode {
+func (n *nodeList) TxnGetTableNodeLocked(txnCtx txnif.TxnReader) *DLNode {
 	var dn *DLNode
 	fn := func(nn *nameNode) (goNext bool) {
 		dlNode := nn.GetTableNode()
@@ -171,7 +171,7 @@ func (n *nodeList) TxnGetTableNodeLocked(txnCtx iface.TxnReader) *DLNode {
 					return
 				}
 				state := entry.Txn.GetTxnState(true)
-				if state == iface.TxnStateRollbacked {
+				if state == txnif.TxnStateRollbacked {
 					dn = dlNode
 				}
 				goNext = false
@@ -193,7 +193,7 @@ func (n *nodeList) TxnGetTableNodeLocked(txnCtx iface.TxnReader) *DLNode {
 	return dn
 }
 
-func (n *nodeList) TxnGetDBNodeLocked(txnCtx iface.TxnReader) *DLNode {
+func (n *nodeList) TxnGetDBNodeLocked(txnCtx txnif.TxnReader) *DLNode {
 	var dn *DLNode
 	fn := func(nn *nameNode) (goNext bool) {
 		dlNode := nn.GetDBNode()
@@ -230,7 +230,7 @@ func (n *nodeList) TxnGetDBNodeLocked(txnCtx iface.TxnReader) *DLNode {
 					return
 				}
 				state := entry.Txn.GetTxnState(true)
-				if state == iface.TxnStateRollbacked {
+				if state == txnif.TxnStateRollbacked {
 					dn = dlNode
 				}
 				goNext = false

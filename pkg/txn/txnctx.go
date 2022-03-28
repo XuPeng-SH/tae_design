@@ -3,7 +3,7 @@ package txn
 import (
 	"fmt"
 	"sync"
-	"tae/pkg/iface"
+	"tae/pkg/iface/txnif"
 )
 
 type TxnCtx struct {
@@ -22,7 +22,7 @@ func NewTxnCtx(rwlocker *sync.RWMutex, id, start uint64, info []byte) *TxnCtx {
 		ID:       id,
 		RWMutex:  rwlocker,
 		StartTS:  start,
-		CommitTS: iface.UncommitTS,
+		CommitTS: txnif.UncommitTS,
 		Info:     info,
 	}
 }
@@ -32,31 +32,31 @@ func (ctx *TxnCtx) GetInfo() []byte     { return ctx.Info }
 func (ctx *TxnCtx) GetStartTS() uint64  { return ctx.StartTS }
 func (ctx *TxnCtx) GetCommitTS() uint64 { return ctx.CommitTS }
 
-func (ctx *TxnCtx) Compare(o iface.TxnReader) int {
+func (ctx *TxnCtx) Compare(o txnif.TxnReader) int {
 	return 0
 }
 
 func (ctx *TxnCtx) IsActiveLocked() bool {
-	return ctx.CommitTS == iface.UncommitTS
+	return ctx.CommitTS == txnif.UncommitTS
 }
 
 func (ctx *TxnCtx) ToCommittingLocked(ts uint64) error {
 	if ts <= ctx.StartTS {
 		panic(fmt.Sprintf("start ts %d should be less than commit ts %d", ctx.StartTS, ts))
 	}
-	if ctx.CommitTS != iface.UncommitTS {
+	if ctx.CommitTS != txnif.UncommitTS {
 		return ErrTxnNotActive
 	}
 	ctx.CommitTS = ts
-	ctx.State = iface.TxnStateCommitting
+	ctx.State = txnif.TxnStateCommitting
 	return nil
 }
 
 func (ctx *TxnCtx) ToCommittedLocked() error {
-	if ctx.State != iface.TxnStateCommitting {
+	if ctx.State != txnif.TxnStateCommitting {
 		return ErrTxnNotCommitting
 	}
-	ctx.State = iface.TxnStateCommitted
+	ctx.State = txnif.TxnStateCommitted
 	return nil
 }
 
@@ -64,18 +64,18 @@ func (ctx *TxnCtx) ToRollbackingLocked(ts uint64) error {
 	if ts <= ctx.StartTS {
 		panic(fmt.Sprintf("start ts %d should be less than commit ts %d", ctx.StartTS, ts))
 	}
-	if (ctx.State != iface.TxnStateActive) && (ctx.State != iface.TxnStateCommitting) {
+	if (ctx.State != txnif.TxnStateActive) && (ctx.State != txnif.TxnStateCommitting) {
 		return ErrTxnCannotRollback
 	}
 	ctx.CommitTS = ts
-	ctx.State = iface.TxnStateRollbacking
+	ctx.State = txnif.TxnStateRollbacking
 	return nil
 }
 
 func (ctx *TxnCtx) ToRollbackedLocked() error {
-	if ctx.State != iface.TxnStateRollbacking {
+	if ctx.State != txnif.TxnStateRollbacking {
 		return ErrTxnNotRollbacking
 	}
-	ctx.State = iface.TxnStateRollbacked
+	ctx.State = txnif.TxnStateRollbacked
 	return nil
 }

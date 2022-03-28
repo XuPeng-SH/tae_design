@@ -2,7 +2,7 @@ package catalog
 
 import (
 	"sync"
-	"tae/pkg/iface"
+	"tae/pkg/iface/txnif"
 )
 
 const (
@@ -100,13 +100,13 @@ func (e *BaseEntry) CommitDrop(ts uint64) error {
 	return nil
 }
 
-func (e *BaseEntry) DropEntryLocked(txnCtx iface.TxnReader) error {
+func (e *BaseEntry) DropEntryLocked(txnCtx txnif.TxnReader) error {
 	startTS := txnCtx.GetStartTS()
 	if e.HasDropped() {
 		return ErrValidation
 	}
 	if e.DropStartTS != 0 {
-		return iface.TxnWWConflictErr
+		return txnif.TxnWWConflictErr
 	}
 	if e.HasStarted() {
 		if startTS <= e.CreateAt {

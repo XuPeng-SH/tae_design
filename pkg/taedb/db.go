@@ -1,7 +1,7 @@
 package taedb
 
 import (
-	"tae/pkg/iface"
+	"tae/pkg/iface/txnif"
 	"tae/pkg/txn"
 
 	"github.com/matrixorigin/matrixone/pkg/container/batch"
@@ -41,7 +41,7 @@ type tae struct {
 	TxnMgr *txn.TxnManager
 }
 
-func (db *tae) GetTxn(ctx TxnCtx) (iface.AsyncTxn, error) {
+func (db *tae) GetTxn(ctx TxnCtx) (txnif.AsyncTxn, error) {
 	transaction := db.TxnMgr.GetTxn(ctx.GetID())
 	if transaction == nil {
 		return nil, ErrTxnNotFound
@@ -90,7 +90,7 @@ func (db *tae) AppendRows(desc *AppendDesc, ctx TxnCtx) error {
 	return nil
 }
 
-func (db *tae) getOrSetTable(transaction iface.AsyncTxn, dbName, tableName string) *metadata.Table {
+func (db *tae) getOrSetTable(transaction txnif.AsyncTxn, dbName, tableName string) *metadata.Table {
 	// entry := transaction.GetTableByName(desc.DB, desc.Table)
 	// if entry == nil {
 	// 	if entry, err = db.Catalog.GetTableByName(desc.DB, desc.Table, transaction); err != nil {

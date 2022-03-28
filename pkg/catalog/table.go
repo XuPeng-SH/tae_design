@@ -3,7 +3,7 @@ package catalog
 import (
 	"fmt"
 	"sync"
-	"tae/pkg/iface"
+	"tae/pkg/iface/txnif"
 )
 
 type TableEntry struct {
@@ -14,7 +14,7 @@ type TableEntry struct {
 	link    *Link
 }
 
-func NewTableEntry(db *DBEntry, schema *Schema, txnCtx iface.TxnReader) *TableEntry {
+func NewTableEntry(db *DBEntry, schema *Schema, txnCtx txnif.TxnReader) *TableEntry {
 	id := db.catalog.NextTable()
 	e := &TableEntry{
 		BaseEntry2: &BaseEntry2{

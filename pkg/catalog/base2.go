@@ -2,7 +2,7 @@ package catalog
 
 import (
 	"sync"
-	"tae/pkg/iface"
+	"tae/pkg/iface/txnif"
 )
 
 type Waitable interface {
@@ -20,7 +20,7 @@ func (w *waitable) Wait() error {
 type CommitInfo2 struct {
 	// Ops    []OpT
 	CurrOp OpT
-	Txn    iface.TxnReader
+	Txn    txnif.TxnReader
 }
 
 type BaseEntry2 struct {
@@ -39,7 +39,7 @@ func (be *BaseEntry2) IsCommitted() bool {
 		return true
 	}
 	state := be.Txn.GetTxnState(true)
-	return state == iface.TxnStateCommitted || state == iface.TxnStateRollbacked
+	return state == txnif.TxnStateCommitted || state == txnif.TxnStateRollbacked
 }
 
 func (be *BaseEntry2) GetID() uint64 { return be.ID }
@@ -109,7 +109,7 @@ func (be *BaseEntry2) HasCreated() bool {
 	return be.CreateAt != 0
 }
 
-func (be *BaseEntry2) DropEntryLocked(txnCtx iface.TxnReader) error {
+func (be *BaseEntry2) DropEntryLocked(txnCtx txnif.TxnReader) error {
 	if be.Txn == nil {
 		if be.HasDropped() {
 			return ErrNotFound
@@ -128,7 +128,7 @@ func (be *BaseEntry2) DropEntryLocked(txnCtx iface.TxnReader) error {
 		be.CurrOp = OpSoftDelete
 		return nil
 	}
-	return iface.TxnWWConflictErr
+	return txnif.TxnWWConflictErr
 }
 
 func (be *BaseEntry2) SameTxn(o *BaseEntry2) bool {
@@ -156,7 +156,7 @@ func (be *BaseEntry2) GetTxnID() uint64 {
 	return 0
 }
 
-func (be *BaseEntry2) IsSameTxn(ctx iface.TxnReader) bool {
+func (be *BaseEntry2) IsSameTxn(ctx txnif.TxnReader) bool {
 	if be.Txn != nil {
 		return be.Txn.GetID() == ctx.GetID()
 	}
@@ -164,7 +164,7 @@ func (be *BaseEntry2) IsSameTxn(ctx iface.TxnReader) bool {
 }
 
 func (be *BaseEntry2) IsCommitting() bool {
-	if be.Txn != nil && be.Txn.GetCommitTS() != iface.UncommitTS {
+	if be.Txn != nil && be.Txn.GetCommitTS() != txnif.UncommitTS {
 		return true
 	}
 	return false

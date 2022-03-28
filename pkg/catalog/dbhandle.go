@@ -1,13 +1,16 @@
 package catalog
 
-import "tae/pkg/iface"
+import (
+	"tae/pkg/iface"
+	"tae/pkg/iface/txnif"
+)
 
 type dbTxnHandle struct {
-	ctx iface.TxnReader
+	ctx txnif.TxnReader
 	db  *DBEntry
 }
 
-func newDBTxnHandle(db *DBEntry, ctx iface.TxnReader) *dbTxnHandle {
+func newDBTxnHandle(db *DBEntry, ctx txnif.TxnReader) *dbTxnHandle {
 	return &dbTxnHandle{
 		ctx: ctx,
 		db:  db,

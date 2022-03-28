@@ -1,27 +1,10 @@
-package iface
+package txnif
 
 import (
-	"errors"
 	"sync"
 
 	"github.com/matrixorigin/matrixone/pkg/container/vector"
 	"github.com/matrixorigin/matrixone/pkg/vm/engine/aoe/storage/container/batch"
-)
-
-var (
-	TxnWWConflictErr = errors.New("tae: w-w conflict error")
-)
-
-const (
-	UncommitTS = ^uint64(0)
-)
-
-const (
-	TxnStateActive int32 = iota
-	TxnStateCommitting
-	TxnStateRollbacking
-	TxnStateCommitted
-	TxnStateRollbacked
 )
 
 type TxnReader interface {

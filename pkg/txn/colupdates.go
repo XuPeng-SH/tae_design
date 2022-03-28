@@ -4,7 +4,7 @@ import (
 	"encoding/binary"
 	"io"
 	"sync"
-	"tae/pkg/iface"
+	"tae/pkg/iface/txnif"
 
 	"github.com/RoaringBitmap/roaring"
 	"github.com/RoaringBitmap/roaring/roaring64"
@@ -130,7 +130,7 @@ func (n *columnUpdates) Update(row uint32, v interface{}) error {
 
 func (n *columnUpdates) UpdateLocked(row uint32, v interface{}) error {
 	if _, ok := n.txnVals[row]; ok {
-		return iface.TxnWWConflictErr
+		return txnif.TxnWWConflictErr
 	}
 	n.txnMask.Add(row)
 	n.txnVals[row] = v

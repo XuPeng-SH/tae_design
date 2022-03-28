@@ -3,7 +3,7 @@ package txn
 import (
 	"fmt"
 	"sync"
-	"tae/pkg/iface"
+	"tae/pkg/iface/txnif"
 
 	"github.com/sirupsen/logrus"
 )
@@ -16,7 +16,7 @@ const (
 )
 
 type OpTxn struct {
-	Txn iface.AsyncTxn
+	Txn txnif.AsyncTxn
 	Op  OpType
 }
 
@@ -84,7 +84,7 @@ func (txn *transaction) Done() {
 
 func (txn *transaction) IsTerminated(waitIfcommitting bool) bool {
 	state := txn.GetTxnState(waitIfcommitting)
-	return state == iface.TxnStateCommitted || state == iface.TxnStateRollbacked
+	return state == txnif.TxnStateCommitted || state == txnif.TxnStateRollbacked
 }
 
 func (txn *transaction) GetTxnState(waitIfcommitting bool) int32 {
@@ -94,14 +94,14 @@ func (txn *transaction) GetTxnState(waitIfcommitting bool) int32 {
 		txn.RUnlock()
 		return state
 	}
-	if state != iface.TxnStateCommitting {
+	if state != txnif.TxnStateCommitting {
 		txn.RUnlock()
 		return state
 	}
 	txn.RUnlock()
 	txn.DoneCond.L.Lock()
 	state = txn.State
-	if state != iface.TxnStateCommitting {
+	if state != txnif.TxnStateCommitting {
 		txn.DoneCond.L.Unlock()
 		return state
 	}

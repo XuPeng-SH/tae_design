@@ -2,7 +2,7 @@ package txn
 
 import (
 	"sync"
-	"tae/pkg/iface"
+	"tae/pkg/iface/txnif"
 
 	"github.com/matrixorigin/matrixone/pkg/vm/engine/aoe/storage/common"
 	"github.com/matrixorigin/matrixone/pkg/vm/engine/aoe/storage/logstore/sm"
@@ -15,14 +15,14 @@ type TxnManager struct {
 	sync.RWMutex
 	sm.ClosedState
 	sm.StateMachine
-	Active           map[uint64]iface.AsyncTxn
+	Active           map[uint64]txnif.AsyncTxn
 	IdAlloc, TsAlloc *common.IdAlloctor
 	TxnStoreFactory  TxnStoreFactory
 }
 
 func NewTxnManager(txnStoreFactory TxnStoreFactory) *TxnManager {
 	mgr := &TxnManager{
-		Active:          make(map[uint64]iface.AsyncTxn),
+		Active:          make(map[uint64]txnif.AsyncTxn),
 		IdAlloc:         common.NewIdAlloctor(1),
 		TsAlloc:         common.NewIdAlloctor(1),
 		TxnStoreFactory: txnStoreFactory,
@@ -39,7 +39,7 @@ func (mgr *TxnManager) Init(prevTxnId uint64, prevTs uint64) error {
 	return nil
 }
 
-func (mgr *TxnManager) StartTxn(info []byte) iface.AsyncTxn {
+func (mgr *TxnManager) StartTxn(info []byte) txnif.AsyncTxn {
 	mgr.Lock()
 	defer mgr.Unlock()
 	txnId := mgr.IdAlloc.Alloc()
@@ -51,7 +51,7 @@ func (mgr *TxnManager) StartTxn(info []byte) iface.AsyncTxn {
 	return txn
 }
 
-func (mgr *TxnManager) GetTxn(id uint64) iface.AsyncTxn {
+func (mgr *TxnManager) GetTxn(id uint64) txnif.AsyncTxn {
 	mgr.RLock()
 	defer mgr.RUnlock()
 	return mgr.Active[id]
@@ -61,11 +61,11 @@ func (mgr *TxnManager) OnOpTxn(op *OpTxn) {
 	mgr.EnqueueRecevied(op)
 }
 
-func (mgr *TxnManager) onPreparCommit(txn iface.AsyncTxn) {
+func (mgr *TxnManager) onPreparCommit(txn txnif.AsyncTxn) {
 	txn.SetError(txn.PreapreCommit())
 }
 
-func (mgr *TxnManager) onPreparRollback(txn iface.AsyncTxn) {
+func (mgr *TxnManager) onPreparRollback(txn txnif.AsyncTxn) {
 	txn.SetError(txn.PreapreRollback())
 }
 
