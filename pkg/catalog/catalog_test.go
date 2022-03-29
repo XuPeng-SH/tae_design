@@ -83,11 +83,34 @@ func (h *testDatabaseHandle) CreateRelation(def interface{}) (rel handle.Relatio
 	if err != nil {
 		return nil, err
 	}
+	h.Txn.GetStore().AddTxnEntry(tbl)
 	rel = newTestTableHandle(h.catalog, h.Txn, tbl)
 	return
 }
 
+func (h *testDatabaseHandle) DropRelationByName(name string) (rel handle.Relation, err error) {
+	entry, err := h.entry.DropTableEntry(name, h.Txn)
+	if err != nil {
+		return nil, err
+	}
+	h.Txn.GetStore().AddTxnEntry(entry)
+	rel = newTestTableHandle(h.catalog, h.Txn, entry)
+	return
+}
+
 func (h *testDatabaseHandle) String() string {
+	return h.entry.String()
+}
+
+func (h *testDatabaseHandle) GetRelationByName(name string) (rel handle.Relation, err error) {
+	entry, err := h.entry.GetTableEntry(name, h.Txn)
+	if err != nil {
+		return nil, err
+	}
+	return newTestTableHandle(h.catalog, h.Txn, entry), nil
+}
+
+func (h *testTableHandle) String() string {
 	return h.entry.String()
 }
 
@@ -119,6 +142,7 @@ func (txn *testTxn) DropDatabase(name string) (handle.Database, error) {
 	if err != nil {
 		return nil, err
 	}
+	txn.Store.AddTxnEntry(entry)
 	return newTestDBHandle(txn.catalog, txn, entry), nil
 }
 
@@ -185,13 +209,13 @@ func TestCreateDB1(t *testing.T) {
 
 	txn1.Commit()
 
-	err = db1.(*testDatabaseHandle).entry.PrepareCommit()
+	err = txn1.GetStore().PrepareCommit()
 	assert.Nil(t, err)
 
 	assert.True(t, db1.(*testDatabaseHandle).entry.HasCreated())
 	assert.True(t, db1.(*testDatabaseHandle).entry.IsCommitting())
 
-	err = db1.(*testDatabaseHandle).entry.Commit()
+	err = txn1.GetStore().Commit()
 	assert.Nil(t, err)
 	assert.False(t, db1.(*testDatabaseHandle).entry.IsCommitting())
 
@@ -243,43 +267,36 @@ func TestTableEntry1(t *testing.T) {
 	catalog := MockCatalog(dir, "mock", nil)
 	defer catalog.Close()
 
-	factory := func() txnif.TxnStore {
-		store := new(testTxnStore)
-		store.catalog = catalog
-		store.entries = make(map[txnif.TxnEntry]bool)
-		return store
-	}
-	txnMgr := txnbase.NewTxnManager(factory, nil)
+	txnMgr := txnbase.NewTxnManager(testStoreFactory(catalog), testTxnFactory(catalog))
 	txnMgr.Start()
 	defer txnMgr.Stop()
 
 	txn1 := txnMgr.StartTxn(nil)
-	db1, err := catalog.CreateDBEntry("db1", txn1)
+	name := "db1"
+	db1, err := txn1.CreateDatabase(name)
 	assert.Nil(t, err)
-	txn1.GetStore().AddTxnEntry(db1)
 	t.Log(db1.String())
 
 	schema := MockSchema(2)
 	schema.Name = "tb1"
-	tb1, err := db1.CreateTableEntry(schema, txn1)
+	tb1, err := db1.CreateRelation(schema)
 	assert.Nil(t, err)
-	t.Log(tb1)
-	txn1.GetStore().AddTxnEntry(tb1)
+	t.Log(tb1.String())
 
-	_, err = db1.GetTableEntry(schema.Name, txn1)
+	_, err = db1.GetRelationByName(schema.Name)
 	assert.Nil(t, err)
 
-	_, err = db1.CreateTableEntry(schema, txn1)
+	_, err = db1.CreateRelation(schema)
 	assert.Equal(t, ErrDuplicate, err)
 
 	txn2 := txnMgr.StartTxn(nil)
-	_, err = catalog.GetDBEntry("db1", txn2)
+	_, err = txn2.GetDatabase(schema.Name)
 	assert.Equal(t, err, ErrNotFound)
 
-	_, err = catalog.CreateDBEntry("db1", txn2)
+	_, err = txn2.CreateDatabase(name)
 	assert.Equal(t, err, txnif.TxnWWConflictErr)
 
-	_, err = catalog.DropDBEntry("db1", txn2)
+	_, err = txn2.DropDatabase(name)
 	assert.Equal(t, err, ErrNotFound)
 
 	err = txn1.Commit()
@@ -289,49 +306,42 @@ func TestTableEntry1(t *testing.T) {
 	assert.Nil(t, err)
 	err = txn1.GetStore().Commit()
 	assert.Nil(t, err)
-	// err = db1.PrepareCommit()
-	// assert.Nil(t, err)
-	// err = tb1.PrepareCommit()
-	// assert.Nil(t, err)
-	// t.Log(db1.String())
-	// t.Log(tb1.String())
 
-	// err = db1.Commit()
-	// err = tb1.Commit()
-
-	_, err = catalog.DropDBEntry("db1", txn2)
+	_, err = txn2.DropDatabase(name)
 	assert.Equal(t, err, ErrNotFound)
 
 	txn3 := txnMgr.StartTxn(nil)
-	db, err := catalog.GetDBEntry("db1", txn3)
+	db, err := txn3.GetDatabase(name)
 	assert.Nil(t, err)
 
-	_, err = db.DropTableEntry(schema.Name, txn3)
+	_, err = db.DropRelationByName(schema.Name)
 	assert.Nil(t, err)
 	t.Log(tb1.String())
 
-	_, err = db.GetTableEntry(schema.Name, txn3)
+	_, err = db.GetRelationByName(schema.Name)
 	assert.Equal(t, ErrNotFound, err)
 
 	txn4 := txnMgr.StartTxn(nil)
-	db, err = catalog.GetDBEntry("db1", txn4)
+	db, err = txn4.GetDatabase(name)
 	assert.Nil(t, err)
-	_, err = db.GetTableEntry(schema.Name, txn4)
+	_, err = db.GetRelationByName(schema.Name)
 	assert.Nil(t, err)
 
-	_, err = db.DropTableEntry(schema.Name, txn4)
+	_, err = db.DropRelationByName(schema.Name)
 	assert.Equal(t, txnif.TxnWWConflictErr, err)
 
 	err = txn3.Commit()
 	assert.Nil(t, err)
 
-	err = tb1.PrepareCommit()
+	err = txn3.GetStore().PrepareCommit()
+	assert.Nil(t, err)
+	err = txn3.GetStore().Commit()
 	assert.Nil(t, err)
 	t.Log(tb1.String())
 
 	txn5 := txnMgr.StartTxn(nil)
-	db, err = catalog.GetDBEntry("db1", txn5)
+	db, err = txn5.GetDatabase(name)
 	assert.Nil(t, err)
-	_, err = db.GetTableEntry(schema.Name, txn5)
+	_, err = db.GetRelationByName(schema.Name)
 	assert.Equal(t, ErrNotFound, err)
 }
