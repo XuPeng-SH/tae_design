@@ -127,6 +127,8 @@ func (n *nodeList) TxnGetTableNodeLocked(txnCtx txnif.TxnReader) *DLNode {
 	fn := func(nn *nameNode) (goNext bool) {
 		dlNode := nn.GetTableNode()
 		entry := dlNode.payload.(*TableEntry)
+		entry.RLock()
+		defer entry.RUnlock()
 		goNext = true
 		// A txn is writing the entry
 		if entry.HasActiveTxn() {
@@ -198,6 +200,8 @@ func (n *nodeList) TxnGetDBNodeLocked(txnCtx txnif.TxnReader) *DLNode {
 	fn := func(nn *nameNode) (goNext bool) {
 		dlNode := nn.GetDBNode()
 		entry := dlNode.payload.(*DBEntry)
+		entry.RLock()
+		defer entry.RUnlock()
 		goNext = true
 		if entry.HasActiveTxn() {
 			if entry.IsSameTxn(txnCtx) {

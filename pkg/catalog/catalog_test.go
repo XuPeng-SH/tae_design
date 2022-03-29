@@ -4,10 +4,12 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sync"
 	"tae/pkg/iface/handle"
 	"tae/pkg/iface/txnif"
 	"tae/pkg/txn/txnbase"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 )
@@ -344,4 +346,75 @@ func TestTableEntry1(t *testing.T) {
 	assert.Nil(t, err)
 	_, err = db.GetRelationByName(schema.Name)
 	assert.Equal(t, ErrNotFound, err)
+}
+
+func TestTableEntry2(t *testing.T) {
+	dir := initTestPath(t)
+	catalog := MockCatalog(dir, "mock", nil)
+	defer catalog.Close()
+
+	txnMgr := txnbase.NewTxnManager(testStoreFactory(catalog), testTxnFactory(catalog))
+	txnMgr.Start()
+	defer txnMgr.Stop()
+
+	txn1 := txnMgr.StartTxn(nil)
+	name := "db1"
+	db, err := txn1.CreateDatabase(name)
+	assert.Nil(t, err)
+	schema := MockSchema(2)
+	schema.Name = "tb1"
+	_, err = db.CreateRelation(schema)
+	assert.Nil(t, err)
+
+	for i := 0; i < 1000; i++ {
+		s := MockSchema(1)
+		s.Name = fmt.Sprintf("xx%d", i)
+		_, err = db.CreateRelation(s)
+		assert.Nil(t, err)
+	}
+	err = txn1.Commit()
+	assert.Nil(t, err)
+
+	err = txn1.GetStore().PrepareCommit()
+	assert.Nil(t, err)
+	err = txn1.GetStore().Commit()
+	assert.Nil(t, err)
+
+	txn2 := txnMgr.StartTxn(nil)
+	db, err = txn2.GetDatabase(name)
+	assert.Nil(t, err)
+	rel, err := db.DropRelationByName(schema.Name)
+	assert.Nil(t, err)
+	t.Log(rel.String())
+	db, err = txn2.DropDatabase(name)
+	assert.Nil(t, err)
+	t.Log(db.String())
+
+	var wg sync.WaitGroup
+	txns := []txnif.AsyncTxn{txn2}
+	for i := 0; i < 10; i++ {
+		txn := txnMgr.StartTxn(nil)
+		txns = append(txns, txn)
+	}
+	now := time.Now()
+	for _, txn := range txns {
+		wg.Add(1)
+		go func(ttxn txnif.AsyncTxn) {
+			defer wg.Done()
+			for i := 0; i < 1000; i++ {
+				database, err := ttxn.GetDatabase(name)
+				if err != nil {
+					// t.Logf("db-ttxn=%d, %s", ttxn.GetID(), err)
+				} else {
+					// t.Logf("db-ttxn=%d, %v", ttxn.GetID(), err)
+					_, err := database.GetRelationByName(schema.Name)
+					if err != nil {
+						// t.Logf("rel-ttxn=%d, %s", ttxn.GetID(), err)
+					}
+				}
+			}
+		}(txn)
+	}
+	wg.Wait()
+	t.Log(time.Since(now))
 }

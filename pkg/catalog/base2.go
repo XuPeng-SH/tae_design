@@ -60,6 +60,8 @@ func (be *BaseEntry2) DoCompre(oe *BaseEntry2) int {
 }
 
 func (be *BaseEntry2) PrepareCommit() error {
+	be.Lock()
+	defer be.Unlock()
 	if be.CreateAt == 0 {
 		be.CreateAt = be.Txn.GetCommitTS()
 	}
@@ -70,6 +72,11 @@ func (be *BaseEntry2) PrepareCommit() error {
 }
 
 func (be *BaseEntry2) Commit() error {
+	be.Lock()
+	defer be.Unlock()
+	if be.Txn == nil {
+		panic("logic error")
+	}
 	be.Txn = nil
 	return nil
 }
