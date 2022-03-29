@@ -1,6 +1,10 @@
 package handle
 
-import "github.com/matrixorigin/matrixone/pkg/container/batch"
+import (
+	"io"
+
+	"github.com/matrixorigin/matrixone/pkg/container/batch"
+)
 
 type SegmentIt interface {
 	Iterator
@@ -8,6 +12,7 @@ type SegmentIt interface {
 }
 
 type SegmentReader interface {
+	io.Closer
 	GetID() uint64
 	MakeBlockIt() BlockIt
 	MakeReader() Reader
@@ -15,6 +20,7 @@ type SegmentReader interface {
 }
 
 type SegmentWriter interface {
+	io.Closer
 	Append(data *batch.Batch, offset uint32) (uint32, error)
 	Update(blk uint64, row uint32, col uint16, v interface{}) error
 	RangeDelete(blk uint64, start, end uint32) error

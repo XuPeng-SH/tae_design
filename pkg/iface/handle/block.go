@@ -1,6 +1,8 @@
 package handle
 
 import (
+	"io"
+
 	"github.com/matrixorigin/matrixone/pkg/container/batch"
 	"github.com/matrixorigin/matrixone/pkg/container/vector"
 )
@@ -23,11 +25,13 @@ type Filter struct {
 }
 
 type BlockReader interface {
+	io.Closer
 	GetByFilter(filter Filter, offsetOnly bool) (*batch.Batch, error)
 	GetBatch(ctx interface{}) (*batch.Batch, error)
 }
 
 type BlockWriter interface {
+	io.Closer
 	Append(data *batch.Batch, offset uint32) (uint32, error)
 	Update(row uint32, col uint16, v interface{}) error
 	RangeDelete(start, end uint32) error

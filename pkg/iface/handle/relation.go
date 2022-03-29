@@ -24,3 +24,8 @@ type Relation interface {
 	BatchDedup(col *vector.Vector) error
 	Append(data *batch.Batch) error
 }
+
+type RelationIt interface {
+	Iterator
+	GetRelation() Relation
+}
