@@ -12,6 +12,8 @@ import (
 )
 
 type TxnReader interface {
+	RLock()
+	RUnlock()
 	GetID() uint64
 	GetStartTS() uint64
 	GetCommitTS() uint64
@@ -114,6 +116,9 @@ type TxnStore interface {
 }
 
 type TxnEntry interface {
+	sync.Locker
+	RLock()
+	RUnlock()
 	PrepareCommit() error
 	// PrepareRollback() error
 	Commit() error

@@ -63,24 +63,37 @@ func (catalog *Catalog) addEntryLocked(database *DBEntry) (Waitable, error) {
 	} else {
 		old := nn.GetDBNode()
 		oldE := old.payload.(*DBEntry)
+		oldE.RLock()
 		if !oldE.HasActiveTxn() {
 			if !oldE.HasDropped() {
+				oldE.RUnlock()
 				return nil, ErrDuplicate
 			}
 		} else {
+			eTxn := oldE.Txn
 			if oldE.IsSameTxn(database.Txn) {
 				if !oldE.IsDroppedUncommitted() {
+					oldE.RUnlock()
 					return nil, ErrDuplicate
 				}
 			} else {
 				if !oldE.IsCommitting() {
+					oldE.RUnlock()
 					return nil, txnif.TxnWWConflictErr
 				}
 				if oldE.Txn.GetCommitTS() < database.Txn.GetStartTS() {
-					return &waitable{func() error { oldE.Txn.GetTxnState(true); return nil }}, nil
+					oldE.RUnlock()
+					return &waitable{fn: func() error {
+						// oldE.RLock()
+						// txn := oldE.Txn
+						// oldE.RUnlock()
+						eTxn.GetTxnState(true)
+						return nil
+					}}, nil
 				}
 			}
 		}
+		oldE.RUnlock()
 		n := catalog.link.Insert(database)
 		catalog.entries[database.GetID()] = n
 		nn.CreateNode(database.GetID())
@@ -126,6 +139,8 @@ func (catalog *Catalog) DropDBEntry(name string, txnCtx txnif.AsyncTxn) (deleted
 		return
 	}
 	entry := dn.payload.(*DBEntry)
+	entry.Lock()
+	defer entry.Unlock()
 	err = entry.DropEntryLocked(txnCtx)
 	if err == nil {
 		deleted = entry
@@ -139,6 +154,8 @@ func (catalog *Catalog) CreateDBEntry(name string, txnCtx txnif.AsyncTxn) (*DBEn
 	old := catalog.txnGetNodeByNameLocked(name, txnCtx)
 	if old != nil {
 		oldE := old.payload.(*DBEntry)
+		oldE.RLock()
+		defer oldE.RUnlock()
 		if oldE.Txn != nil {
 			if oldE.Txn.GetID() == txnCtx.GetID() {
 				if !oldE.IsDroppedUncommitted() {

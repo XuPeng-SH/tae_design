@@ -46,6 +46,10 @@ func (be *BaseEntry2) IsCommitted() bool {
 func (be *BaseEntry2) GetID() uint64 { return be.ID }
 
 func (be *BaseEntry2) DoCompre(oe *BaseEntry2) int {
+	be.RLock()
+	defer be.RUnlock()
+	oe.RLock()
+	defer oe.RUnlock()
 	r := 0
 	if be.CreateAt != 0 && oe.CreateAt != 0 {
 		r = CompareUint64(be.CreateAt, oe.CreateAt)

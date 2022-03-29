@@ -32,11 +32,15 @@ func (ctx *TxnCtx) Repr() string {
 	return repr
 }
 
-func (ctx *TxnCtx) String() string      { return ctx.Repr() }
-func (ctx *TxnCtx) GetID() uint64       { return ctx.ID }
-func (ctx *TxnCtx) GetInfo() []byte     { return ctx.Info }
-func (ctx *TxnCtx) GetStartTS() uint64  { return ctx.StartTS }
-func (ctx *TxnCtx) GetCommitTS() uint64 { return ctx.CommitTS }
+func (ctx *TxnCtx) String() string     { return ctx.Repr() }
+func (ctx *TxnCtx) GetID() uint64      { return ctx.ID }
+func (ctx *TxnCtx) GetInfo() []byte    { return ctx.Info }
+func (ctx *TxnCtx) GetStartTS() uint64 { return ctx.StartTS }
+func (ctx *TxnCtx) GetCommitTS() uint64 {
+	ctx.RLock()
+	defer ctx.RUnlock()
+	return ctx.CommitTS
+}
 
 func (ctx *TxnCtx) Compare(o txnif.TxnReader) int {
 	return 0

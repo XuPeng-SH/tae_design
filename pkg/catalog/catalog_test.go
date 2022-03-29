@@ -31,7 +31,10 @@ func (store *testTxnStore) BindTxn(txn txnif.AsyncTxn) {
 
 func (store *testTxnStore) PrepareCommit() error {
 	for e, _ := range store.entries {
-		if err := e.PrepareCommit(); err != nil {
+		// e.Lock()
+		err := e.PrepareCommit()
+		// e.Unlock()
+		if err != nil {
 			return err
 		}
 	}
@@ -40,7 +43,10 @@ func (store *testTxnStore) PrepareCommit() error {
 
 func (store *testTxnStore) Commit() error {
 	for e, _ := range store.entries {
-		if err := e.Commit(); err != nil {
+		// e.Lock()
+		err := e.Commit()
+		// e.Unlock()
+		if err != nil {
 			return err
 		}
 	}
@@ -417,4 +423,45 @@ func TestTableEntry2(t *testing.T) {
 	}
 	wg.Wait()
 	t.Log(time.Since(now))
+}
+
+func TestTableEntry3(t *testing.T) {
+	dir := initTestPath(t)
+	catalog := MockCatalog(dir, "mock", nil)
+	defer catalog.Close()
+
+	txnMgr := txnbase.NewTxnManager(testStoreFactory(catalog), testTxnFactory(catalog))
+	txnMgr.Start()
+	defer txnMgr.Stop()
+	name := "db1"
+	var wg sync.WaitGroup
+	flow := func() {
+		defer wg.Done()
+		txn := txnMgr.StartTxn(nil)
+		_, err := txn.GetDatabase(name)
+		if err == ErrNotFound {
+			_, err = txn.CreateDatabase(name)
+			if err != nil {
+				return
+			}
+		} else {
+			_, err = txn.DropDatabase(name)
+			if err != nil {
+				return
+			}
+		}
+		err = txn.Commit()
+		assert.Nil(t, err)
+		err = txn.GetStore().PrepareCommit()
+		assert.Nil(t, err)
+		time.Sleep(time.Microsecond * 1000)
+		err = txn.GetStore().Commit()
+		assert.Nil(t, err)
+	}
+
+	for i := 0; i < 1000; i++ {
+		wg.Add(1)
+		go flow()
+	}
+	wg.Wait()
 }
