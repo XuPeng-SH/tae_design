@@ -457,6 +457,7 @@ func TestTableEntry3(t *testing.T) {
 		time.Sleep(time.Microsecond * 1000)
 		err = txn.GetStore().Commit()
 		assert.Nil(t, err)
+		t.Log(txn.String())
 	}
 
 	for i := 0; i < 1000; i++ {
