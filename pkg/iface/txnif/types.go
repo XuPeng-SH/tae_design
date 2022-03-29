@@ -20,6 +20,8 @@ type TxnReader interface {
 	GetTxnState(waitIfcommitting bool) int32
 	GetError() error
 	GetStore() TxnStore
+	String() string
+	Repr() string
 }
 
 type TxnHandle interface {

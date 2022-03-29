@@ -55,10 +55,11 @@ func (entry *TableEntry) Compare(o NodePayload) int {
 }
 
 func (entry *TableEntry) String() string {
+	return fmt.Sprintf("TABLE%s", entry.BaseEntry2.String())
 	// s := fmt.Sprintf("TABLE<%d>[\"%s\"]: [%d-%d],[%d-%d]", entry.ID, entry.schema.Name, entry.CreateStartTS, entry.CreateCommitTS, entry.DropStartTS, entry.DropCommitTS)
-	s := fmt.Sprintf("TABLE<%d>[\"%s\"]: [%d-%d]", entry.ID, entry.schema.Name, entry.CreateAt, entry.DeleteAt)
-	if entry.Txn != nil {
-		s = fmt.Sprintf("%s, [%d-%d]", s, entry.Txn.GetStartTS(), entry.Txn.GetCommitTS())
-	}
-	return s
+	// s := fmt.Sprintf("TABLE<%d>[\"%s\"]: [%d-%d]", entry.ID, entry.schema.Name, entry.CreateAt, entry.DeleteAt)
+	// if entry.Txn != nil {
+	// 	s = fmt.Sprintf("%s, [%d-%d]", s, entry.Txn.GetStartTS(), entry.Txn.GetCommitTS())
+	// }
+	// return s
 }

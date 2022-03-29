@@ -45,11 +45,12 @@ func (e *DBEntry) Compare(o NodePayload) int {
 }
 
 func (e *DBEntry) String() string {
-	s := fmt.Sprintf("DB<%d>[\"%s\"]: [%d-%d]", e.ID, e.name, e.CreateAt, e.DeleteAt)
-	if e.Txn != nil {
-		s = fmt.Sprintf("%s, [%d-%d]", s, e.Txn.GetStartTS(), e.Txn.GetCommitTS())
-	}
-	return s
+	return fmt.Sprintf("DB%s", e.BaseEntry2.String())
+	// s := fmt.Sprintf("DB<%d>[\"%s\"]: [%d-%d]", e.ID, e.name, e.CreateAt, e.DeleteAt)
+	// if e.Txn != nil {
+	// 	s = fmt.Sprintf("%s, [%d-%d]", s, e.Txn.GetStartTS(), e.Txn.GetCommitTS())
+	// }
+	// return s
 }
 
 func (e *DBEntry) txnGetNodeByNameLocked(name string, txnCtx txnif.TxnReader) *DLNode {

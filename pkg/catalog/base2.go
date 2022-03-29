@@ -1,6 +1,7 @@
 package catalog
 
 import (
+	"fmt"
 	"sync"
 	"tae/pkg/iface/txnif"
 )
@@ -175,4 +176,12 @@ func (be *BaseEntry2) CreateAndDropInSameTxn() bool {
 		return true
 	}
 	return false
+}
+
+func (be *BaseEntry2) String() string {
+	s := fmt.Sprintf("[ID=%d][%d,%d]", be.ID, be.CreateAt, be.DeleteAt)
+	if be.Txn != nil {
+		s = fmt.Sprintf("%s%s", s, be.Txn.Repr())
+	}
+	return s
 }
