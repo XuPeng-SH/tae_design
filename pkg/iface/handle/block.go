@@ -26,12 +26,14 @@ type Filter struct {
 
 type BlockReader interface {
 	io.Closer
+	String() string
 	GetByFilter(filter Filter, offsetOnly bool) (*batch.Batch, error)
 	GetBatch(ctx interface{}) (*batch.Batch, error)
 }
 
 type BlockWriter interface {
 	io.Closer
+	String() string
 	Append(data *batch.Batch, offset uint32) (uint32, error)
 	Update(row uint32, col uint16, v interface{}) error
 	RangeDelete(start, end uint32) error

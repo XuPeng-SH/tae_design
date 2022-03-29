@@ -17,10 +17,12 @@ type SegmentReader interface {
 	MakeBlockIt() BlockIt
 	MakeReader() Reader
 	GetByFilter(filter Filter, offsetOnly bool) (map[uint64]*batch.Batch, error)
+	String() string
 }
 
 type SegmentWriter interface {
 	io.Closer
+	String() string
 	Append(data *batch.Batch, offset uint32) (uint32, error)
 	Update(blk uint64, row uint32, col uint16, v interface{}) error
 	RangeDelete(blk uint64, start, end uint32) error

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"tae/pkg/iface/handle"
 	"tae/pkg/iface/txnif"
 	"tae/pkg/txn/txnbase"
 	"testing"
@@ -44,52 +45,82 @@ func (store *testTxnStore) Commit() error {
 	return nil
 }
 
-// func (store *testTxnStore) CreateDBEntry(name string) error {
-// 	entry, err := store.catalog.CreateDBEntry(name, store.txn)
-// 	if err != nil {
-// 		return err
-// 	}
-// 	store.entries[entry.BaseEntry2] = true
-// 	return nil
-// }
+type testDatabaseHandle struct {
+	*txnbase.TxnDatabase
+	catalog *Catalog
+	entry   *DBEntry
+}
 
-// func (store *testTxnStore) CreateTableEntry(dbName string, def interface{}) error {
-// 	schema := def.(*Schema)
-// 	db, err := store.catalog.GetDBEntry(dbName, store.txn)
-// 	if err != nil {
-// 		return err
-// 	}
-// 	entry, err := db.CreateTableEntry(schema, store.txn)
-// 	if err != nil {
-// 		return err
-// 	}
-// 	store.entries[entry.BaseEntry2] = true
-// 	return nil
-// }
+type testTableHandle struct {
+	*txnbase.TxnRelation
+	catalog *Catalog
+	entry   *TableEntry
+}
 
-// func (store *testTxnStore) DropDBEntry(name string) error {
-// 	entry, err := store.catalog.DropDBEntry(name, store.txn)
-// 	if err != nil {
-// 		return err
-// 	}
+func newTestDBHandle(catalog *Catalog, txn txnif.AsyncTxn, entry *DBEntry) *testDatabaseHandle {
+	return &testDatabaseHandle{
+		TxnDatabase: &txnbase.TxnDatabase{
+			Txn: txn,
+		},
+		catalog: catalog,
+		entry:   entry,
+	}
+}
 
-// 	store.entries[entry.BaseEntry2] = true
-// 	return nil
-// }
+func newTestTableHandle(catalog *Catalog, txn txnif.AsyncTxn, entry *TableEntry) *testTableHandle {
+	return &testTableHandle{
+		TxnRelation: &txnbase.TxnRelation{
+			Txn: txn,
+		},
+		catalog: catalog,
+		entry:   entry,
+	}
+}
 
-// func (store *testTxnStore) DropTableEntry(dbName, name string) error {
-// 	db, err := store.catalog.GetDBEntry(dbName, store.txn)
-// 	if err != nil {
-// 		return err
-// 	}
-// 	entry, err := db.DropTableEntry(name, store.txn)
-// 	if err != nil {
-// 		return err
-// 	}
+func (h *testDatabaseHandle) CreateRelation(def interface{}) (rel handle.Relation, err error) {
+	schema := def.(*Schema)
+	tbl, err := h.entry.CreateTableEntry(schema, h.Txn)
+	if err != nil {
+		return nil, err
+	}
+	rel = newTestTableHandle(h.catalog, h.Txn, tbl)
+	return
+}
 
-// 	store.entries[entry.BaseEntry2] = true
-// 	return nil
-// }
+func (h *testDatabaseHandle) String() string {
+	return h.entry.String()
+}
+
+type testTxn struct {
+	*txnbase.Txn
+	catalog *Catalog
+}
+
+func (txn *testTxn) CreateDatabase(name string) (handle.Database, error) {
+	entry, err := txn.catalog.CreateDBEntry(name, txn)
+	if err != nil {
+		return nil, err
+	}
+	txn.Store.AddTxnEntry(entry)
+	h := newTestDBHandle(txn.catalog, txn, entry)
+	return h, nil
+}
+
+func (txn *testTxn) GetDatabase(name string) (handle.Database, error) {
+	entry, err := txn.catalog.GetDBEntry(name, txn)
+	if err != nil {
+		return nil, err
+	}
+	return newTestDBHandle(txn.catalog, txn, entry), nil
+}
+
+func (txn *testTxn) DropDatabase(name string) (handle.Database, error) {
+	entry, err := txn.catalog.DropDBEntry(name, txn)
+	if err != nil {
+		return nil, err
+	}
+	return newTestDBHandle(txn.catalog, txn, entry), nil
+}
 
 func initTestPath(t *testing.T) string {
 	dir := filepath.Join("/tmp", t.Name())
@@ -97,26 +128,40 @@ func initTestPath(t *testing.T) string {
 	return dir
 }
 
-func TestCreateDB1(t *testing.T) {
-	dir := initTestPath(t)
-	catalog := MockCatalog(dir, "mock", nil)
-	defer catalog.Close()
+func testTxnFactory(catalog *Catalog) txnbase.TxnFactory {
+	return func(mgr *txnbase.TxnManager, store txnif.TxnStore, id uint64, ts uint64, info []byte) txnif.AsyncTxn {
+		txn := new(testTxn)
+		txn.Txn = txnbase.NewTxn(mgr, store, id, ts, info)
+		txn.catalog = catalog
+		return txn
+	}
+}
 
-	factory := func() txnif.TxnStore {
+func testStoreFactory(catalog *Catalog) txnbase.TxnStoreFactory {
+	return func() txnif.TxnStore {
 		store := new(testTxnStore)
 		store.catalog = catalog
 		store.entries = make(map[txnif.TxnEntry]bool)
 		return store
 	}
-	txnMgr := txnbase.NewTxnManager(factory, nil)
+
+}
+
+func TestCreateDB1(t *testing.T) {
+	dir := initTestPath(t)
+	catalog := MockCatalog(dir, "mock", nil)
+	defer catalog.Close()
+
+	txnMgr := txnbase.NewTxnManager(testStoreFactory(catalog), testTxnFactory(catalog))
 	txnMgr.Start()
 	defer txnMgr.Stop()
 
 	txn1 := txnMgr.StartTxn(nil)
 
 	name := fmt.Sprintf("%s-%d", t.Name(), 1)
-	db1, err := catalog.CreateDBEntry(name, txn1)
+	db1, err := txn1.CreateDatabase(name)
 	assert.Nil(t, err)
+	t.Log(db1.String())
 
 	assert.Equal(t, 1, len(catalog.entries))
 	cnt := 0
@@ -127,46 +172,43 @@ func TestCreateDB1(t *testing.T) {
 	}, true)
 	assert.Equal(t, 1, cnt)
 
-	_, err = catalog.CreateDBEntry(name, txn1)
+	_, err = txn1.CreateDatabase(name)
 	assert.Equal(t, ErrDuplicate, err)
 
 	txn2 := txnMgr.StartTxn(nil)
 
-	_, err = catalog.CreateDBEntry(name, txn2)
+	_, err = txn2.CreateDatabase(name)
 	assert.Equal(t, txnif.TxnWWConflictErr, err)
 
-	_, err = catalog.GetDBEntry(db1.name, txn1)
+	_, err = txn1.GetDatabase(name)
 	assert.Nil(t, err)
 
 	txn1.Commit()
 
-	// err = db1.CommitStart(txn1.GetCommitTS())
-	// assert.Nil(t, err)
-	err = db1.PrepareCommit()
+	err = db1.(*testDatabaseHandle).entry.PrepareCommit()
 	assert.Nil(t, err)
 
-	assert.True(t, db1.HasCreated())
-	assert.True(t, db1.IsCommitting())
+	assert.True(t, db1.(*testDatabaseHandle).entry.HasCreated())
+	assert.True(t, db1.(*testDatabaseHandle).entry.IsCommitting())
 
-	err = db1.Commit()
+	err = db1.(*testDatabaseHandle).entry.Commit()
 	assert.Nil(t, err)
-	assert.False(t, db1.IsCommitting())
+	assert.False(t, db1.(*testDatabaseHandle).entry.IsCommitting())
 
-	_, err = catalog.CreateDBEntry(name, txn2)
+	_, err = txn2.CreateDatabase(name)
 	assert.Equal(t, ErrDuplicate, err)
 
-	_, err = catalog.DropDBEntry(name, txn2)
+	_, err = txn2.DropDatabase(name)
 	assert.Equal(t, ErrNotFound, err)
 
 	txn3 := txnMgr.StartTxn(nil)
-	_, err = catalog.DropDBEntry(name, txn3)
+	_, err = txn3.DropDatabase(name)
 	assert.Nil(t, err)
-	assert.True(t, db1.IsDroppedUncommitted())
+	assert.True(t, db1.(*testDatabaseHandle).entry.IsDroppedUncommitted())
 
-	_, err = catalog.CreateDBEntry(name, txn3)
+	_, err = txn3.CreateDatabase(name)
 	assert.Nil(t, err)
 
-	// assert.Equal(t, 0, len(catalog.entries))
 	cnt = 0
 	catalog.link.Loop(func(n *DLNode) bool {
 		// t.Log(n.payload.(*DBEntry).String())
@@ -177,13 +219,9 @@ func TestCreateDB1(t *testing.T) {
 
 	txn4 := txnMgr.StartTxn(nil)
 
-	e, err := catalog.GetDBEntry(db1.name, txn4)
-	assert.NotNil(t, e)
-	assert.Equal(t, db1, e)
-
-	// txn3.Commit()
-	// e.PrepareCommit()
-	// t.Logf("%d:%d", txn4.GetStartTS(), txn4.GetCommitTS())
+	h, err := txn4.GetDatabase(name)
+	assert.NotNil(t, h)
+	assert.Equal(t, db1.(*testDatabaseHandle).entry, h.(*testDatabaseHandle).entry)
 }
 
 //
