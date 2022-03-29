@@ -99,7 +99,7 @@ func (catalog *Catalog) removeEntryLocked(database *DBEntry) error {
 	return nil
 }
 
-func (catalog *Catalog) txnGetNodeByNameLocked(name string, txnCtx txnif.TxnReader) *DLNode {
+func (catalog *Catalog) txnGetNodeByNameLocked(name string, txnCtx txnif.AsyncTxn) *DLNode {
 	node := catalog.nameNodes[name]
 	if node == nil {
 		return nil
@@ -107,7 +107,7 @@ func (catalog *Catalog) txnGetNodeByNameLocked(name string, txnCtx txnif.TxnRead
 	return node.TxnGetDBNodeLocked(txnCtx)
 }
 
-func (catalog *Catalog) GetDBEntry(name string, txnCtx txnif.TxnReader) (*DBEntry, error) {
+func (catalog *Catalog) GetDBEntry(name string, txnCtx txnif.AsyncTxn) (*DBEntry, error) {
 	catalog.RLock()
 	n := catalog.txnGetNodeByNameLocked(name, txnCtx)
 	catalog.RUnlock()
@@ -117,7 +117,7 @@ func (catalog *Catalog) GetDBEntry(name string, txnCtx txnif.TxnReader) (*DBEntr
 	return n.payload.(*DBEntry), nil
 }
 
-func (catalog *Catalog) DropDBEntry(name string, txnCtx txnif.TxnReader) (deleted *DBEntry, err error) {
+func (catalog *Catalog) DropDBEntry(name string, txnCtx txnif.AsyncTxn) (deleted *DBEntry, err error) {
 	catalog.Lock()
 	defer catalog.Unlock()
 	dn := catalog.txnGetNodeByNameLocked(name, txnCtx)
@@ -133,7 +133,7 @@ func (catalog *Catalog) DropDBEntry(name string, txnCtx txnif.TxnReader) (delete
 	return
 }
 
-func (catalog *Catalog) CreateDBEntry(name string, txnCtx txnif.TxnReader) (*DBEntry, error) {
+func (catalog *Catalog) CreateDBEntry(name string, txnCtx txnif.AsyncTxn) (*DBEntry, error) {
 	var err error
 	catalog.Lock()
 	old := catalog.txnGetNodeByNameLocked(name, txnCtx)
@@ -176,6 +176,6 @@ func (catalog *Catalog) CreateDBEntry(name string, txnCtx txnif.TxnReader) (*DBE
 	return entry, err
 }
 
-func (catalog *Catalog) MakeDBHandle(txnCtx txnif.TxnReader) iface.Database {
+func (catalog *Catalog) MakeDBHandle(txnCtx txnif.AsyncTxn) iface.Database {
 	return nil
 }

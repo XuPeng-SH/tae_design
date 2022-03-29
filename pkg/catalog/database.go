@@ -19,7 +19,7 @@ type DBEntry struct {
 	nodesMu sync.RWMutex
 }
 
-func NewDBEntry(catalog *Catalog, name string, txnCtx txnif.TxnReader) *DBEntry {
+func NewDBEntry(catalog *Catalog, name string, txnCtx txnif.AsyncTxn) *DBEntry {
 	id := catalog.NextDB()
 	e := &DBEntry{
 		BaseEntry2: &BaseEntry2{
@@ -53,7 +53,7 @@ func (e *DBEntry) String() string {
 	// return s
 }
 
-func (e *DBEntry) txnGetNodeByNameLocked(name string, txnCtx txnif.TxnReader) *DLNode {
+func (e *DBEntry) txnGetNodeByNameLocked(name string, txnCtx txnif.AsyncTxn) *DLNode {
 	node := e.nameNodes[name]
 	if node == nil {
 		return nil
@@ -61,7 +61,7 @@ func (e *DBEntry) txnGetNodeByNameLocked(name string, txnCtx txnif.TxnReader) *D
 	return node.TxnGetTableNodeLocked(txnCtx)
 }
 
-func (e *DBEntry) GetTableEntry(name string, txnCtx txnif.TxnReader) (entry *TableEntry, err error) {
+func (e *DBEntry) GetTableEntry(name string, txnCtx txnif.AsyncTxn) (entry *TableEntry, err error) {
 	e.RLock()
 	n := e.txnGetNodeByNameLocked(name, txnCtx)
 	e.RUnlock()
@@ -72,7 +72,7 @@ func (e *DBEntry) GetTableEntry(name string, txnCtx txnif.TxnReader) (entry *Tab
 	return
 }
 
-func (e *DBEntry) DropTableEntry(name string, txnCtx txnif.TxnReader) (deleted *TableEntry, err error) {
+func (e *DBEntry) DropTableEntry(name string, txnCtx txnif.AsyncTxn) (deleted *TableEntry, err error) {
 	e.Lock()
 	defer e.Unlock()
 	dn := e.txnGetNodeByNameLocked(name, txnCtx)
@@ -88,7 +88,7 @@ func (e *DBEntry) DropTableEntry(name string, txnCtx txnif.TxnReader) (deleted *
 	return
 }
 
-func (e *DBEntry) CreateTableEntry(schema *Schema, txnCtx txnif.TxnReader) (created *TableEntry, err error) {
+func (e *DBEntry) CreateTableEntry(schema *Schema, txnCtx txnif.AsyncTxn) (created *TableEntry, err error) {
 	e.Lock()
 	defer e.Unlock()
 	old := e.txnGetNodeByNameLocked(schema.Name, txnCtx)

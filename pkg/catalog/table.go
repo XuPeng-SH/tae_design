@@ -14,7 +14,7 @@ type TableEntry struct {
 	link    *Link
 }
 
-func NewTableEntry(db *DBEntry, schema *Schema, txnCtx txnif.TxnReader) *TableEntry {
+func NewTableEntry(db *DBEntry, schema *Schema, txnCtx txnif.AsyncTxn) *TableEntry {
 	id := db.catalog.NextTable()
 	e := &TableEntry{
 		BaseEntry2: &BaseEntry2{
