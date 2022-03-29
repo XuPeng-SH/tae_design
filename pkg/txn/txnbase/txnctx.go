@@ -28,6 +28,8 @@ func NewTxnCtx(rwlocker *sync.RWMutex, id, start uint64, info []byte) *TxnCtx {
 }
 
 func (ctx *TxnCtx) Repr() string {
+	ctx.RLock()
+	defer ctx.RUnlock()
 	repr := fmt.Sprintf("Txn[%d][%d->%d][%s]", ctx.ID, ctx.StartTS, ctx.CommitTS, txnif.TxnStrState(ctx.State))
 	return repr
 }

@@ -6,6 +6,7 @@ import (
 	"tae/pkg/iface/txnif"
 
 	"github.com/jiangxinmeng1/logstore/pkg/store"
+	"github.com/sirupsen/logrus"
 )
 
 // +--------+---------+----------+----------+------------+
@@ -82,11 +83,13 @@ func (catalog *Catalog) addEntryLocked(database *DBEntry) (Waitable, error) {
 					return nil, txnif.TxnWWConflictErr
 				}
 				if oldE.Txn.GetCommitTS() < database.Txn.GetStartTS() {
+					nTxn := database.Txn
 					oldE.RUnlock()
 					return &waitable{fn: func() error {
 						// oldE.RLock()
 						// txn := oldE.Txn
 						// oldE.RUnlock()
+						logrus.Infof("%s ----WAIT---->%s", nTxn.String(), eTxn.String())
 						eTxn.GetTxnState(true)
 						return nil
 					}}, nil

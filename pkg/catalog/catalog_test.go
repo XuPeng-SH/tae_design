@@ -454,13 +454,13 @@ func TestTableEntry3(t *testing.T) {
 		assert.Nil(t, err)
 		err = txn.GetStore().PrepareCommit()
 		assert.Nil(t, err)
-		time.Sleep(time.Microsecond * 1000)
+		time.Sleep(time.Microsecond * 10)
 		err = txn.GetStore().Commit()
 		assert.Nil(t, err)
 		t.Log(txn.String())
 	}
 
-	for i := 0; i < 1000; i++ {
+	for i := 0; i < 100; i++ {
 		wg.Add(1)
 		go flow()
 	}

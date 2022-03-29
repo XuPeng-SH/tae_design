@@ -120,7 +120,7 @@ func (txn *Txn) GetTxnState(waitIfcommitting bool) int32 {
 }
 
 func (txn *Txn) PreapreCommit() error {
-	logrus.Infof("Prepare Committing %d", txn.ID)
+	logrus.Debugf("Prepare Committing %d", txn.ID)
 	var err error
 	if txn.PrepareCommitFn != nil {
 		err = txn.PrepareCommitFn(txn)
@@ -133,13 +133,13 @@ func (txn *Txn) PreapreCommit() error {
 }
 
 func (txn *Txn) PreapreRollback() error {
-	logrus.Infof("Prepare Rollbacking %d", txn.ID)
+	logrus.Debugf("Prepare Rollbacking %d", txn.ID)
 	return nil
 }
 
 func (txn *Txn) WaitDone() error {
 	// TODO
-	logrus.Infof("Wait txn %d done", txn.ID)
+	// logrus.Infof("Wait %s Done", txn.String())
 	txn.Done()
 	return txn.Err
 }
