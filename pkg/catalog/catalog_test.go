@@ -108,7 +108,7 @@ func TestCreateDB1(t *testing.T) {
 		store.entries = make(map[txnif.TxnEntry]bool)
 		return store
 	}
-	txnMgr := txnbase.NewTxnManager(factory)
+	txnMgr := txnbase.NewTxnManager(factory, nil)
 	txnMgr.Start()
 	defer txnMgr.Stop()
 
@@ -211,7 +211,7 @@ func TestTableEntry1(t *testing.T) {
 		store.entries = make(map[txnif.TxnEntry]bool)
 		return store
 	}
-	txnMgr := txnbase.NewTxnManager(factory)
+	txnMgr := txnbase.NewTxnManager(factory, nil)
 	txnMgr.Start()
 	defer txnMgr.Stop()
 

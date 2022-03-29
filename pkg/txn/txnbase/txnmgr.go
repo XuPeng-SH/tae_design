@@ -10,6 +10,7 @@ import (
 )
 
 type TxnStoreFactory = func() txnif.TxnStore
+type TxnFactory = func(*TxnManager, txnif.TxnStore, uint64, uint64, []byte) txnif.AsyncTxn
 
 type TxnManager struct {
 	sync.RWMutex
@@ -18,14 +19,19 @@ type TxnManager struct {
 	Active           map[uint64]txnif.AsyncTxn
 	IdAlloc, TsAlloc *common.IdAlloctor
 	TxnStoreFactory  TxnStoreFactory
+	TxnFactory       TxnFactory
 }
 
-func NewTxnManager(txnStoreFactory TxnStoreFactory) *TxnManager {
+func NewTxnManager(txnStoreFactory TxnStoreFactory, txnFactory TxnFactory) *TxnManager {
+	if txnFactory == nil {
+		txnFactory = DefaultTxnFactory
+	}
 	mgr := &TxnManager{
 		Active:          make(map[uint64]txnif.AsyncTxn),
 		IdAlloc:         common.NewIdAlloctor(1),
 		TsAlloc:         common.NewIdAlloctor(1),
 		TxnStoreFactory: txnStoreFactory,
+		TxnFactory:      txnFactory,
 	}
 	pqueue := sm.NewSafeQueue(10000, 200, mgr.onPreparing)
 	cqueue := sm.NewSafeQueue(10000, 200, mgr.onCommit)
@@ -46,7 +52,7 @@ func (mgr *TxnManager) StartTxn(info []byte) txnif.AsyncTxn {
 	startTs := mgr.TsAlloc.Alloc()
 
 	store := mgr.TxnStoreFactory()
-	txn := NewTxn(mgr, store, txnId, startTs, info)
+	txn := mgr.TxnFactory(mgr, store, txnId, startTs, info)
 	store.BindTxn(txn)
 	mgr.Active[txnId] = txn
 	return txn

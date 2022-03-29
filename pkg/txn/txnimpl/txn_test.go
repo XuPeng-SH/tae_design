@@ -433,7 +433,7 @@ func TestApplyUpdateNode2(t *testing.T) {
 }
 
 func TestTxnManager1(t *testing.T) {
-	mgr := txnbase.NewTxnManager(DefaultTxnStoreFactory)
+	mgr := txnbase.NewTxnManager(DefaultTxnStoreFactory, nil)
 	mgr.Start()
 	txn := mgr.StartTxn(nil)
 
@@ -482,7 +482,7 @@ func TestTxnManager1(t *testing.T) {
 }
 
 func TestTransaction1(t *testing.T) {
-	mgr := txnbase.NewTxnManager(DefaultTxnStoreFactory)
+	mgr := txnbase.NewTxnManager(DefaultTxnStoreFactory, nil)
 	mgr.Start()
 	defer mgr.Stop()
 

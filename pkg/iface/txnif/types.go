@@ -3,6 +3,7 @@ package txnif
 import (
 	"io"
 	"sync"
+	"tae/pkg/iface/handle"
 
 	"github.com/RoaringBitmap/roaring"
 	"github.com/matrixorigin/matrixone/pkg/container/batch"
@@ -25,10 +26,13 @@ type TxnReader interface {
 }
 
 type TxnHandle interface {
-	BatchDedup(uint64, *vector.Vector) error
-	RegisterTable(interface{}) error
-	GetTableByName(db, table string) (interface{}, error)
-	Append(uint64, *batch.Batch)
+	// BatchDedup(uint64, *vector.Vector) error
+	// RegisterTable(interface{}) error
+	// GetTableByName(db, table string) (interface{}, error)
+	// Append(uint64, *batch.Batch)
+	CreateDatabase(name string) (handle.Database, error)
+	DropDatabase(name string) (handle.Database, error)
+	GetDatabase(name string) (handle.Database, error)
 }
 
 type TxnChanger interface {
@@ -55,6 +59,7 @@ type TxnAsyncer interface {
 }
 
 type AsyncTxn interface {
+	TxnHandle
 	TxnAsyncer
 	TxnReader
 	TxnWriter
