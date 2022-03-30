@@ -400,7 +400,7 @@ func TestTableEntry2(t *testing.T) {
 	t.Log(time.Since(now))
 }
 
-func TestTableEntry3(t *testing.T) {
+func TestDB1(t *testing.T) {
 	dir := initTestPath(t)
 	catalog := MockCatalog(dir, "mock", nil)
 	defer catalog.Close()
@@ -429,7 +429,54 @@ func TestTableEntry3(t *testing.T) {
 		assert.Nil(t, err)
 	}
 
-	for i := 0; i < 10000; i++ {
+	for i := 0; i < 1000; i++ {
+		wg.Add(1)
+		go flow()
+	}
+	wg.Wait()
+}
+
+func TestTable1(t *testing.T) {
+	dir := initTestPath(t)
+	catalog := MockCatalog(dir, "mock", nil)
+	defer catalog.Close()
+
+	txnMgr := txnbase.NewTxnManager(testStoreFactory(catalog), testTxnFactory(catalog))
+	txnMgr.Start()
+	defer txnMgr.Stop()
+	name := "db1"
+	tbName := "tb1"
+	var wg sync.WaitGroup
+	flow := func() {
+		defer wg.Done()
+		txn := txnMgr.StartTxn(nil)
+		db, err := txn.GetDatabase(name)
+		assert.Nil(t, err)
+		rel, err := db.GetRelationByName(tbName)
+		if err == ErrNotFound {
+			schema := MockSchema(1)
+			schema.Name = tbName
+			if rel, err = db.CreateRelation(schema); err != nil {
+				return
+			}
+		} else {
+			if rel, err = db.DropRelationByName(tbName); err != nil {
+				return
+			}
+		}
+		err = txn.Commit()
+		assert.Nil(t, err)
+		assert.NotNil(t, rel)
+		// t.Log(rel.String())
+	}
+	{
+		txn := txnMgr.StartTxn(nil)
+		_, err := txn.CreateDatabase(name)
+		assert.Nil(t, err)
+		err = txn.Commit()
+		assert.Nil(t, err)
+	}
+	for i := 0; i < 1000; i++ {
 		wg.Add(1)
 		go flow()
 	}

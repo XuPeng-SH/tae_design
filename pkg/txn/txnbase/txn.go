@@ -116,6 +116,7 @@ func (txn *Txn) GetTxnState(waitIfcommitting bool) int32 {
 	}
 	txn.DoneCond.Wait()
 	txn.DoneCond.L.Unlock()
+	// logrus.Infof("%s-Waited", txn.String())
 	return state
 }
 

@@ -80,8 +80,8 @@ func (mgr *TxnManager) onPreparRollback(txn txnif.AsyncTxn) {
 func (mgr *TxnManager) onPreparing(items ...interface{}) {
 	for _, item := range items {
 		op := item.(*OpTxn)
-		ts := mgr.TsAlloc.Alloc()
 		mgr.Lock()
+		ts := mgr.TsAlloc.Alloc()
 		op.Txn.Lock()
 		if op.Op == OpCommit {
 			op.Txn.ToCommittingLocked(ts)

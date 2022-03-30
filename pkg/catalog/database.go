@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"sync"
 	"tae/pkg/iface/txnif"
+
+	"github.com/sirupsen/logrus"
 )
 
 type DBEntry struct {
@@ -76,6 +78,8 @@ func (e *DBEntry) DropTableEntry(name string, txnCtx txnif.AsyncTxn) (deleted *T
 		return
 	}
 	entry := dn.payload.(*TableEntry)
+	entry.Lock()
+	defer entry.Unlock()
 	err = entry.DropEntryLocked(txnCtx)
 	if err == nil {
 		deleted = entry
@@ -85,10 +89,11 @@ func (e *DBEntry) DropTableEntry(name string, txnCtx txnif.AsyncTxn) (deleted *T
 
 func (e *DBEntry) CreateTableEntry(schema *Schema, txnCtx txnif.AsyncTxn) (created *TableEntry, err error) {
 	e.Lock()
-	defer e.Unlock()
 	old := e.txnGetNodeByNameLocked(schema.Name, txnCtx)
 	if old != nil {
 		oldE := old.payload.(*TableEntry)
+		oldE.RLock()
+		defer oldE.RUnlock()
 		if oldE.Txn != nil {
 			if oldE.Txn.GetID() == txnCtx.GetID() {
 				if !oldE.IsDroppedUncommitted() {
@@ -103,15 +108,39 @@ func (e *DBEntry) CreateTableEntry(schema *Schema, txnCtx txnif.AsyncTxn) (creat
 			}
 		}
 		if err != nil {
+			e.Unlock()
 			return
 		}
 	}
 	created = NewTableEntry(e, schema, txnCtx)
+	err = e.addEntryLocked(created, e.RWMutex)
+	e.Unlock()
 
-	return created, e.addEntryLocked(created)
+	return created, err
 }
 
-func (e *DBEntry) addEntryLocked(table *TableEntry) error {
+func (e *DBEntry) addEntryLocked(table *TableEntry, lockCtx sync.Locker) (err error) {
+	var w Waitable
+	for {
+		w, err = e.tryAddEntryLocked(table)
+		if w == nil {
+			break
+		}
+		if lockCtx != nil {
+			lockCtx.Unlock()
+		}
+		err = w.Wait()
+		if lockCtx != nil {
+			lockCtx.Lock()
+		}
+		if err != nil {
+			break
+		}
+	}
+	return
+}
+
+func (e *DBEntry) tryAddEntryLocked(table *TableEntry) (Waitable, error) {
 	nn := e.nameNodes[table.schema.Name]
 	if nn == nil {
 		n := e.link.Insert(table)
@@ -124,22 +153,42 @@ func (e *DBEntry) addEntryLocked(table *TableEntry) error {
 	} else {
 		old := nn.GetTableNode()
 		oldE := old.payload.(*TableEntry)
-		if oldE.Txn == nil {
-			if !oldE.HasDropped() {
-				return ErrDuplicate
-			}
-		} else {
-			if oldE.SameTxn(e.BaseEntry2) {
+		oldE.RLock()
+		if oldE.HasActiveTxn() {
+			oeTxn := oldE.Txn
+			if oldE.IsSameTxn(table.Txn) {
 				if !oldE.IsDroppedUncommitted() {
-					return ErrDuplicate
+					oldE.RUnlock()
+					return nil, ErrDuplicate
 				}
 			} else {
-				return txnif.TxnWWConflictErr
+				if !oldE.IsCommitting() {
+					oldE.RUnlock()
+					return nil, txnif.TxnWWConflictErr
+				}
+				if oeTxn.GetCommitTS() < table.Txn.GetStartTS() {
+					// if table.CreateAfter(oeTxn.GetCommitTS()) {
+					nTxn := table.Txn
+					oldE.RUnlock()
+					return &waitable{
+						fn: func() error {
+							logrus.Infof("%s ----WAIT---->%s", nTxn.String(), oeTxn.String())
+							oeTxn.GetTxnState(true)
+							return nil
+						},
+					}, nil
+				}
+			}
+		} else {
+			if !oldE.HasDropped() {
+				oldE.RUnlock()
+				return nil, ErrDuplicate
 			}
 		}
+		oldE.RUnlock()
 		n := e.link.Insert(table)
 		e.entries[table.GetID()] = n
 		nn.CreateNode(table.GetID())
 	}
-	return nil
+	return nil, nil
 }

@@ -85,9 +85,6 @@ func (catalog *Catalog) addEntryLocked(database *DBEntry) (Waitable, error) {
 					nTxn := database.Txn
 					oldE.RUnlock()
 					return &waitable{fn: func() error {
-						// oldE.RLock()
-						// txn := oldE.Txn
-						// oldE.RUnlock()
 						logrus.Infof("%s ----WAIT---->%s", nTxn.String(), eTxn.String())
 						eTxn.GetTxnState(true)
 						return nil
