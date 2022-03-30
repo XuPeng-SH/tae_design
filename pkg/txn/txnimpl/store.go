@@ -1,11 +1,11 @@
 package txnimpl
 
 import (
+	"tae/pkg/catalog"
 	"tae/pkg/iface/txnif"
 	"tae/pkg/txn/txnbase"
 
 	"github.com/matrixorigin/matrixone/pkg/container/batch"
-	"github.com/matrixorigin/matrixone/pkg/vm/engine/aoe/storage/metadata/v1"
 	"github.com/matrixorigin/matrixone/pkg/vm/engine/aoe/storage/mutation/buffer/base"
 )
 
@@ -37,7 +37,7 @@ func (store *txnStore) Close() error {
 	return err
 }
 
-func (store *txnStore) InitTable(id uint64, schema *metadata.Schema) error {
+func (store *txnStore) InitTable(id uint64, schema *catalog.Schema) error {
 	table := store.tables[id]
 	if table != nil {
 		return ErrDuplicateNode

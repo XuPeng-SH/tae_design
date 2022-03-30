@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"sync"
 	"sync/atomic"
+	"tae/pkg/catalog"
 	"tae/pkg/txn/txnbase"
 	"testing"
 	"time"
@@ -19,7 +20,6 @@ import (
 	"github.com/matrixorigin/matrixone/pkg/container/types"
 	gvec "github.com/matrixorigin/matrixone/pkg/container/vector"
 	"github.com/matrixorigin/matrixone/pkg/vm/engine/aoe/storage/common"
-	"github.com/matrixorigin/matrixone/pkg/vm/engine/aoe/storage/metadata/v1"
 	"github.com/matrixorigin/matrixone/pkg/vm/engine/aoe/storage/mock"
 	"github.com/matrixorigin/matrixone/pkg/vm/engine/aoe/storage/mutation/buffer"
 	"github.com/panjf2000/ants/v2"
@@ -59,7 +59,7 @@ func makeTable(t *testing.T, dir string, colCnt int, bufSize uint64) *txnTable {
 	mgr := buffer.NewNodeManager(bufSize, nil)
 	driver := txnbase.NewNodeDriver(dir, "store", nil)
 	id := common.NextGlobalSeqNum()
-	schema := metadata.MockSchemaAll(colCnt)
+	schema := catalog.MockSchemaAll(colCnt)
 	return NewTable(nil, id, schema, driver, mgr)
 }
 
@@ -219,7 +219,7 @@ func TestIndex(t *testing.T) {
 	_, err = index.Find("one")
 	assert.NotNil(t, err)
 
-	schema := metadata.MockSchemaAll(14)
+	schema := catalog.MockSchemaAll(14)
 	bat := mock.MockBatch(schema.Types(), 500)
 
 	idx := NewSimpleTableIndex()
@@ -339,7 +339,7 @@ func TestColumnNode(t *testing.T) {
 	target := common.ID{}
 	start := time.Now()
 	ecnt := 100
-	schema := metadata.MockSchema(2)
+	schema := catalog.MockSchema(2)
 	for i, _ := range nodes {
 		node := NewColumnUpdates(&target, schema.ColDefs[0], nil)
 		nodes[i] = node
@@ -374,7 +374,7 @@ func TestApplyUpdateNode(t *testing.T) {
 	target := common.ID{}
 	deletes := &roaring.Bitmap{}
 	deletes.Add(1)
-	schema := metadata.MockSchema(2)
+	schema := catalog.MockSchema(2)
 	node := NewColumnUpdates(&target, schema.ColDefs[0], nil)
 	node.Update(0, []byte("update"))
 	deletes.AddRange(3, 4)
@@ -411,7 +411,7 @@ func TestApplyUpdateNode2(t *testing.T) {
 	target := common.ID{}
 	deletes := &roaring.Bitmap{}
 	deletes.Add(1)
-	schema := metadata.MockSchema(2)
+	schema := catalog.MockSchema(2)
 	node := NewColumnUpdates(&target, schema.ColDefs[0], nil)
 	node.Update(0, int8(8))
 	deletes.AddRange(2, 4)

@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"tae/pkg/catalog"
 	"tae/pkg/iface/txnif"
 	"tae/pkg/txn/txnbase"
 
@@ -12,7 +13,6 @@ import (
 	"github.com/matrixorigin/matrixone/pkg/container/vector"
 	gvec "github.com/matrixorigin/matrixone/pkg/container/vector"
 	"github.com/matrixorigin/matrixone/pkg/vm/engine/aoe/storage/common"
-	"github.com/matrixorigin/matrixone/pkg/vm/engine/aoe/storage/metadata/v1"
 	"github.com/matrixorigin/matrixone/pkg/vm/engine/aoe/storage/mutation/buffer/base"
 	"github.com/sirupsen/logrus"
 )
@@ -23,7 +23,7 @@ var (
 
 type Table interface {
 	io.Closer
-	GetSchema() *metadata.Schema
+	GetSchema() *catalog.Schema
 	GetID() uint64
 	Append(data *batch.Batch) error
 	RangeDeleteLocalRows(start, end uint32) error
@@ -47,13 +47,13 @@ type txnTable struct {
 	updates    map[common.ID]*blockUpdates
 	driver     txnbase.NodeDriver
 	id         uint64
-	schema     *metadata.Schema
+	schema     *catalog.Schema
 	nodesMgr   base.INodeManager
 	index      TableIndex
 	rows       uint32
 }
 
-func NewTable(txnState *txnbase.TxnState, id uint64, schema *metadata.Schema, driver txnbase.NodeDriver, mgr base.INodeManager) *txnTable {
+func NewTable(txnState *txnbase.TxnState, id uint64, schema *catalog.Schema, driver txnbase.NodeDriver, mgr base.INodeManager) *txnTable {
 	if txnState == nil {
 		txnState = new(txnbase.TxnState)
 	}
@@ -75,7 +75,7 @@ func (tbl *txnTable) IsDeleted() bool {
 	return false
 }
 
-func (tbl *txnTable) GetSchema() *metadata.Schema {
+func (tbl *txnTable) GetSchema() *catalog.Schema {
 	return tbl.schema
 }
 

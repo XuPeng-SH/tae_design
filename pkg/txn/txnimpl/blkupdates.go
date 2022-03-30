@@ -4,24 +4,24 @@ import (
 	"encoding/binary"
 	"io"
 	"sync"
+	"tae/pkg/catalog"
 	"tae/pkg/iface/txnif"
 	"tae/pkg/txn/txnbase"
 
 	"github.com/RoaringBitmap/roaring"
 	"github.com/matrixorigin/matrixone/pkg/vm/engine/aoe/storage/common"
-	"github.com/matrixorigin/matrixone/pkg/vm/engine/aoe/storage/metadata/v1"
 )
 
 type blockUpdates struct {
 	rwlocker     *sync.RWMutex
-	schema       *metadata.Schema
+	schema       *catalog.Schema
 	id           *common.ID
 	cols         map[uint16]*columnUpdates
 	baseDeletes  *roaring.Bitmap
 	localDeletes *roaring.Bitmap
 }
 
-func NewBlockUpdates(id *common.ID, schema *metadata.Schema, rwlocker *sync.RWMutex, baseDeletes *roaring.Bitmap) *blockUpdates {
+func NewBlockUpdates(id *common.ID, schema *catalog.Schema, rwlocker *sync.RWMutex, baseDeletes *roaring.Bitmap) *blockUpdates {
 	if rwlocker == nil {
 		rwlocker = new(sync.RWMutex)
 	}

@@ -4,6 +4,7 @@ import (
 	"encoding/binary"
 	"io"
 	"sync"
+	"tae/pkg/catalog"
 	"tae/pkg/iface/txnif"
 	"tae/pkg/txn/txnbase"
 
@@ -13,18 +14,17 @@ import (
 	"github.com/matrixorigin/matrixone/pkg/container/types"
 	gvec "github.com/matrixorigin/matrixone/pkg/container/vector"
 	"github.com/matrixorigin/matrixone/pkg/vm/engine/aoe/storage/common"
-	"github.com/matrixorigin/matrixone/pkg/vm/engine/aoe/storage/metadata/v1"
 )
 
 type columnUpdates struct {
 	rwlock  *sync.RWMutex
-	colDef  *metadata.ColDef
+	colDef  *catalog.ColDef
 	target  *common.ID
 	txnMask *roaring.Bitmap
 	txnVals map[uint32]interface{}
 }
 
-func NewColumnUpdates(target *common.ID, colDef *metadata.ColDef, rwlock *sync.RWMutex) *columnUpdates {
+func NewColumnUpdates(target *common.ID, colDef *catalog.ColDef, rwlock *sync.RWMutex) *columnUpdates {
 	if rwlock == nil {
 		rwlock = &sync.RWMutex{}
 	}

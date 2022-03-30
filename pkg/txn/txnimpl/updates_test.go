@@ -3,13 +3,13 @@ package txnimpl
 import (
 	"bytes"
 	"fmt"
+	"tae/pkg/catalog"
 	"tae/pkg/txn/txnbase"
 	"testing"
 	"time"
 
 	"github.com/RoaringBitmap/roaring"
 	"github.com/matrixorigin/matrixone/pkg/vm/engine/aoe/storage/common"
-	"github.com/matrixorigin/matrixone/pkg/vm/engine/aoe/storage/metadata/v1"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -23,7 +23,7 @@ type testUpdateNode struct {
 	id       *common.ID
 }
 
-func newTestUpdateNode(ntype int8, schema *metadata.Schema, id *common.ID, start uint64, deletes *roaring.Bitmap) *testUpdateNode {
+func newTestUpdateNode(ntype int8, schema *catalog.Schema, id *common.ID, start uint64, deletes *roaring.Bitmap) *testUpdateNode {
 	return &testUpdateNode{
 		id:       id,
 		ntype:    ntype,
@@ -153,7 +153,7 @@ func TestUpdatesMerge(t *testing.T) {
 	cnt1 := 11
 	cnt2 := 10
 	nodes := make([]*testUpdateNode, 0)
-	schema := metadata.MockSchema(1)
+	schema := catalog.MockSchema(1)
 	for i := 0; i < cnt1+cnt2; i++ {
 		nid := id.Next()
 		start := uint64(i) * 2
@@ -232,7 +232,7 @@ func TestUpdates(t *testing.T) {
 	id := common.ID{}
 	committed := 10
 	nodes := make([]*testUpdateNode, 0)
-	schema := metadata.MockSchema(1)
+	schema := catalog.MockSchema(1)
 	var head *testUpdateNode
 	for i := 0; i < committed; i++ {
 		nid := id.Next()
