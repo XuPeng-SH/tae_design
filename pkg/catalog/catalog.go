@@ -2,7 +2,6 @@ package catalog
 
 import (
 	"sync"
-	"tae/pkg/iface"
 	"tae/pkg/iface/txnif"
 
 	"github.com/jiangxinmeng1/logstore/pkg/store"
@@ -194,8 +193,4 @@ func (catalog *Catalog) CreateDBEntry(name string, txnCtx txnif.AsyncTxn) (*DBEn
 	catalog.Unlock()
 
 	return entry, err
-}
-
-func (catalog *Catalog) MakeDBHandle(txnCtx txnif.AsyncTxn) iface.Database {
-	return nil
 }
