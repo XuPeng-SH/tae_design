@@ -87,29 +87,6 @@ func (e *DBEntry) DropTableEntry(name string, txnCtx txnif.AsyncTxn) (deleted *T
 
 func (e *DBEntry) CreateTableEntry(schema *Schema, txnCtx txnif.AsyncTxn) (created *TableEntry, err error) {
 	e.Lock()
-	old := e.txnGetNodeByNameLocked(schema.Name, txnCtx)
-	if old != nil {
-		record := old.payload.(*TableEntry)
-		record.RLock()
-		defer record.RUnlock()
-		if record.Txn != nil {
-			if record.Txn.GetID() == txnCtx.GetID() {
-				if !record.IsDroppedUncommitted() {
-					err = ErrDuplicate
-				}
-			} else {
-				err = txnif.TxnWWConflictErr
-			}
-		} else {
-			if !record.HasDropped() {
-				err = ErrDuplicate
-			}
-		}
-		if err != nil {
-			e.Unlock()
-			return
-		}
-	}
 	created = NewTableEntry(e, schema, txnCtx)
 	err = e.addEntryLocked(created)
 	e.Unlock()
