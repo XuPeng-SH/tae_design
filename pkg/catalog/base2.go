@@ -31,6 +31,8 @@ type BaseEntry2 struct {
 	CreateAt, DeleteAt uint64
 }
 
+func (be *BaseEntry2) GetTxn() txnif.TxnReader { return be.Txn }
+
 func (be *BaseEntry2) IsTerminated(waitIfcommitting bool) bool {
 	return be.Txn.IsTerminated(waitIfcommitting)
 }
@@ -195,4 +197,34 @@ func (be *BaseEntry2) String() string {
 		s = fmt.Sprintf("%s%s", s, be.Txn.Repr())
 	}
 	return s
+}
+
+func (be *BaseEntry2) PrepareWrite(txn txnif.TxnReader, rwlocker *sync.RWMutex) (err error) {
+	eTxn := be.Txn
+	// No active txn is on this entry
+	if eTxn == nil {
+		return
+	}
+	// The same txn is on this entry
+	if eTxn.GetID() == txn.GetID() {
+		return
+	}
+	commitTS := be.Txn.GetCommitTS()
+	// Another active txn is on this entry
+	if commitTS == txnif.UncommitTS {
+		err = txnif.TxnWWConflictErr
+		return
+	}
+	// Another committing|rollbacking|committed|rollbacked txn commits|rollbacks after txn starts
+	if commitTS > txn.GetStartTS() {
+		return
+	}
+	if rwlocker != nil {
+		rwlocker.RUnlock()
+	}
+	eTxn.GetTxnState(true)
+	if rwlocker != nil {
+		rwlocker.RLock()
+	}
+	return
 }

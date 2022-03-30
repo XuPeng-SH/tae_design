@@ -19,7 +19,8 @@ type TxnReader interface {
 	GetCommitTS() uint64
 	GetInfo() []byte
 	IsTerminated(bool) bool
-	Compare(o TxnReader) int
+	IsVisible(o TxnReader) bool
+	// Compare(o TxnReader) int
 	GetTxnState(waitIfcommitting bool) int32
 	GetError() error
 	GetStore() TxnStore

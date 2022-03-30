@@ -44,8 +44,11 @@ func (ctx *TxnCtx) GetCommitTS() uint64 {
 	return ctx.CommitTS
 }
 
-func (ctx *TxnCtx) Compare(o txnif.TxnReader) int {
-	return 0
+func (ctx *TxnCtx) IsVisible(o txnif.TxnReader) bool {
+	ostart := o.GetStartTS()
+	ctx.RLock()
+	defer ctx.RUnlock()
+	return ostart <= ctx.StartTS
 }
 
 func (ctx *TxnCtx) IsActiveLocked() bool {
