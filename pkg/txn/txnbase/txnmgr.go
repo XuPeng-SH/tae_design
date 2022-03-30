@@ -114,6 +114,6 @@ func (mgr *TxnManager) onCommit(items ...interface{}) {
 			panic(err)
 		}
 		op.Txn.WaitDone()
-		logrus.Infof("%s Done", op.Repr())
+		logrus.Debugf("%s Done", op.Repr())
 	}
 }

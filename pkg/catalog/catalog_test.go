@@ -31,9 +31,7 @@ func (store *testTxnStore) BindTxn(txn txnif.AsyncTxn) {
 
 func (store *testTxnStore) PrepareCommit() error {
 	for e, _ := range store.entries {
-		// e.Lock()
 		err := e.PrepareCommit()
-		// e.Unlock()
 		if err != nil {
 			return err
 		}
@@ -43,9 +41,7 @@ func (store *testTxnStore) PrepareCommit() error {
 
 func (store *testTxnStore) Commit() error {
 	for e, _ := range store.entries {
-		// e.Lock()
 		err := e.Commit()
-		// e.Unlock()
 		if err != nil {
 			return err
 		}
@@ -431,10 +427,9 @@ func TestTableEntry3(t *testing.T) {
 		}
 		err = txn.Commit()
 		assert.Nil(t, err)
-		t.Log(txn.String())
 	}
 
-	for i := 0; i < 4000; i++ {
+	for i := 0; i < 10000; i++ {
 		wg.Add(1)
 		go flow()
 	}
