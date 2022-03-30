@@ -136,11 +136,12 @@ func (e *DBEntry) addEntryLocked(table *TableEntry) error {
 			record.RUnlock()
 			return err
 		}
-		if record.HasActiveTxn() && !record.IsDroppedUncommitted() {
-			record.RUnlock()
-			return ErrDuplicate
-		}
-		if !record.HasDropped() {
+		if record.HasActiveTxn() {
+			if !record.IsDroppedUncommitted() {
+				record.RUnlock()
+				return ErrDuplicate
+			}
+		} else if !record.HasDropped() {
 			record.RUnlock()
 			return ErrDuplicate
 		}

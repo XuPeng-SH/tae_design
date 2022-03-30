@@ -50,7 +50,7 @@ func (catalog *Catalog) Close() error {
 	return catalog.store.Close()
 }
 
-func (catalog *Catalog) addEntryLocked(database *DBEntry) (Waitable, error) {
+func (catalog *Catalog) addEntryLocked(database *DBEntry) error {
 	nn := catalog.nameNodes[database.name]
 	if nn == nil {
 		n := catalog.link.Insert(database)
@@ -61,43 +61,31 @@ func (catalog *Catalog) addEntryLocked(database *DBEntry) (Waitable, error) {
 
 		nn.CreateNode(database.GetID())
 	} else {
-		old := nn.GetDBNode()
-		oldE := old.payload.(*DBEntry)
-		oldE.RLock()
-		if !oldE.HasActiveTxn() {
-			if !oldE.HasDropped() {
-				oldE.RUnlock()
-				return nil, ErrDuplicate
-			}
-		} else {
-			eTxn := oldE.Txn
-			if oldE.IsSameTxn(database.Txn) {
-				if !oldE.IsDroppedUncommitted() {
-					oldE.RUnlock()
-					return nil, ErrDuplicate
-				}
-			} else {
-				if !oldE.IsCommitting() {
-					oldE.RUnlock()
-					return nil, txnif.TxnWWConflictErr
-				}
-				if oldE.Txn.GetCommitTS() < database.Txn.GetStartTS() {
-					nTxn := database.Txn
-					oldE.RUnlock()
-					return &waitable{fn: func() error {
-						logrus.Infof("%s ----WAIT---->%s", nTxn.String(), eTxn.String())
-						eTxn.GetTxnState(true)
-						return nil
-					}}, nil
-				}
-			}
+		node := nn.GetDBNode()
+		record := node.payload.(*DBEntry)
+		record.RLock()
+		err := record.PrepareWrite(database.GetTxn(), record.RWMutex)
+		if err != nil {
+			record.RUnlock()
+			return err
 		}
-		oldE.RUnlock()
+		if record.HasActiveTxn() {
+			if !record.IsDroppedUncommitted() {
+				record.RUnlock()
+				return ErrDuplicate
+			}
+		} else if !record.HasDropped() {
+			record.RUnlock()
+			logrus.Info(record.String())
+			return ErrDuplicate
+		}
+
+		record.RUnlock()
 		n := catalog.link.Insert(database)
 		catalog.entries[database.GetID()] = n
 		nn.CreateNode(database.GetID())
 	}
-	return nil, nil
+	return nil
 }
 
 func (catalog *Catalog) removeEntryLocked(database *DBEntry) error {
@@ -150,43 +138,31 @@ func (catalog *Catalog) DropDBEntry(name string, txnCtx txnif.AsyncTxn) (deleted
 func (catalog *Catalog) CreateDBEntry(name string, txnCtx txnif.AsyncTxn) (*DBEntry, error) {
 	var err error
 	catalog.Lock()
-	old := catalog.txnGetNodeByNameLocked(name, txnCtx)
-	if old != nil {
-		oldE := old.payload.(*DBEntry)
-		oldE.RLock()
-		defer oldE.RUnlock()
-		if oldE.Txn != nil {
-			if oldE.Txn.GetID() == txnCtx.GetID() {
-				if !oldE.IsDroppedUncommitted() {
-					err = ErrDuplicate
-				}
-			} else {
-				err = txnif.TxnWWConflictErr
-			}
-		} else {
-			if !oldE.HasDropped() {
-				err = ErrDuplicate
-			}
-		}
-		if err != nil {
-			catalog.Unlock()
-			return nil, err
-		}
-	}
+	// node := catalog.txnGetNodeByNameLocked(name, txnCtx)
+	// if node != nil {
+	// 	record := node.payload.(*DBEntry)
+	// 	record.RLock()
+	// 	defer record.RUnlock()
+	// 	if record.Txn != nil {
+	// 		if record.Txn.GetID() == txnCtx.GetID() {
+	// 			if !record.IsDroppedUncommitted() {
+	// 				err = ErrDuplicate
+	// 			}
+	// 		} else {
+	// 			err = txnif.TxnWWConflictErr
+	// 		}
+	// 	} else {
+	// 		if !record.HasDropped() {
+	// 			err = ErrDuplicate
+	// 		}
+	// 	}
+	// 	if err != nil {
+	// 		catalog.Unlock()
+	// 		return nil, err
+	// 	}
+	// }
 	entry := NewDBEntry(catalog, name, txnCtx)
-	var w Waitable
-	for {
-		w, err = catalog.addEntryLocked(entry)
-		if w == nil {
-			break
-		}
-		catalog.Unlock()
-		err = w.Wait()
-		catalog.Lock()
-		if err != nil {
-			break
-		}
-	}
+	err = catalog.addEntryLocked(entry)
 	catalog.Unlock()
 
 	return entry, err
