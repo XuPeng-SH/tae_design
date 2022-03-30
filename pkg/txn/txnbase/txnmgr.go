@@ -69,11 +69,11 @@ func (mgr *TxnManager) OnOpTxn(op *OpTxn) {
 }
 
 func (mgr *TxnManager) onPreparCommit(txn txnif.AsyncTxn) {
-	txn.SetError(txn.PreapreCommit())
+	txn.SetError(txn.PrepareCommit())
 }
 
 func (mgr *TxnManager) onPreparRollback(txn txnif.AsyncTxn) {
-	txn.SetError(txn.PreapreRollback())
+	txn.SetError(txn.PrepareRollback())
 }
 
 // TODO
@@ -110,6 +110,9 @@ func (mgr *TxnManager) onPreparing(items ...interface{}) {
 func (mgr *TxnManager) onCommit(items ...interface{}) {
 	for _, item := range items {
 		op := item.(*OpTxn)
+		if err := op.Txn.DoCommit(); err != nil {
+			panic(err)
+		}
 		op.Txn.WaitDone()
 		logrus.Infof("%s Done", op.Repr())
 	}

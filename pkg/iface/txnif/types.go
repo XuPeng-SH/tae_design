@@ -47,8 +47,9 @@ type TxnChanger interface {
 	ToRollbackingLocked(ts uint64) error
 	Commit() error
 	Rollback() error
-	PreapreCommit() error
-	PreapreRollback() error
+	PrepareCommit() error
+	PrepareRollback() error
+	DoCommit() error
 	SetError(error)
 	SetPrepareCommitFn(func(interface{}) error)
 }

@@ -217,13 +217,6 @@ func TestCreateDB1(t *testing.T) {
 
 	txn1.Commit()
 
-	err = txn1.GetStore().PrepareCommit()
-	assert.Nil(t, err)
-
-	assert.True(t, db1.(*testDatabaseHandle).entry.HasCreated())
-	assert.True(t, db1.(*testDatabaseHandle).entry.IsCommitting())
-
-	err = txn1.GetStore().Commit()
 	assert.Nil(t, err)
 	assert.False(t, db1.(*testDatabaseHandle).entry.IsCommitting())
 
@@ -310,11 +303,6 @@ func TestTableEntry1(t *testing.T) {
 	err = txn1.Commit()
 	assert.Nil(t, err)
 
-	err = txn1.GetStore().PrepareCommit()
-	assert.Nil(t, err)
-	err = txn1.GetStore().Commit()
-	assert.Nil(t, err)
-
 	_, err = txn2.DropDatabase(name)
 	assert.Equal(t, err, ErrNotFound)
 
@@ -341,10 +329,6 @@ func TestTableEntry1(t *testing.T) {
 	err = txn3.Commit()
 	assert.Nil(t, err)
 
-	err = txn3.GetStore().PrepareCommit()
-	assert.Nil(t, err)
-	err = txn3.GetStore().Commit()
-	assert.Nil(t, err)
 	t.Log(tb1.String())
 
 	txn5 := txnMgr.StartTxn(nil)
@@ -379,11 +363,6 @@ func TestTableEntry2(t *testing.T) {
 		assert.Nil(t, err)
 	}
 	err = txn1.Commit()
-	assert.Nil(t, err)
-
-	err = txn1.GetStore().PrepareCommit()
-	assert.Nil(t, err)
-	err = txn1.GetStore().Commit()
 	assert.Nil(t, err)
 
 	txn2 := txnMgr.StartTxn(nil)
@@ -452,15 +431,10 @@ func TestTableEntry3(t *testing.T) {
 		}
 		err = txn.Commit()
 		assert.Nil(t, err)
-		err = txn.GetStore().PrepareCommit()
-		assert.Nil(t, err)
-		time.Sleep(time.Microsecond * 10)
-		err = txn.GetStore().Commit()
-		assert.Nil(t, err)
 		t.Log(txn.String())
 	}
 
-	for i := 0; i < 100; i++ {
+	for i := 0; i < 4000; i++ {
 		wg.Add(1)
 		go flow()
 	}

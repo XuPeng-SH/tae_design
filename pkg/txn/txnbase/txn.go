@@ -119,7 +119,7 @@ func (txn *Txn) GetTxnState(waitIfcommitting bool) int32 {
 	return state
 }
 
-func (txn *Txn) PreapreCommit() error {
+func (txn *Txn) PrepareCommit() error {
 	logrus.Debugf("Prepare Committing %d", txn.ID)
 	var err error
 	if txn.PrepareCommitFn != nil {
@@ -128,11 +128,16 @@ func (txn *Txn) PreapreCommit() error {
 	if err != nil {
 		return err
 	}
-	// TODO
+	// TODO: process data in store
+	err = txn.Store.PrepareCommit()
 	return txn.Err
 }
 
-func (txn *Txn) PreapreRollback() error {
+func (txn *Txn) DoCommit() error {
+	return txn.Store.Commit()
+}
+
+func (txn *Txn) PrepareRollback() error {
 	logrus.Debugf("Prepare Rollbacking %d", txn.ID)
 	return nil
 }
