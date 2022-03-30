@@ -17,13 +17,19 @@ type txnStore struct {
 	dbIndex    map[string]uint64
 	tableIndex map[string]uint64
 	txn        txnif.AsyncTxn
+	catalog    *catalog.Catalog
 }
 
-var DefaultTxnStoreFactory = func() txnif.TxnStore { return NewStore() }
+var TxnStoreFactory = func(catalog *catalog.Catalog) txnbase.TxnStoreFactory {
+	return func() txnif.TxnStore {
+		return newStore(catalog)
+	}
+}
 
-func NewStore() *txnStore {
+func newStore(catalog *catalog.Catalog) *txnStore {
 	return &txnStore{
-		tables: make(map[uint64]Table),
+		tables:  make(map[uint64]Table),
+		catalog: catalog,
 	}
 }
 
