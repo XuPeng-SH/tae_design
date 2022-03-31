@@ -12,14 +12,15 @@ import (
 
 type txnStore struct {
 	txnbase.NoopTxnStore
-	tables     map[uint64]Table
-	driver     txnbase.NodeDriver
-	nodesMgr   base.INodeManager
-	dbIndex    map[string]uint64
-	tableIndex map[string]uint64
-	txn        txnif.AsyncTxn
-	catalog    *catalog.Catalog
-	database   handle.Database
+	tables      map[uint64]Table
+	driver      txnbase.NodeDriver
+	nodesMgr    base.INodeManager
+	dbIndex     map[string]uint64
+	tableIndex  map[string]uint64
+	txn         txnif.AsyncTxn
+	catalog     *catalog.Catalog
+	database    handle.Database
+	createEntry txnif.TxnEntry
 }
 
 var TxnStoreFactory = func(catalog *catalog.Catalog) txnbase.TxnStoreFactory {
@@ -88,30 +89,68 @@ func (store *txnStore) UseDatabase(name string) (err error) {
 }
 
 func (store *txnStore) CreateDatabase(name string) (handle.Database, error) {
-	var err error
-	store.database, err = store.txn.CreateDatabase(name)
-	return store.database, err
+	meta, err := store.catalog.CreateDBEntry(name, store.txn)
+	if err != nil {
+		return nil, err
+	}
+	store.createEntry = meta
+	store.database = newDatabase(store.txn, meta)
+	return store.database, nil
 }
 
-func (store *txnStore) CreateRelation(schema *catalog.Schema) (relation handle.Relation, err error) {
-	if relation, err = store.database.CreateRelation(schema); err != nil {
+func (store *txnStore) CreateRelation(def interface{}) (relation handle.Relation, err error) {
+	schema := def.(*catalog.Schema)
+	db := store.database.GetMeta().(*catalog.DBEntry)
+	meta, err := db.CreateTableEntry(schema, store.txn)
+	if err != nil {
 		return
 	}
-	// meta := relation.GetMeta().(*catalog.TableEntry)
+	relation = newRelation(store.txn, meta)
+
 	table := newTxnTable(nil, relation, store.driver, store.nodesMgr)
+	table.SetCreateEntry(meta)
 	// table.AddCreateCommand() // TODO
 	store.tables[relation.ID()] = table
 
 	return
 }
 
+func (store *txnStore) Commit() (err error) {
+	if store.createEntry != nil {
+		if err = store.createEntry.Commit(); err != nil {
+			return
+		}
+	}
+	for _, table := range store.tables {
+		if err = table.Commit(); err != nil {
+			break
+		}
+	}
+	return
+}
+
 func (store *txnStore) PrepareCommit() (err error) {
+	if store.createEntry != nil {
+		if err = store.createEntry.PrepareCommit(); err != nil {
+			return
+		}
+	}
 	for _, table := range store.tables {
 		if err = table.PrepareCommit(); err != nil {
 			break
 		}
 	}
 	return
+}
+
+func (store *txnStore) AddTxnEntry(t txnif.TxnEntryType, entry txnif.TxnEntry) {
+	// switch t {
+	// case TxnEntryCreateDatabase:
+	// 	store.createEntry = entry
+	// case TxnEntryCretaeTable:
+	// 	create := entry.(*catalog.TableEntry)
+
+	// }
 }
 
 // func (store *txnStore) PrepareRollback() error { return nil }

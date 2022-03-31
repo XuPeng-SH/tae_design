@@ -103,19 +103,21 @@ type TxnStore interface {
 	UpdateLocalValue(id uint64, row uint32, col uint16, v interface{}) error
 	AddUpdateNode(id uint64, node BlockUpdates) error
 
-	// CreateDBEntry(name string) error
-	// CreateTableEntry(databse string, def interface{}) error
+	CreateRelation(def interface{}) (handle.Relation, error)
+	CreateDatabase(name string) (handle.Database, error)
 
 	// DropDBEntry(name string) error
 	// DropTableEntry(dbName, name string) error
 
-	AddTxnEntry(TxnEntry)
+	AddTxnEntry(TxnEntryType, TxnEntry)
 
 	PrepareCommit() error
 	// PrepareRollback() error
 	Commit() error
 	// Rollback() error
 }
+
+type TxnEntryType int16
 
 type TxnEntry interface {
 	sync.Locker

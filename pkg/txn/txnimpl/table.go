@@ -38,6 +38,7 @@ type Table interface {
 	AddUpdateNode(txnif.BlockUpdates) error
 	IsDeleted() bool
 	PrepareCommit() error
+	Commit() error
 
 	SetCreateEntry(txnif.TxnEntry)
 	SetDropEntry(txnif.TxnEntry)
@@ -278,6 +279,44 @@ func (tbl *txnTable) GetLocalValue(row uint32, col uint16) (interface{}, error) 
 }
 
 func (tbl *txnTable) PrepareCommit() (err error) {
+	tbl.entry.RLock()
+	if tbl.entry.CreateAndDropInSameTxn() {
+		tbl.entry.RUnlock()
+		// TODO: should remove all inodes and updates
+		return
+	}
+	tbl.entry.RUnlock()
+	if tbl.createEntry != nil {
+		if err = tbl.createEntry.PrepareCommit(); err != nil {
+			return
+		}
+	} else if tbl.dropEntry != nil {
+		if err = tbl.dropEntry.PrepareCommit(); err != nil {
+			return
+		}
+	}
+	// TODO
+	return
+}
+
+func (tbl *txnTable) Commit() (err error) {
+	tbl.entry.RLock()
+	if tbl.entry.CreateAndDropInSameTxn() {
+		tbl.entry.RUnlock()
+		// TODO: should remove all inodes and updates
+		return
+	}
+	tbl.entry.RUnlock()
+	if tbl.createEntry != nil {
+		if err = tbl.createEntry.Commit(); err != nil {
+			return
+		}
+	} else if tbl.dropEntry != nil {
+		if err = tbl.dropEntry.Commit(); err != nil {
+			return
+		}
+	}
+	// TODO
 	return
 }
 

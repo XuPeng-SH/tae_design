@@ -16,4 +16,5 @@ type Database interface {
 
 	MakeRelationIt() RelationIt
 	String() string
+	GetMeta() interface{}
 }

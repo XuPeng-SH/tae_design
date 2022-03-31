@@ -483,9 +483,21 @@ func TestTxnManager1(t *testing.T) {
 }
 
 func TestTransaction1(t *testing.T) {
-	mgr := txnbase.NewTxnManager(TxnStoreFactory(nil), TxnFactory(nil))
+	dir := initTestPath(t)
+	c := catalog.MockCatalog(dir, "mock", nil)
+	defer c.Close()
+	mgr := txnbase.NewTxnManager(TxnStoreFactory(c), TxnFactory(c))
 	mgr.Start()
 	defer mgr.Stop()
 
-	// txn1 := mgr.StartTxn(nil)
+	name := "db"
+	txn1 := mgr.StartTxn(nil)
+	db, err := txn1.CreateDatabase(name)
+	assert.Nil(t, err)
+	t.Log(db.String())
+	err = txn1.Commit()
+	assert.Nil(t, err)
+	t.Log(db.String())
+	assert.Equal(t, txn1.GetCommitTS(), db.GetMeta().(*catalog.DBEntry).CreateAt)
+	assert.Nil(t, db.GetMeta().(*catalog.DBEntry).Txn)
 }

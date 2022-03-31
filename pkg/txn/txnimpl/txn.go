@@ -2,6 +2,7 @@ package txnimpl
 
 import (
 	"tae/pkg/catalog"
+	"tae/pkg/iface/handle"
 	"tae/pkg/iface/txnif"
 	"tae/pkg/txn/txnbase"
 )
@@ -23,4 +24,16 @@ func newTxnImpl(catalog *catalog.Catalog, mgr *txnbase.TxnManager, store txnif.T
 		catalog: catalog,
 	}
 	return impl
+}
+
+func (txn *txnImpl) CreateDatabase(name string) (db handle.Database, err error) {
+	return txn.Store.CreateDatabase(name)
+}
+
+func (txn *txnImpl) DropDatabase(name string) (db handle.Database, err error) {
+	return
+}
+
+func (txn *txnImpl) GetDatabase(name string) (db handle.Database, err error) {
+	return
 }

@@ -1,0 +1,42 @@
+package txnimpl
+
+import (
+	"tae/pkg/catalog"
+	"tae/pkg/iface/handle"
+	"tae/pkg/iface/txnif"
+	"tae/pkg/txn/txnbase"
+
+	"github.com/matrixorigin/matrixone/pkg/container/batch"
+	"github.com/matrixorigin/matrixone/pkg/container/vector"
+)
+
+type txnRelation struct {
+	*txnbase.TxnRelation
+	entry *catalog.TableEntry
+	store txnif.TxnStore
+}
+
+func newRelation(txn txnif.AsyncTxn, meta *catalog.TableEntry) *txnRelation {
+	rel := &txnRelation{
+		TxnRelation: &txnbase.TxnRelation{
+			Txn: txn,
+		},
+		entry: meta,
+	}
+	return rel
+}
+
+func (h *txnRelation) ID() uint64     { return h.entry.GetID() }
+func (h *txnRelation) String() string { return h.entry.String() }
+
+func (h *txnRelation) GetMeta() interface{}   { return h.entry }
+func (h *txnRelation) GetSchema() interface{} { return h.entry.GetSchema() }
+
+func (h *txnRelation) Close() error                        { return nil }
+func (h *txnRelation) Rows() int64                         { return 0 }
+func (h *txnRelation) Size(attr string) int64              { return 0 }
+func (h *txnRelation) GetCardinality(attr string) int64    { return 0 }
+func (h *txnRelation) MakeSegmentIt() handle.SegmentIt     { return nil }
+func (h *txnRelation) MakeReader() handle.Reader           { return nil }
+func (h *txnRelation) BatchDedup(col *vector.Vector) error { return nil }
+func (h *txnRelation) Append(data *batch.Batch) error      { return nil }

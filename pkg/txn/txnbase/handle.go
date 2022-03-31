@@ -37,6 +37,7 @@ func (db *TxnDatabase) GetRelationByName(name string) (rel handle.Relation, err 
 func (db *TxnDatabase) RelationCnt() int64                                              { return 0 }
 func (db *TxnDatabase) Relations() (rels []handle.Relation)                             { return }
 func (db *TxnDatabase) MakeRelationIt() (it handle.RelationIt)                          { return }
+func (db *TxnDatabase) GetMeta() interface{}                                            { return nil }
 
 func (rel *TxnRelation) String() string                      { return "" }
 func (rel *TxnRelation) Close() error                        { return nil }

@@ -1,6 +1,7 @@
 package txnbase
 
 import (
+	"tae/pkg/iface/handle"
 	"tae/pkg/iface/txnif"
 
 	"github.com/matrixorigin/matrixone/pkg/container/batch"
@@ -23,9 +24,11 @@ func (store *NoopTxnStore) PrepareCommit() error                                
 func (store *NoopTxnStore) Rollback() error                                        { return nil }
 func (store *NoopTxnStore) Commit() error                                          { return nil }
 
-func (store *NoopTxnStore) AddTxnEntry(entry txnif.TxnEntry) {}
+func (store *NoopTxnStore) AddTxnEntry(t txnif.TxnEntryType, entry txnif.TxnEntry) {}
 
-// func (store *NoopTxnStore) CreateDBEntry(name string) error                         { return nil }
+func (store *NoopTxnStore) CreateRelation(def interface{}) (rel handle.Relation, err error) { return }
+func (store *NoopTxnStore) CreateDatabase(name string) (db handle.Database, err error)      { return }
+
 // func (store *NoopTxnStore) DropDBEntry(name string) error                           { return nil }
 // func (store *NoopTxnStore) CreateTableEntry(database string, def interface{}) error { return nil }
 // func (store *NoopTxnStore) DropTableEntry(dbName, name string) error                { return nil }

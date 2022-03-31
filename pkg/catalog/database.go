@@ -44,6 +44,8 @@ func (e *DBEntry) Compare(o NodePayload) int {
 	return e.DoCompre(oe)
 }
 
+func (e *DBEntry) GetName() string { return e.name }
+
 func (e *DBEntry) String() string {
 	return fmt.Sprintf("DB%s[name=%s]", e.BaseEntry2.String(), e.name)
 }
