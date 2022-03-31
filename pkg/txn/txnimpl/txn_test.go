@@ -495,9 +495,44 @@ func TestTransaction1(t *testing.T) {
 	db, err := txn1.CreateDatabase(name)
 	assert.Nil(t, err)
 	t.Log(db.String())
+
+	schema := catalog.MockSchema(1)
+	rel, err := db.CreateRelation(schema)
+	assert.Nil(t, err)
+	t.Log(rel.String())
+
 	err = txn1.Commit()
 	assert.Nil(t, err)
 	t.Log(db.String())
 	assert.Equal(t, txn1.GetCommitTS(), db.GetMeta().(*catalog.DBEntry).CreateAt)
 	assert.Nil(t, db.GetMeta().(*catalog.DBEntry).Txn)
+	assert.Equal(t, txn1.GetCommitTS(), rel.GetMeta().(*catalog.TableEntry).CreateAt)
+	assert.Nil(t, rel.GetMeta().(*catalog.TableEntry).Txn)
+
+	txn2 := mgr.StartTxn(nil)
+	get, err := txn2.GetDatabase(name)
+	assert.Nil(t, err)
+	t.Log(get.String())
+
+	dropped, err := txn2.DropDatabase(name)
+	assert.Nil(t, err)
+	t.Log(dropped.String())
+
+	get, err = txn2.GetDatabase(name)
+	assert.Equal(t, catalog.ErrNotFound, err)
+	t.Log(err)
+
+	txn3 := mgr.StartTxn(nil)
+
+	err = txn3.UseDatabase(name)
+	assert.Nil(t, err)
+	err = txn3.UseDatabase("xx")
+	assert.NotNil(t, err)
+
+	db3, err := txn3.GetDatabase(name)
+	assert.Nil(t, err)
+
+	rel, err = db3.GetRelationByName(schema.Name)
+	assert.Nil(t, err)
+	t.Log(rel.String())
 }

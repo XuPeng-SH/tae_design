@@ -31,9 +31,13 @@ func (txn *txnImpl) CreateDatabase(name string) (db handle.Database, err error) 
 }
 
 func (txn *txnImpl) DropDatabase(name string) (db handle.Database, err error) {
-	return
+	return txn.Store.DropDatabase(name)
 }
 
 func (txn *txnImpl) GetDatabase(name string) (db handle.Database, err error) {
-	return
+	return txn.Store.GetDatabase(name)
+}
+
+func (txn *txnImpl) UseDatabase(name string) (err error) {
+	return txn.Store.UseDatabase(name)
 }

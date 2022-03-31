@@ -38,16 +38,12 @@ func (db *txnDatabase) CreateRelation(def interface{}) (rel handle.Relation, err
 }
 
 func (db *txnDatabase) DropRelationByName(name string) (rel handle.Relation, err error) {
-	meta, err := db.entry.DropTableEntry(name, db.Txn)
-	if err != nil {
-		return nil, err
-	}
-	db.Txn.GetStore().AddTxnEntry(TxnEntryDropTable, meta)
-	rel = newRelation(db.Txn, meta)
-	return
+	return db.Txn.GetStore().DropRelationByName(name)
 }
 
-func (db *txnDatabase) GetRelationByName(name string) (rel handle.Relation, err error) { return }
+func (db *txnDatabase) GetRelationByName(name string) (rel handle.Relation, err error) {
+	return db.Txn.GetStore().GetRelationByName(name)
+}
 
 func (db *txnDatabase) RelationCnt() int64                     { return 0 }
 func (db *txnDatabase) Relations() (rels []handle.Relation)    { return }

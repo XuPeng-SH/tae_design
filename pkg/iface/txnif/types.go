@@ -36,6 +36,7 @@ type TxnHandle interface {
 	CreateDatabase(name string) (handle.Database, error)
 	DropDatabase(name string) (handle.Database, error)
 	GetDatabase(name string) (handle.Database, error)
+	UseDatabase(name string) error
 }
 
 type TxnChanger interface {
@@ -104,10 +105,13 @@ type TxnStore interface {
 	AddUpdateNode(id uint64, node BlockUpdates) error
 
 	CreateRelation(def interface{}) (handle.Relation, error)
-	CreateDatabase(name string) (handle.Database, error)
+	DropRelationByName(name string) (handle.Relation, error)
+	GetRelationByName(name string) (handle.Relation, error)
 
-	// DropDBEntry(name string) error
-	// DropTableEntry(dbName, name string) error
+	CreateDatabase(name string) (handle.Database, error)
+	GetDatabase(name string) (handle.Database, error)
+	DropDatabase(name string) (handle.Database, error)
+	UseDatabase(name string) error
 
 	AddTxnEntry(TxnEntryType, TxnEntry)
 

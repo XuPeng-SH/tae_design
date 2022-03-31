@@ -27,7 +27,12 @@ func (store *NoopTxnStore) Commit() error                                       
 func (store *NoopTxnStore) AddTxnEntry(t txnif.TxnEntryType, entry txnif.TxnEntry) {}
 
 func (store *NoopTxnStore) CreateRelation(def interface{}) (rel handle.Relation, err error) { return }
+func (store *NoopTxnStore) DropRelationByName(name string) (rel handle.Relation, err error) { return }
+func (store *NoopTxnStore) GetRelationByName(name string) (rel handle.Relation, err error)  { return }
 func (store *NoopTxnStore) CreateDatabase(name string) (db handle.Database, err error)      { return }
+func (store *NoopTxnStore) DropDatabase(name string) (db handle.Database, err error)        { return }
+func (store *NoopTxnStore) GetDatabase(name string) (db handle.Database, err error)         { return }
+func (store *NoopTxnStore) UseDatabase(name string) (err error)                             { return }
 
 // func (store *NoopTxnStore) DropDBEntry(name string) error                           { return nil }
 // func (store *NoopTxnStore) CreateTableEntry(database string, def interface{}) error { return nil }

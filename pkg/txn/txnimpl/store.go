@@ -21,6 +21,7 @@ type txnStore struct {
 	catalog     *catalog.Catalog
 	database    handle.Database
 	createEntry txnif.TxnEntry
+	dropEntry   txnif.TxnEntry
 }
 
 var TxnStoreFactory = func(catalog *catalog.Catalog) txnbase.TxnStoreFactory {
@@ -84,11 +85,38 @@ func (store *txnStore) AddUpdateNode(id uint64, node txnif.BlockUpdates) error {
 }
 
 func (store *txnStore) UseDatabase(name string) (err error) {
+	if err = store.checkDatabase(name); err != nil {
+		return
+	}
 	store.database, err = store.txn.GetDatabase(name)
 	return err
 }
 
+func (store *txnStore) checkDatabase(name string) (err error) {
+	if store.database != nil {
+		if store.database.GetName() != name {
+			return txnbase.ErrTxnDifferentDatabase
+		}
+	}
+	return
+}
+
+func (store *txnStore) GetDatabase(name string) (db handle.Database, err error) {
+	if err = store.checkDatabase(name); err != nil {
+		return
+	}
+	meta, err := store.catalog.GetDBEntry(name, store.txn)
+	if err != nil {
+		return
+	}
+	db = newDatabase(store.txn, meta)
+	return
+}
+
 func (store *txnStore) CreateDatabase(name string) (handle.Database, error) {
+	if store.database != nil {
+		return nil, txnbase.ErrTxnDifferentDatabase
+	}
 	meta, err := store.catalog.CreateDBEntry(name, store.txn)
 	if err != nil {
 		return nil, err
@@ -96,6 +124,19 @@ func (store *txnStore) CreateDatabase(name string) (handle.Database, error) {
 	store.createEntry = meta
 	store.database = newDatabase(store.txn, meta)
 	return store.database, nil
+}
+
+func (store *txnStore) DropDatabase(name string) (db handle.Database, err error) {
+	if err = store.checkDatabase(name); err != nil {
+		return
+	}
+	meta, err := store.catalog.DropDBEntry(name, store.txn)
+	if err != nil {
+		return
+	}
+	store.dropEntry = meta
+	store.database = newDatabase(store.txn, meta)
+	return store.database, err
 }
 
 func (store *txnStore) CreateRelation(def interface{}) (relation handle.Relation, err error) {
@@ -112,6 +153,35 @@ func (store *txnStore) CreateRelation(def interface{}) (relation handle.Relation
 	// table.AddCreateCommand() // TODO
 	store.tables[relation.ID()] = table
 
+	return
+}
+
+func (store *txnStore) DropRelationByName(name string) (relation handle.Relation, err error) {
+	db := store.database.GetMeta().(*catalog.DBEntry)
+	meta, err := db.DropTableEntry(name, store.txn)
+	if err != nil {
+		return nil, err
+	}
+	table := store.tables[meta.GetID()]
+	if table == nil {
+		relation = newRelation(store.txn, meta)
+		table := newTxnTable(nil, relation, store.driver, store.nodesMgr)
+		table.SetDropEntry(meta)
+		store.tables[meta.GetID()] = table
+	}
+	if relation == nil {
+		relation = newRelation(store.txn, meta)
+	}
+	return
+}
+
+func (store *txnStore) GetRelationByName(name string) (relation handle.Relation, err error) {
+	db := store.database.GetMeta().(*catalog.DBEntry)
+	meta, err := db.GetTableEntry(name, store.txn)
+	if err != nil {
+		return
+	}
+	relation = newRelation(store.txn, meta)
 	return
 }
 
