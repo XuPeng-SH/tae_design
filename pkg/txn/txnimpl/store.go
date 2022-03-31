@@ -2,6 +2,7 @@ package txnimpl
 
 import (
 	"tae/pkg/catalog"
+	"tae/pkg/iface/handle"
 	"tae/pkg/iface/txnif"
 	"tae/pkg/txn/txnbase"
 
@@ -18,6 +19,7 @@ type txnStore struct {
 	tableIndex map[string]uint64
 	txn        txnif.AsyncTxn
 	catalog    *catalog.Catalog
+	database   handle.Database
 }
 
 var TxnStoreFactory = func(catalog *catalog.Catalog) txnbase.TxnStoreFactory {
@@ -43,15 +45,15 @@ func (store *txnStore) Close() error {
 	return err
 }
 
-func (store *txnStore) InitTable(id uint64, schema *catalog.Schema) error {
-	table := store.tables[id]
-	if table != nil {
-		return ErrDuplicateNode
-	}
-	store.tables[id] = NewTable(nil, id, schema, store.driver, store.nodesMgr)
-	store.tableIndex[schema.Name] = id
-	return nil
-}
+// func (store *txnStore) InitTable(id uint64, schema *catalog.Schema) error {
+// 	table := store.tables[id]
+// 	if table != nil {
+// 		return ErrDuplicateNode
+// 	}
+// 	store.tables[id] = newTxnTable(nil, id, schema, store.driver, store.nodesMgr)
+// 	store.tableIndex[schema.Name] = id
+// 	return nil
+// }
 
 func (store *txnStore) BindTxn(txn txnif.AsyncTxn) {
 	store.txn = txn
@@ -80,8 +82,39 @@ func (store *txnStore) AddUpdateNode(id uint64, node txnif.BlockUpdates) error {
 	return table.AddUpdateNode(node)
 }
 
+func (store *txnStore) UseDatabase(name string) (err error) {
+	store.database, err = store.txn.GetDatabase(name)
+	return err
+}
+
+func (store *txnStore) CreateDatabase(name string) (handle.Database, error) {
+	var err error
+	store.database, err = store.txn.CreateDatabase(name)
+	return store.database, err
+}
+
+func (store *txnStore) CreateRelation(schema *catalog.Schema) (relation handle.Relation, err error) {
+	if relation, err = store.database.CreateRelation(schema); err != nil {
+		return
+	}
+	// meta := relation.GetMeta().(*catalog.TableEntry)
+	table := newTxnTable(nil, relation, store.driver, store.nodesMgr)
+	// table.AddCreateCommand() // TODO
+	store.tables[relation.ID()] = table
+
+	return
+}
+
+func (store *txnStore) PrepareCommit() (err error) {
+	for _, table := range store.tables {
+		if err = table.PrepareCommit(); err != nil {
+			break
+		}
+	}
+	return
+}
+
 // func (store *txnStore) PrepareRollback() error { return nil }
-// func (store *txnStore) PrepareCommit() error   { return nil }
 // func (store *txnStore) Rollback() error        { return nil }
 // func (store *txnStore) Commit() error          { return nil }
 

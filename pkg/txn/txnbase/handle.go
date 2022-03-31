@@ -27,6 +27,8 @@ type TxnBlock struct {
 	Seg handle.Segment
 }
 
+func (db *TxnDatabase) GetID() uint64                                                   { return 0 }
+func (db *TxnDatabase) GetName() string                                                 { return "" }
 func (db *TxnDatabase) String() string                                                  { return "" }
 func (db *TxnDatabase) Close() error                                                    { return nil }
 func (db *TxnDatabase) CreateRelation(def interface{}) (rel handle.Relation, err error) { return }
@@ -47,3 +49,4 @@ func (rel *TxnRelation) MakeSegmentIt() handle.SegmentIt     { return nil }
 func (rel *TxnRelation) MakeReader() handle.Reader           { return nil }
 func (rel *TxnRelation) BatchDedup(col *vector.Vector) error { return nil }
 func (rel *TxnRelation) Append(data *batch.Batch) error      { return nil }
+func (rel *TxnRelation) GetMeta() interface{}                { return nil }

@@ -200,6 +200,9 @@ func (be *BaseEntry2) String() string {
 }
 
 func (be *BaseEntry2) PrepareWrite(txn txnif.TxnReader, rwlocker *sync.RWMutex) (err error) {
+	if txn == nil {
+		return
+	}
 	eTxn := be.Txn
 	// No active txn is on this entry
 	if eTxn == nil {

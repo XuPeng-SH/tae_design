@@ -31,6 +31,16 @@ func NewTableEntry(db *DBEntry, schema *Schema, txnCtx txnif.AsyncTxn) *TableEnt
 	return e
 }
 
+func MockStaloneTableEntry(id uint64, schema *Schema) *TableEntry {
+	return &TableEntry{
+		BaseEntry2: &BaseEntry2{
+			RWMutex: new(sync.RWMutex),
+			ID:      id,
+		},
+		schema: schema,
+	}
+}
+
 // func (entry *TableEntry) ToLogEntry() LogEntry {
 
 // }
@@ -47,6 +57,10 @@ func (entry *TableEntry) deleteEntryLocked(segment *SegmentEntry) error {
 		entry.link.Delete(n)
 	}
 	return nil
+}
+
+func (entry *TableEntry) GetSchema() *Schema {
+	return entry.schema
 }
 
 func (entry *TableEntry) Compare(o NodePayload) int {

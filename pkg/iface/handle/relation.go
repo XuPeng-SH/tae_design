@@ -24,6 +24,8 @@ type Relation interface {
 	BatchDedup(col *vector.Vector) error
 	Append(data *batch.Batch) error
 	String() string
+
+	GetMeta() interface{}
 }
 
 type RelationIt interface {

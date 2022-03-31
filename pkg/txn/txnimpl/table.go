@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"tae/pkg/catalog"
+	"tae/pkg/iface/handle"
 	"tae/pkg/iface/txnif"
 	"tae/pkg/txn/txnbase"
 
@@ -36,32 +37,38 @@ type Table interface {
 	BatchDedupLocalByCol(col *gvec.Vector) error
 	AddUpdateNode(txnif.BlockUpdates) error
 	IsDeleted() bool
+	PrepareCommit() error
+
+	SetCreateEntry(txnif.TxnEntry)
+	SetDropEntry(txnif.TxnEntry)
 	// Commit() error
 	// Rollback() error
 }
 
 type txnTable struct {
 	*txnbase.TxnState
-	inodes     []InsertNode
-	appendable base.INodeHandle
-	updates    map[common.ID]*blockUpdates
-	driver     txnbase.NodeDriver
-	id         uint64
-	schema     *catalog.Schema
-	nodesMgr   base.INodeManager
-	index      TableIndex
-	rows       uint32
+	createEntry txnif.TxnEntry
+	dropEntry   txnif.TxnEntry
+	inodes      []InsertNode
+	appendable  base.INodeHandle
+	updates     map[common.ID]*blockUpdates
+	driver      txnbase.NodeDriver
+	entry       *catalog.TableEntry
+	handle      handle.Relation
+	nodesMgr    base.INodeManager
+	index       TableIndex
+	rows        uint32
 }
 
-func NewTable(txnState *txnbase.TxnState, id uint64, schema *catalog.Schema, driver txnbase.NodeDriver, mgr base.INodeManager) *txnTable {
+func newTxnTable(txnState *txnbase.TxnState, handle handle.Relation, driver txnbase.NodeDriver, mgr base.INodeManager) *txnTable {
 	if txnState == nil {
 		txnState = new(txnbase.TxnState)
 	}
 	tbl := &txnTable{
 		inodes:   make([]InsertNode, 0),
 		nodesMgr: mgr,
-		id:       id,
-		schema:   schema,
+		handle:   handle,
+		entry:    handle.GetMeta().(*catalog.TableEntry),
 		driver:   driver,
 		index:    NewSimpleTableIndex(),
 		TxnState: txnState,
@@ -70,17 +77,30 @@ func NewTable(txnState *txnbase.TxnState, id uint64, schema *catalog.Schema, dri
 	return tbl
 }
 
+func (tbl *txnTable) SetCreateEntry(e txnif.TxnEntry) {
+	if tbl.createEntry != nil {
+		panic("logic error")
+	}
+	tbl.createEntry = e
+}
+
+func (tbl *txnTable) SetDropEntry(e txnif.TxnEntry) {
+	if tbl.dropEntry != nil {
+		panic("logic error")
+	}
+	tbl.dropEntry = e
+}
+
 func (tbl *txnTable) IsDeleted() bool {
-	// TODO
-	return false
+	return tbl.dropEntry != nil
 }
 
 func (tbl *txnTable) GetSchema() *catalog.Schema {
-	return tbl.schema
+	return tbl.entry.GetSchema()
 }
 
 func (tbl *txnTable) GetID() uint64 {
-	return tbl.id
+	return tbl.entry.GetID()
 }
 
 func (tbl *txnTable) Close() error {
@@ -103,7 +123,7 @@ func (tbl *txnTable) registerInsertNode() error {
 		tbl.appendable.Close()
 	}
 	id := common.ID{
-		TableID:   tbl.id,
+		TableID:   tbl.entry.GetID(),
 		SegmentID: uint64(len(tbl.inodes)),
 	}
 	n := NewInsertNode(tbl, tbl.nodesMgr, id, tbl.driver)
@@ -150,7 +170,7 @@ func (tbl *txnTable) Append(data *batch.Batch) error {
 		space := n.GetSpace()
 		logrus.Infof("Appended: %d, Space:%d", appended, space)
 		start := tbl.rows
-		if err = tbl.index.BatchInsert(data.Vecs[tbl.schema.PrimaryKey], int(offset), int(appended), start, false); err != nil {
+		if err = tbl.index.BatchInsert(data.Vecs[tbl.GetSchema().PrimaryKey], int(offset), int(appended), start, false); err != nil {
 			break
 		}
 		offset += appended
@@ -195,7 +215,7 @@ func (tbl *txnTable) RangeDeleteLocalRows(start, end uint32) error {
 }
 
 func (tbl *txnTable) LocalDeletesToString() string {
-	s := fmt.Sprintf("<txnTable-%d>[LocalDeletes]:\n", tbl.id)
+	s := fmt.Sprintf("<txnTable-%d>[LocalDeletes]:\n", tbl.GetID())
 	for i, n := range tbl.inodes {
 		s = fmt.Sprintf("%s\t<INode-%d>: %s\n", s, i, n.PrintDeletes())
 	}
@@ -242,7 +262,7 @@ func (tbl *txnTable) Rows() uint32 {
 }
 
 func (tbl *txnTable) BatchDedupLocal(bat *gbat.Batch) error {
-	return tbl.BatchDedupLocalByCol(bat.Vecs[tbl.schema.PrimaryKey])
+	return tbl.BatchDedupLocalByCol(bat.Vecs[tbl.GetSchema().PrimaryKey])
 }
 
 func (tbl *txnTable) BatchDedupLocalByCol(col *gvec.Vector) error {
@@ -255,6 +275,10 @@ func (tbl *txnTable) GetLocalValue(row uint32, col uint16) (interface{}, error) 
 	h := tbl.nodesMgr.Pin(n)
 	defer h.Close()
 	return n.GetValue(int(col), noffset)
+}
+
+func (tbl *txnTable) PrepareCommit() (err error) {
+	return
 }
 
 // func (tbl *txnTable) PrepareCommit() (entry NodeEntry, err error) {
