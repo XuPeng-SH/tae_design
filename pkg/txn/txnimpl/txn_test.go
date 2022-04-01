@@ -10,16 +10,18 @@ import (
 	"sync"
 	"sync/atomic"
 	"tae/pkg/catalog"
+	com "tae/pkg/common"
 	"tae/pkg/txn/txnbase"
 	"testing"
 	"time"
+
+	"github.com/matrixorigin/matrixone/pkg/vm/engine/aoe/storage/common"
 
 	"github.com/RoaringBitmap/roaring"
 	"github.com/RoaringBitmap/roaring/roaring64"
 	"github.com/matrixorigin/matrixone/pkg/container/nulls"
 	"github.com/matrixorigin/matrixone/pkg/container/types"
 	gvec "github.com/matrixorigin/matrixone/pkg/container/vector"
-	"github.com/matrixorigin/matrixone/pkg/vm/engine/aoe/storage/common"
 	"github.com/matrixorigin/matrixone/pkg/vm/engine/aoe/storage/mock"
 	"github.com/matrixorigin/matrixone/pkg/vm/engine/aoe/storage/mutation/buffer"
 	"github.com/panjf2000/ants/v2"
@@ -530,6 +532,7 @@ func TestTransaction1(t *testing.T) {
 	// assert.NotNil(t, err)
 	t.Log(db2.String())
 	t.Log(rel.String())
+	t.Log(c.SimplePPString(com.PPL1))
 }
 
 func TestTransaction2(t *testing.T) {

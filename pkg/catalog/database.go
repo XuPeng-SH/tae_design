@@ -3,6 +3,7 @@ package catalog
 import (
 	"fmt"
 	"sync"
+	"tae/pkg/common"
 	"tae/pkg/iface/txnif"
 
 	"github.com/sirupsen/logrus"
@@ -50,6 +51,33 @@ func (e *DBEntry) GetName() string { return e.name }
 
 func (e *DBEntry) String() string {
 	return fmt.Sprintf("DB%s[name=%s]", e.BaseEntry2.String(), e.name)
+}
+
+func (e *DBEntry) MakeTableIt(reverse bool) *LinkIt {
+	return NewLinkIt(e.RWMutex, e.link, reverse)
+}
+
+func (e *DBEntry) PPString(level common.PPLevel, depth int, prefix string) string {
+	s := fmt.Sprintf("%s%s%s", common.RepeatStr("\t", depth), prefix, e.String())
+	if level == common.PPL0 {
+		return s
+	}
+	var body string
+	it := e.MakeTableIt(true)
+	for it.Valid() {
+		table := it.curr.payload.(*TableEntry)
+		if len(body) == 0 {
+			body = table.PPString(level, depth+1, "")
+		} else {
+			body = fmt.Sprintf("%s\n%s", body, table.PPString(level, depth+1, ""))
+		}
+		it.Next()
+	}
+
+	if len(body) == 0 {
+		return s
+	}
+	return fmt.Sprintf("%s\n%s", s, body)
 }
 
 func (e *DBEntry) txnGetNodeByNameLocked(name string, txnCtx txnif.AsyncTxn) *DLNode {

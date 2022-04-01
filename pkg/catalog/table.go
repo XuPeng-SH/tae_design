@@ -3,6 +3,7 @@ package catalog
 import (
 	"fmt"
 	"sync"
+	"tae/pkg/common"
 	"tae/pkg/iface/txnif"
 )
 
@@ -72,14 +73,12 @@ func (entry *TableEntry) GetDB() *DBEntry {
 	return entry.db
 }
 
+func (entry *TableEntry) PPString(level common.PPLevel, depth int, prefix string) string {
+	return fmt.Sprintf("%s%s%s", common.RepeatStr("\t", depth), prefix, entry.String())
+}
+
 func (entry *TableEntry) String() string {
 	entry.RLock()
 	defer entry.RUnlock()
 	return fmt.Sprintf("TABLE%s[name=%s]", entry.BaseEntry2.String(), entry.schema.Name)
-	// s := fmt.Sprintf("TABLE<%d>[\"%s\"]: [%d-%d],[%d-%d]", entry.ID, entry.schema.Name, entry.CreateStartTS, entry.CreateCommitTS, entry.DropStartTS, entry.DropCommitTS)
-	// s := fmt.Sprintf("TABLE<%d>[\"%s\"]: [%d-%d]", entry.ID, entry.schema.Name, entry.CreateAt, entry.DeleteAt)
-	// if entry.Txn != nil {
-	// 	s = fmt.Sprintf("%s, [%d-%d]", s, entry.Txn.GetStartTS(), entry.Txn.GetCommitTS())
-	// }
-	// return s
 }

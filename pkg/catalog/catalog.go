@@ -1,7 +1,9 @@
 package catalog
 
 import (
+	"fmt"
 	"sync"
+	"tae/pkg/common"
 	"tae/pkg/iface/txnif"
 
 	"github.com/jiangxinmeng1/logstore/pkg/store"
@@ -86,6 +88,37 @@ func (catalog *Catalog) addEntryLocked(database *DBEntry) error {
 		nn.CreateNode(database.GetID())
 	}
 	return nil
+}
+
+func (catalog *Catalog) MakeDBIt(reverse bool) *LinkIt {
+	return NewLinkIt(catalog.RWMutex, catalog.link, reverse)
+}
+
+func (catalog *Catalog) SimplePPString(level common.PPLevel) string {
+	return catalog.PPString(level, 0, "")
+}
+
+func (catalog *Catalog) PPString(level common.PPLevel, depth int, prefix string) string {
+	cnt := 0
+	var body string
+	it := catalog.MakeDBIt(true)
+	for it.Valid() {
+		cnt++
+		table := it.curr.payload.(*DBEntry)
+		if len(body) == 0 {
+			body = table.PPString(level, depth+1, "")
+		} else {
+			body = fmt.Sprintf("%s\n%s", body, table.PPString(level, depth+1, ""))
+		}
+		it.Next()
+	}
+
+	head := fmt.Sprintf("CATALOG[CNT=%d]", cnt)
+
+	if len(body) == 0 {
+		return head
+	}
+	return fmt.Sprintf("%s\n%s", head, body)
 }
 
 func (catalog *Catalog) RemoveEntry(database *DBEntry) error {
