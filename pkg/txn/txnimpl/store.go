@@ -110,6 +110,7 @@ func (store *txnStore) GetDatabase(name string) (db handle.Database, err error) 
 		return
 	}
 	db = newDatabase(store.txn, meta)
+	store.database = db
 	return
 }
 
@@ -208,6 +209,11 @@ func (store *txnStore) PrepareCommit() (err error) {
 	for _, table := range store.tables {
 		if err = table.PrepareCommit(); err != nil {
 			break
+		}
+	}
+	if store.dropEntry != nil {
+		if err = store.dropEntry.PrepareCommit(); err != nil {
+			return
 		}
 	}
 	return

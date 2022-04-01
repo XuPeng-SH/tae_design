@@ -68,6 +68,10 @@ func (entry *TableEntry) Compare(o NodePayload) int {
 	return entry.DoCompre(oe)
 }
 
+func (entry *TableEntry) GetDB() *DBEntry {
+	return entry.db
+}
+
 func (entry *TableEntry) String() string {
 	entry.RLock()
 	defer entry.RUnlock()

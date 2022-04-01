@@ -286,6 +286,18 @@ func (tbl *txnTable) PrepareCommit() (err error) {
 		return
 	}
 	tbl.entry.RUnlock()
+	if tbl.createEntry != nil || tbl.dropEntry != nil {
+		dbEntry := tbl.entry.GetDB()
+		commitTs := tbl.entry.GetTxn().GetCommitTS()
+		dbEntry.RLock()
+		if dbEntry.DeleteBefore(commitTs) {
+			err = txnif.TxnRWConflictErr
+		}
+		dbEntry.RUnlock()
+	}
+	if err != nil {
+		return err
+	}
 	if tbl.createEntry != nil {
 		if err = tbl.createEntry.PrepareCommit(); err != nil {
 			return

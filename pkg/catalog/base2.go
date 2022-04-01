@@ -192,7 +192,7 @@ func (be *BaseEntry2) CreateAndDropInSameTxn() bool {
 }
 
 func (be *BaseEntry2) String() string {
-	s := fmt.Sprintf("[ID=%d][%d,%d]", be.ID, be.CreateAt, be.DeleteAt)
+	s := fmt.Sprintf("[Op=%s][ID=%d][%d,%d]", OpNames[be.CurrOp], be.ID, be.CreateAt, be.DeleteAt)
 	if be.Txn != nil {
 		s = fmt.Sprintf("%s%s", s, be.Txn.Repr())
 	}

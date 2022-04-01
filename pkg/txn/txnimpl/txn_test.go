@@ -482,7 +482,57 @@ func TestTxnManager1(t *testing.T) {
 	assert.Equal(t, expected, seqs)
 }
 
+func initTestContext(t *testing.T, dir string) (*catalog.Catalog, *txnbase.TxnManager) {
+	c := catalog.MockCatalog(dir, "mock", nil)
+	mgr := txnbase.NewTxnManager(TxnStoreFactory(c), TxnFactory(c))
+	mgr.Start()
+	return c, mgr
+}
+
+// 1. Txn1 create database "db" and table "tb1". Commit
+// 2. Txn2 drop database
+// 3. Txn3 create table "tb2"
+// 4. Txn2 commit
+// 5. Txn3 commit
 func TestTransaction1(t *testing.T) {
+	dir := initTestPath(t)
+	c, mgr := initTestContext(t, dir)
+	defer c.Close()
+	defer mgr.Stop()
+
+	txn1 := mgr.StartTxn(nil)
+	name := "db"
+	schema := catalog.MockSchema(1)
+	db, err := txn1.CreateDatabase(name)
+	assert.Nil(t, err)
+	_, err = db.CreateRelation(schema)
+	assert.Nil(t, err)
+	err = txn1.Commit()
+	assert.Nil(t, err)
+
+	txn2 := mgr.StartTxn(nil)
+	db2, err := txn2.DropDatabase(name)
+	assert.Nil(t, err)
+	t.Log(db2.String())
+
+	txn3 := mgr.StartTxn(nil)
+	db3, err := txn3.GetDatabase(name)
+	assert.Nil(t, err)
+	t.Log(db3.String())
+	schema = catalog.MockSchema(1)
+	rel, err := db3.CreateRelation(schema)
+	assert.Nil(t, err)
+	t.Log(rel.String())
+
+	err = txn2.Commit()
+	assert.Nil(t, err)
+	err = txn3.Commit()
+	// assert.NotNil(t, err)
+	t.Log(db2.String())
+	t.Log(rel.String())
+}
+
+func TestTransaction2(t *testing.T) {
 	dir := initTestPath(t)
 	c := catalog.MockCatalog(dir, "mock", nil)
 	defer c.Close()
