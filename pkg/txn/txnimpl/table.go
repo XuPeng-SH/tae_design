@@ -39,8 +39,8 @@ type Table interface {
 	IsDeleted() bool
 	PrepareCommit() error
 	PrepareRollback() error
-	Commit() error
-	Rollback() error
+	ApplyCommit() error
+	ApplyRollback() error
 
 	SetCreateEntry(txnif.TxnEntry)
 	SetDropEntry(txnif.TxnEntry)
@@ -327,7 +327,7 @@ func (tbl *txnTable) PrepareCommit() (err error) {
 	return
 }
 
-func (tbl *txnTable) Commit() (err error) {
+func (tbl *txnTable) ApplyCommit() (err error) {
 	tbl.entry.RLock()
 	if tbl.entry.CreateAndDropInSameTxn() {
 		tbl.entry.RUnlock()
@@ -336,11 +336,11 @@ func (tbl *txnTable) Commit() (err error) {
 	}
 	tbl.entry.RUnlock()
 	if tbl.createEntry != nil {
-		if err = tbl.createEntry.Commit(); err != nil {
+		if err = tbl.createEntry.ApplyCommit(); err != nil {
 			return
 		}
 	} else if tbl.dropEntry != nil {
-		if err = tbl.dropEntry.Commit(); err != nil {
+		if err = tbl.dropEntry.ApplyCommit(); err != nil {
 			return
 		}
 	}
@@ -348,9 +348,9 @@ func (tbl *txnTable) Commit() (err error) {
 	return
 }
 
-func (tbl *txnTable) Rollback() (err error) {
+func (tbl *txnTable) ApplyRollback() (err error) {
 	if tbl.createEntry != nil || tbl.dropEntry != nil {
-		if err = tbl.entry.Rollback(); err != nil {
+		if err = tbl.entry.ApplyRollback(); err != nil {
 			return
 		}
 	}

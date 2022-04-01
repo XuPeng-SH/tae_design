@@ -11,6 +11,13 @@ import (
 	"github.com/matrixorigin/matrixone/pkg/vm/engine/aoe/storage/common"
 )
 
+type Txn2PC interface {
+	PrepareRollback() error
+	PrepareCommit() error
+	ApplyRollback() error
+	ApplyCommit() error
+}
+
 type TxnReader interface {
 	RLock()
 	RUnlock()
@@ -49,10 +56,6 @@ type TxnChanger interface {
 	ToRollbackingLocked(ts uint64) error
 	Commit() error
 	Rollback() error
-	PrepareCommit() error
-	PrepareRollback() error
-	DoCommit() error
-	DoRollback() error
 	SetError(error)
 	SetPrepareCommitFn(func(interface{}) error)
 }
@@ -65,6 +68,7 @@ type TxnAsyncer interface {
 }
 
 type AsyncTxn interface {
+	Txn2PC
 	TxnHandle
 	TxnAsyncer
 	TxnReader
@@ -97,6 +101,7 @@ type ColumnUpdates interface {
 }
 
 type TxnStore interface {
+	Txn2PC
 	io.Closer
 	BindTxn(AsyncTxn)
 
@@ -115,11 +120,6 @@ type TxnStore interface {
 	UseDatabase(name string) error
 
 	AddTxnEntry(TxnEntryType, TxnEntry)
-
-	PrepareCommit() error
-	PrepareRollback() error
-	Commit() error
-	Rollback() error
 }
 
 type TxnEntryType int16
@@ -130,6 +130,6 @@ type TxnEntry interface {
 	RUnlock()
 	PrepareCommit() error
 	PrepareRollback() error
-	Commit() error
-	Rollback() error
+	ApplyCommit() error
+	ApplyRollback() error
 }

@@ -112,11 +112,11 @@ func (mgr *TxnManager) onCommit(items ...interface{}) {
 		op := item.(*OpTxn)
 		switch op.Op {
 		case OpCommit:
-			if err := op.Txn.DoCommit(); err != nil {
+			if err := op.Txn.ApplyCommit(); err != nil {
 				panic(err)
 			}
 		case OpRollback:
-			if err := op.Txn.DoRollback(); err != nil {
+			if err := op.Txn.ApplyRollback(); err != nil {
 				panic(err)
 			}
 		}

@@ -88,11 +88,11 @@ func (be *BaseEntry2) PrepareRollback() error {
 	return nil
 }
 
-func (be *BaseEntry2) Rollback() error {
+func (be *BaseEntry2) ApplyRollback() error {
 	return nil
 }
 
-func (be *BaseEntry2) Commit() error {
+func (be *BaseEntry2) ApplyCommit() error {
 	be.Lock()
 	defer be.Unlock()
 	// if be.Txn == nil {

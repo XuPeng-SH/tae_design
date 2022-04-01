@@ -134,12 +134,12 @@ func (txn *Txn) PrepareCommit() error {
 	return err
 }
 
-func (txn *Txn) DoCommit() error {
-	return txn.Store.Commit()
+func (txn *Txn) ApplyCommit() error {
+	return txn.Store.ApplyCommit()
 }
 
-func (txn *Txn) DoRollback() error {
-	return txn.Store.Rollback()
+func (txn *Txn) ApplyRollback() error {
+	return txn.Store.ApplyRollback()
 }
 
 func (txn *Txn) PrepareRollback() error {

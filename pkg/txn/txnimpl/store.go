@@ -186,32 +186,32 @@ func (store *txnStore) GetRelationByName(name string) (relation handle.Relation,
 	return
 }
 
-func (store *txnStore) Rollback() (err error) {
+func (store *txnStore) ApplyRollback() (err error) {
 	entry := store.createEntry
 	if entry == nil {
 		entry = store.dropEntry
 	}
 	if entry != nil {
-		if err = entry.Rollback(); err != nil {
+		if err = entry.ApplyRollback(); err != nil {
 			return
 		}
 	}
 	for _, table := range store.tables {
-		if err = table.Rollback(); err != nil {
+		if err = table.ApplyRollback(); err != nil {
 			break
 		}
 	}
 	return
 }
 
-func (store *txnStore) Commit() (err error) {
+func (store *txnStore) ApplyCommit() (err error) {
 	if store.createEntry != nil {
-		if err = store.createEntry.Commit(); err != nil {
+		if err = store.createEntry.ApplyCommit(); err != nil {
 			return
 		}
 	}
 	for _, table := range store.tables {
-		if err = table.Commit(); err != nil {
+		if err = table.ApplyCommit(); err != nil {
 			break
 		}
 	}

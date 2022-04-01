@@ -50,9 +50,9 @@ func (store *mockTxnStore) PrepareCommit() error {
 	return nil
 }
 
-func (store *mockTxnStore) Commit() error {
+func (store *mockTxnStore) ApplyCommit() error {
 	for e, _ := range store.entries {
-		err := e.Commit()
+		err := e.ApplyCommit()
 		if err != nil {
 			return err
 		}

@@ -21,8 +21,8 @@ func (store *NoopTxnStore) UpdateLocalValue(id uint64, row uint32, col uint16, v
 func (store *NoopTxnStore) AddUpdateNode(id uint64, node txnif.BlockUpdates) error { return nil }
 func (store *NoopTxnStore) PrepareRollback() error                                 { return nil }
 func (store *NoopTxnStore) PrepareCommit() error                                   { return nil }
-func (store *NoopTxnStore) Rollback() error                                        { return nil }
-func (store *NoopTxnStore) Commit() error                                          { return nil }
+func (store *NoopTxnStore) ApplyRollback() error                                   { return nil }
+func (store *NoopTxnStore) ApplyCommit() error                                     { return nil }
 
 func (store *NoopTxnStore) AddTxnEntry(t txnif.TxnEntryType, entry txnif.TxnEntry) {}
 
