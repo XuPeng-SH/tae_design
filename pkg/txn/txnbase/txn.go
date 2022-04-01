@@ -131,16 +131,20 @@ func (txn *Txn) PrepareCommit() error {
 	}
 	// TODO: process data in store
 	err = txn.Store.PrepareCommit()
-	return txn.Err
+	return err
 }
 
 func (txn *Txn) DoCommit() error {
 	return txn.Store.Commit()
 }
 
+func (txn *Txn) DoRollback() error {
+	return txn.Store.Rollback()
+}
+
 func (txn *Txn) PrepareRollback() error {
 	logrus.Debugf("Prepare Rollbacking %d", txn.ID)
-	return nil
+	return txn.Store.PrepareRollback()
 }
 
 func (txn *Txn) WaitDone() error {

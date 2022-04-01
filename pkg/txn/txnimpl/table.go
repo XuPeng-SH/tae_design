@@ -38,12 +38,12 @@ type Table interface {
 	AddUpdateNode(txnif.BlockUpdates) error
 	IsDeleted() bool
 	PrepareCommit() error
+	PrepareRollback() error
 	Commit() error
+	Rollback() error
 
 	SetCreateEntry(txnif.TxnEntry)
 	SetDropEntry(txnif.TxnEntry)
-	// Commit() error
-	// Rollback() error
 }
 
 type txnTable struct {
@@ -278,6 +278,22 @@ func (tbl *txnTable) GetLocalValue(row uint32, col uint16) (interface{}, error) 
 	return n.GetValue(int(col), noffset)
 }
 
+func (tbl *txnTable) PrepareRollback() (err error) {
+	if tbl.createEntry != nil {
+		entry := tbl.createEntry.(*catalog.TableEntry)
+		if err = entry.GetDB().RemoveEntry(entry); err != nil {
+			return
+		}
+	}
+	if tbl.createEntry != nil || tbl.dropEntry != nil {
+		if err = tbl.entry.PrepareRollback(); err != nil {
+			return
+		}
+	}
+	// TODO: remove all inserts and updates
+	return
+}
+
 func (tbl *txnTable) PrepareCommit() (err error) {
 	tbl.entry.RLock()
 	if tbl.entry.CreateAndDropInSameTxn() {
@@ -329,6 +345,16 @@ func (tbl *txnTable) Commit() (err error) {
 		}
 	}
 	// TODO
+	return
+}
+
+func (tbl *txnTable) Rollback() (err error) {
+	if tbl.createEntry != nil || tbl.dropEntry != nil {
+		if err = tbl.entry.Rollback(); err != nil {
+			return
+		}
+	}
+	// TODO: rollback all inserts and updates
 	return
 }
 

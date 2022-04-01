@@ -186,6 +186,24 @@ func (store *txnStore) GetRelationByName(name string) (relation handle.Relation,
 	return
 }
 
+func (store *txnStore) Rollback() (err error) {
+	entry := store.createEntry
+	if entry == nil {
+		entry = store.dropEntry
+	}
+	if entry != nil {
+		if err = entry.Rollback(); err != nil {
+			return
+		}
+	}
+	for _, table := range store.tables {
+		if err = table.Rollback(); err != nil {
+			break
+		}
+	}
+	return
+}
+
 func (store *txnStore) Commit() (err error) {
 	if store.createEntry != nil {
 		if err = store.createEntry.Commit(); err != nil {
@@ -229,9 +247,25 @@ func (store *txnStore) AddTxnEntry(t txnif.TxnEntryType, entry txnif.TxnEntry) {
 	// }
 }
 
-// func (store *txnStore) PrepareRollback() error { return nil }
-// func (store *txnStore) Rollback() error        { return nil }
-// func (store *txnStore) Commit() error          { return nil }
+func (store *txnStore) PrepareRollback() error {
+	var err error
+	if store.createEntry != nil {
+		if err := store.catalog.RemoveEntry(store.createEntry.(*catalog.DBEntry)); err != nil {
+			return err
+		}
+	} else if store.dropEntry != nil {
+		if err := store.createEntry.(*catalog.DBEntry).PrepareRollback(); err != nil {
+			return err
+		}
+	}
+
+	for _, table := range store.tables {
+		if err = table.PrepareRollback(); err != nil {
+			break
+		}
+	}
+	return err
+}
 
 // func (store *txnStore) FindKeys(db, table uint64, keys [][]byte) []uint32 {
 // 	// TODO

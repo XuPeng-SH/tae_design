@@ -88,7 +88,10 @@ func (catalog *Catalog) addEntryLocked(database *DBEntry) error {
 	return nil
 }
 
-func (catalog *Catalog) removeEntryLocked(database *DBEntry) error {
+func (catalog *Catalog) RemoveEntry(database *DBEntry) error {
+	// logrus.Infof("Removing: %s", database.String())
+	catalog.Lock()
+	defer catalog.Unlock()
 	if n, ok := catalog.entries[database.GetID()]; !ok {
 		return ErrNotFound
 	} else {

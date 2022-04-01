@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"sync"
 	"tae/pkg/iface/txnif"
+
+	"github.com/sirupsen/logrus"
 )
 
 type DBEntry struct {
@@ -94,6 +96,20 @@ func (e *DBEntry) CreateTableEntry(schema *Schema, txnCtx txnif.AsyncTxn) (creat
 	e.Unlock()
 
 	return created, err
+}
+
+func (e *DBEntry) RemoveEntry(table *TableEntry) error {
+	logrus.Infof("Removing: %s", table.String())
+	e.Lock()
+	defer e.Unlock()
+	if n, ok := e.entries[table.GetID()]; !ok {
+		return ErrNotFound
+	} else {
+		nn := e.nameNodes[table.GetSchema().Name]
+		nn.DeleteNode(table.GetID())
+		e.link.Delete(n)
+	}
+	return nil
 }
 
 func (e *DBEntry) addEntryLocked(table *TableEntry) error {

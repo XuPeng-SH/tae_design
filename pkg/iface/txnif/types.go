@@ -52,6 +52,7 @@ type TxnChanger interface {
 	PrepareCommit() error
 	PrepareRollback() error
 	DoCommit() error
+	DoRollback() error
 	SetError(error)
 	SetPrepareCommitFn(func(interface{}) error)
 }
@@ -116,9 +117,9 @@ type TxnStore interface {
 	AddTxnEntry(TxnEntryType, TxnEntry)
 
 	PrepareCommit() error
-	// PrepareRollback() error
+	PrepareRollback() error
 	Commit() error
-	// Rollback() error
+	Rollback() error
 }
 
 type TxnEntryType int16
@@ -128,7 +129,7 @@ type TxnEntry interface {
 	RLock()
 	RUnlock()
 	PrepareCommit() error
-	// PrepareRollback() error
+	PrepareRollback() error
 	Commit() error
-	// Rollback() error
+	Rollback() error
 }

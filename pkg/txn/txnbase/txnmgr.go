@@ -110,8 +110,15 @@ func (mgr *TxnManager) onPreparing(items ...interface{}) {
 func (mgr *TxnManager) onCommit(items ...interface{}) {
 	for _, item := range items {
 		op := item.(*OpTxn)
-		if err := op.Txn.DoCommit(); err != nil {
-			panic(err)
+		switch op.Op {
+		case OpCommit:
+			if err := op.Txn.DoCommit(); err != nil {
+				panic(err)
+			}
+		case OpRollback:
+			if err := op.Txn.DoRollback(); err != nil {
+				panic(err)
+			}
 		}
 		op.Txn.WaitDone()
 		logrus.Debugf("%s Done", op.Repr())

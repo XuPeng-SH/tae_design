@@ -27,6 +27,7 @@ type CommitInfo2 struct {
 type BaseEntry2 struct {
 	*sync.RWMutex
 	CommitInfo2
+	PrevCommit         *CommitInfo2
 	ID                 uint64
 	CreateAt, DeleteAt uint64
 }
@@ -77,11 +78,28 @@ func (be *BaseEntry2) PrepareCommit() error {
 	return nil
 }
 
+func (be *BaseEntry2) PrepareRollback() error {
+	be.Lock()
+	defer be.Unlock()
+	if be.PrevCommit != nil {
+		be.CurrOp = be.PrevCommit.CurrOp
+	}
+	be.Txn = nil
+	return nil
+}
+
+func (be *BaseEntry2) Rollback() error {
+	return nil
+}
+
 func (be *BaseEntry2) Commit() error {
 	be.Lock()
 	defer be.Unlock()
-	if be.Txn == nil {
-		panic("logic error")
+	// if be.Txn == nil {
+	// 	panic("logic error")
+	// }
+	if be.PrevCommit != nil {
+		be.PrevCommit = nil
 	}
 	be.Txn = nil
 	return nil
@@ -130,6 +148,9 @@ func (be *BaseEntry2) DropEntryLocked(txnCtx txnif.TxnReader) error {
 		}
 		if be.CreateAt > txnCtx.GetStartTS() {
 			panic("unexpected")
+		}
+		be.PrevCommit = &CommitInfo2{
+			CurrOp: be.CurrOp,
 		}
 		be.Txn = txnCtx
 		be.CurrOp = OpSoftDelete
