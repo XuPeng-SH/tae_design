@@ -237,7 +237,12 @@ func (store *txnStore) PrepareCommit() (err error) {
 	// TODO: prepare commit inserts and updates
 
 	// if store.createEntry != nil {
-	// 	store.createEntry.MarshalTxnRecord()
+	// 	cmd, err := store.createEntry.MakeCommand(0)
+	// 	if err != nil {
+	// 		panic(err)
+	// 	}
+	// 	buf, _ := cmd.Marshal()
+	// 	logrus.Info(buf)
 	// }
 	return
 }

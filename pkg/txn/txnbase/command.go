@@ -21,16 +21,16 @@ const (
 )
 
 func init() {
-	txnif.RegisterCmdFactory(CmdPointer, func() txnif.TxnCmd {
+	txnif.RegisterCmdFactory(CmdPointer, func(int16) txnif.TxnCmd {
 		return new(PointerCmd)
 	})
-	txnif.RegisterCmdFactory(CmdDeleteBitmap, func() txnif.TxnCmd {
+	txnif.RegisterCmdFactory(CmdDeleteBitmap, func(int16) txnif.TxnCmd {
 		return new(DeleteBitmapCmd)
 	})
-	txnif.RegisterCmdFactory(CmdBatch, func() txnif.TxnCmd {
+	txnif.RegisterCmdFactory(CmdBatch, func(int16) txnif.TxnCmd {
 		return new(BatchCmd)
 	})
-	txnif.RegisterCmdFactory(CmdComposed, func() txnif.TxnCmd {
+	txnif.RegisterCmdFactory(CmdComposed, func(int16) txnif.TxnCmd {
 		return new(ComposedCmd)
 	})
 }
@@ -304,7 +304,7 @@ func BuildCommandFrom(r io.Reader) (cmd txnif.TxnCmd, err error) {
 
 	factory := txnif.GetCmdFactory(cmdType)
 
-	cmd = factory()
+	cmd = factory(cmdType)
 	err = cmd.ReadFrom(r)
 	return
 }

@@ -16,7 +16,7 @@ const (
 )
 
 func init() {
-	txnif.RegisterCmdFactory(CmdAppend, func() txnif.TxnCmd {
+	txnif.RegisterCmdFactory(CmdAppend, func(int16) txnif.TxnCmd {
 		return NewEmptyAppendCmd()
 	})
 }
@@ -48,6 +48,9 @@ func (c *AppendCmd) String() string {
 
 func (e *AppendCmd) GetType() int16 { return CmdAppend }
 func (c *AppendCmd) WriteTo(w io.Writer) (err error) {
+	if err = binary.Write(w, binary.BigEndian, c.GetType()); err != nil {
+		return
+	}
 	if err = binary.Write(w, binary.BigEndian, c.ID); err != nil {
 		return
 	}

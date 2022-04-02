@@ -14,7 +14,7 @@ type TxnCmd interface {
 	String() string
 }
 
-type CmdFactory func() TxnCmd
+type CmdFactory func(int16) TxnCmd
 
 var cmdFactories = map[int16]CmdFactory{}
 

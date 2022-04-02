@@ -42,45 +42,15 @@ func MockStaloneTableEntry(id uint64, schema *Schema) *TableEntry {
 	}
 }
 
-// func (entry *TableEntry) MarshalTxnRecord() (buf []byte, err error) {
-// 	entry.RLock()
-// 	if entry.CreateAndDropInSameTxn() {
-// 		entry.RUnlock()
-// 		return
-// 	}
-// 	var w bytes.Buffer
-// 	switch entry.CurrOp {
-// 	case OpCreate:
-// 		if err = binary.Write(&w, binary.BigEndian, TxnETCreateTable); err != nil {
-// 			return
-// 		}
-// 		if err = binary.Write(&w, binary.BigEndian, entry.GetID()); err != nil {
-// 			return
-// 		}
-// 		if err = binary.Write(&w, binary.BigEndian, entry.CreateAt); err != nil {
-// 			return
-// 		}
-// 		var schemaBuf []byte
-// 		if schemaBuf, err = entry.schema.Marshal(); err != nil {
-// 			return
-// 		}
-// 		if _, err = w.Write(schemaBuf); err != nil {
-// 			return
-// 		}
-// 	case OpSoftDelete:
-// 		if err = binary.Write(&w, binary.BigEndian, TxnETDropTable); err != nil {
-// 			return
-// 		}
-// 		if err = binary.Write(&w, binary.BigEndian, entry.GetID()); err != nil {
-// 			return
-// 		}
-// 		if err = binary.Write(&w, binary.BigEndian, entry.DeleteAt); err != nil {
-// 			return
-// 		}
-// 	}
-// 	buf = w.Bytes()
-// 	return
-// }
+func (entry *TableEntry) MakeCommand(id uint32) (cmd txnif.TxnCmd, err error) {
+	cmdType := CmdCreateTable
+	entry.RLock()
+	defer entry.RUnlock()
+	if entry.CurrOp == OpSoftDelete {
+		cmdType = CmdDropTable
+	}
+	return newTableCmd(id, cmdType, entry), nil
+}
 
 func (entry *TableEntry) addEntryLocked(segment *SegmentEntry) {
 	n := entry.link.Insert(segment)

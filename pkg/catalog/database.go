@@ -176,6 +176,16 @@ func (e *DBEntry) addEntryLocked(table *TableEntry) error {
 	return nil
 }
 
+func (e *DBEntry) MakeCommand(id uint32) (txnif.TxnCmd, error) {
+	cmdType := CmdCreateDatabase
+	e.RLock()
+	defer e.RUnlock()
+	if e.CurrOp == OpSoftDelete {
+		cmdType = CmdDropDatabase
+	}
+	return newDBCmd(id, cmdType, e), nil
+}
+
 // func (e *DBEntry) MarshalTxnRecord() (buf []byte, err error) {
 // 	e.RLock()
 // 	defer e.RUnlock()

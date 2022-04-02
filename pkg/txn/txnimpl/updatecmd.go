@@ -9,7 +9,7 @@ import (
 )
 
 func init() {
-	txnif.RegisterCmdFactory(CmdUpdate, func() txnif.TxnCmd {
+	txnif.RegisterCmdFactory(CmdUpdate, func(int16) txnif.TxnCmd {
 		return NewEmptyUpdateCmd()
 	})
 }
