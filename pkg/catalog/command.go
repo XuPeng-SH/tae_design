@@ -59,7 +59,9 @@ func newDBCmd(id uint32, cmdType int16, entry *DBEntry) *entryCmd {
 	impl := &entryCmd{
 		db:      entry,
 		cmdType: cmdType,
-		entry:   entry.BaseEntry2,
+	}
+	if entry != nil {
+		impl.entry = entry.BaseEntry2
 	}
 	impl.BaseCustomizedCmd = txnbase.NewBaseCustomizedCmd(id, impl)
 	return impl
@@ -73,6 +75,9 @@ func (cmd *entryCmd) GetType() int16 { return cmd.cmdType }
 
 func (cmd *entryCmd) WriteTo(w io.Writer) (err error) {
 	if err = binary.Write(w, binary.BigEndian, cmd.GetType()); err != nil {
+		return
+	}
+	if err = binary.Write(w, binary.BigEndian, cmd.ID); err != nil {
 		return
 	}
 	if err = binary.Write(w, binary.BigEndian, cmd.entry.GetID()); err != nil {
@@ -98,9 +103,6 @@ func (cmd *entryCmd) WriteTo(w io.Writer) (err error) {
 			return
 		}
 	case CmdDropDatabase, CmdDropTable:
-		if err = binary.Write(w, binary.BigEndian, cmd.entry.GetID()); err != nil {
-			return
-		}
 		if err = binary.Write(w, binary.BigEndian, cmd.entry.DeleteAt); err != nil {
 			return
 		}
@@ -116,7 +118,40 @@ func (cmd *entryCmd) Marshal() (buf []byte, err error) {
 	return
 }
 func (cmd *entryCmd) ReadFrom(r io.Reader) (err error) {
-	// if err = binary.Read()
+	if err = binary.Read(r, binary.BigEndian, &cmd.ID); err != nil {
+		return
+	}
+	cmd.entry = &BaseEntry2{}
+	if err = binary.Read(r, binary.BigEndian, &cmd.entry.ID); err != nil {
+		return
+	}
+	switch cmd.GetType() {
+	case CmdCreateDatabase:
+		if err = binary.Read(r, binary.BigEndian, &cmd.entry.CreateAt); err != nil {
+			return
+		}
+		cmd.db = &DBEntry{
+			BaseEntry2: cmd.entry,
+		}
+		if cmd.db.name, err = common.ReadString(r); err != nil {
+			return
+		}
+	case CmdCreateTable:
+		if err = binary.Read(r, binary.BigEndian, &cmd.entry.CreateAt); err != nil {
+			return
+		}
+		cmd.table = &TableEntry{
+			BaseEntry2: cmd.entry,
+			schema:     new(Schema),
+		}
+		if err = cmd.table.schema.ReadFrom(r); err != nil {
+			return
+		}
+	case CmdDropTable, CmdDropDatabase:
+		if err = binary.Read(r, binary.BigEndian, &cmd.entry.DeleteAt); err != nil {
+			return
+		}
+	}
 	return
 }
 func (cmd *entryCmd) Unmarshal(buf []byte) (err error) {

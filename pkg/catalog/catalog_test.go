@@ -1,6 +1,7 @@
 package catalog
 
 import (
+	"bytes"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -10,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/matrixorigin/matrixone/pkg/vm/engine/aoe/storage/common"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -325,4 +327,76 @@ func TestTable1(t *testing.T) {
 		go flow()
 	}
 	wg.Wait()
+}
+
+func TestCommand(t *testing.T) {
+	dir := initTestPath(t)
+	catalog := MockCatalog(dir, "mock", nil)
+	defer catalog.Close()
+	name := "db"
+
+	db := NewDBEntry(catalog, name, nil)
+	db.CreateAt = common.NextGlobalSeqNum()
+	db.CurrOp = OpCreate
+	db.ID = uint64(99)
+
+	cdb, err := db.MakeCommand(0)
+	assert.Nil(t, err)
+
+	var w bytes.Buffer
+	err = cdb.WriteTo(&w)
+	assert.Nil(t, err)
+
+	buf := w.Bytes()
+	r := bytes.NewBuffer(buf)
+
+	cmd, err := txnbase.BuildCommandFrom(r)
+	assert.Nil(t, err)
+	t.Log(cmd.GetType())
+	eCmd := cmd.(*entryCmd)
+	assert.Equal(t, db.CreateAt, eCmd.db.CreateAt)
+	assert.Equal(t, db.name, eCmd.db.name)
+	assert.Equal(t, db.ID, eCmd.entry.ID)
+
+	db.CurrOp = OpSoftDelete
+	db.DeleteAt = common.NextGlobalSeqNum()
+
+	cdb, err = db.MakeCommand(1)
+	assert.Nil(t, err)
+
+	w.Reset()
+	err = cdb.WriteTo(&w)
+	assert.Nil(t, err)
+
+	buf = w.Bytes()
+	r = bytes.NewBuffer(buf)
+
+	cmd, err = txnbase.BuildCommandFrom(r)
+	assert.Nil(t, err)
+
+	eCmd = cmd.(*entryCmd)
+	assert.Equal(t, db.DeleteAt, eCmd.entry.DeleteAt)
+	assert.Equal(t, db.ID, eCmd.entry.ID)
+
+	schema := MockSchemaAll(13)
+	tb := NewTableEntry(db, schema, nil)
+	tb.CreateAt = common.NextGlobalSeqNum()
+	tb.ID = common.NextGlobalSeqNum()
+
+	w.Reset()
+	cmd, err = tb.MakeCommand(2)
+	assert.Nil(t, err)
+
+	err = cmd.WriteTo(&w)
+	assert.Nil(t, err)
+
+	buf = w.Bytes()
+	r = bytes.NewBuffer(buf)
+
+	cmd, err = txnbase.BuildCommandFrom(r)
+	assert.Nil(t, err)
+	eCmd = cmd.(*entryCmd)
+	assert.Equal(t, tb.ID, eCmd.table.ID)
+	assert.Equal(t, tb.CreateAt, eCmd.table.CreateAt)
+	assert.Equal(t, tb.GetSchema().Name, eCmd.table.GetSchema().Name)
 }

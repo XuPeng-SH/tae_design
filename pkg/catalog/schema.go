@@ -5,6 +5,7 @@ import (
 	"encoding/binary"
 	"encoding/json"
 	"fmt"
+	"io"
 	"math/rand"
 	"tae/pkg/common"
 	"time"
@@ -49,7 +50,7 @@ type Schema struct {
 	ColDefs          []*ColDef      `json:"cols"`
 	NameIndex        map[string]int `json:"nindex"`
 	BlockMaxRows     uint64         `json:"blkrows"`
-	PrimaryKey       int            `json:"primarykey"`
+	PrimaryKey       int32          `json:"primarykey"`
 	SegmentMaxBlocks uint64         `json:"segblocks"`
 }
 
@@ -59,6 +60,39 @@ func NewEmptySchema(name string) *Schema {
 		ColDefs:   make([]*ColDef, 0),
 		NameIndex: make(map[string]int),
 	}
+}
+
+func (s *Schema) ReadFrom(r io.Reader) (err error) {
+	if err = binary.Read(r, binary.BigEndian, &s.BlockMaxRows); err != nil {
+		return
+	}
+	if err = binary.Read(r, binary.BigEndian, &s.PrimaryKey); err != nil {
+		return
+	}
+	if err = binary.Read(r, binary.BigEndian, &s.SegmentMaxBlocks); err != nil {
+		return
+	}
+	if s.Name, err = common.ReadString(r); err != nil {
+		return
+	}
+	colCnt := uint16(0)
+	if err = binary.Read(r, binary.BigEndian, &colCnt); err != nil {
+		return
+	}
+	colBuf := make([]byte, encoding.TypeSize)
+	for i := uint16(0); i < colCnt; i++ {
+		if _, err = r.Read(colBuf); err != nil {
+			return
+		}
+		colDef := new(ColDef)
+		colDef.Type = encoding.DecodeType(colBuf)
+		if colDef.Name, err = common.ReadString(r); err != nil {
+			return
+		}
+		s.ColDefs = append(s.ColDefs, colDef)
+		colDef.Idx = int(i)
+	}
+	return
 }
 
 func (s *Schema) Marshal() (buf []byte, err error) {
