@@ -43,6 +43,7 @@ func NewAppendCmd(id uint32, node InsertNode) *AppendCmd {
 func (c *AppendCmd) String() string {
 	s := fmt.Sprintf("AppendCmd: ID=%d", c.ID)
 	s = fmt.Sprintf("%s\n%s", s, c.ComposedCmd.ToString("\t"))
+	s = fmt.Sprintf("%s\n%s",s,c.Node.SubCommandInfoToString())
 	return s
 }
 
@@ -51,7 +52,10 @@ func (c *AppendCmd) WriteTo(w io.Writer) (err error) {
 	if err = binary.Write(w, binary.BigEndian, c.ID); err != nil {
 		return
 	}
-	err = c.ComposedCmd.WriteTo(w)
+	if err = c.ComposedCmd.WriteTo(w); err != nil {
+		return
+	}
+	err = c.Node.WriteSubCommandInfo(w)
 	return err
 }
 
@@ -59,7 +63,10 @@ func (c *AppendCmd) ReadFrom(r io.Reader) (err error) {
 	if err = binary.Read(r, binary.BigEndian, &c.ID); err != nil {
 		return
 	}
-	err = c.ComposedCmd.ReadFrom(r)
+	if err = c.ComposedCmd.ReadFrom(r); err != nil {
+		return
+	}
+	err = c.Node.ReadSubCommandInfo(r)
 	return
 }
 

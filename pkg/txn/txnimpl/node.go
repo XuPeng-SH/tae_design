@@ -2,7 +2,9 @@ package txnimpl
 
 import (
 	"bytes"
+	"encoding/binary"
 	"fmt"
+	"io"
 	"sync/atomic"
 	"tae/pkg/iface/txnif"
 	"tae/pkg/txn/txnbase"
@@ -44,17 +46,22 @@ type InsertNode interface {
 	GetValue(col int, row uint32) (interface{}, error)
 	MakeCommand(uint32, bool) (txnif.TxnCmd, txnbase.NodeEntry, error)
 	ToTransient()
+	WriteSubCommandInfo(w io.Writer) error
+	ReadSubCommandInfo(r io.Reader) error
+	SubCommandInfoToString() string
 }
 
 type insertNode struct {
 	*buffer.Node
-	driver  txnbase.NodeDriver
-	data    batch.IBatch
-	lsn     uint64
-	typ     txnbase.NodeState
-	deletes *roaring.Bitmap
-	rows    uint32
-	table   Table
+	driver           txnbase.NodeDriver
+	data             batch.IBatch
+	lsn              uint64
+	typ              txnbase.NodeState
+	deletes          *roaring.Bitmap
+	rows             uint32
+	table            Table
+	subCommandsCount uint32
+	infos            [][]byte
 }
 
 func NewInsertNode(tbl Table, mgr base.INodeManager, id common.ID, driver txnbase.NodeDriver) *insertNode {
@@ -92,6 +99,106 @@ func (n *insertNode) MakeCommand(id uint32, forceFlush bool) (cmd txnif.TxnCmd, 
 		composedCmd.AddCmd(delCmd)
 	}
 	return composedCmd, entry, nil
+}
+
+func (n *insertNode) MakeSubCommands(seg *mockBlocks) error {
+	blk := seg.GetBlock()
+	offset := uint32(0)
+	appended, err, info := blk.PrepareAppend(n.data, offset)
+	if err != nil {
+		return err
+	}
+	n.appendSubcommandInfo(info)
+	offset += appended
+	for offset < n.rows {
+		seg.CreateBlock()
+		blk = seg.GetBlock()
+		appended, err, info = blk.PrepareAppend(n.data, offset)
+		if err != nil {
+			return err
+		}
+		n.appendSubcommandInfo(info)
+		offset += appended
+	}
+	return nil
+}
+
+func (n *insertNode) appendSubcommandInfo(info []byte) {
+	n.subCommandsCount++
+	if n.infos == nil {
+		n.infos = make([][]byte, 0)
+	}
+	n.infos = append(n.infos, info)
+}
+
+func (n *insertNode) marshalSubCommandInfo() []byte {
+	buf := make([]byte, 128)
+	pos := 0
+	length := len(n.infos)
+	binary.BigEndian.PutUint32(buf[pos:pos+8], uint32(length))
+	pos += 4
+	for _, info := range n.infos {
+		length := len(info)
+		if pos+length+8 < len(buf) {
+			buf = append(buf, make([]byte, 128)...)
+		}
+		binary.BigEndian.PutUint64(buf[pos:pos+8], uint64(length))
+		pos += 8
+		copy(buf[pos:pos+length], info)
+		pos += length
+	}
+	return buf[:pos]
+}
+
+func (n *insertNode) UnmarshalSubCommandInfo(buf []byte) {
+	pos := 0
+	length := binary.BigEndian.Uint32(buf[pos : pos+4])
+	pos += 4
+	n.infos = make([][]byte, length)
+	for i := range n.infos {
+		length := binary.BigEndian.Uint64(buf[pos : pos+8])
+		pos += 8
+		n.infos[i] = make([]byte, length)
+		copy(n.infos[i], buf[pos:pos+int(length)])
+		pos += int(length)
+	}
+}
+
+func (n *insertNode) WriteSubCommandInfo(w io.Writer) (err error) {
+	if err = binary.Write(w, binary.BigEndian, n.subCommandsCount); err != nil {
+		return
+	}
+	buf := n.marshalSubCommandInfo()
+	length := uint64(len(buf))
+	if err = binary.Write(w, binary.BigEndian, length); err != nil {
+		return
+	}
+	_, err = w.Write(buf)
+	return err
+}
+
+func (n *insertNode) ReadSubCommandInfo(r io.Reader) (err error) {
+	if err = binary.Read(r, binary.BigEndian, n.subCommandsCount); err != nil {
+		return
+	}
+	length := uint64(0)
+	if err = binary.Read(r, binary.BigEndian, length); err != nil {
+		return
+	}
+	buf := make([]byte, length)
+	if _, err = r.Read(buf); err != nil {
+		return
+	}
+	n.UnmarshalSubCommandInfo(buf)
+	return
+}
+
+func (n *insertNode) SubCommandInfoToString() string{
+	s:=fmt.Sprintf("sub command count:%d\n",n.subCommandsCount)
+	for _,info:=range n.infos{
+		s=fmt.Sprintf("%s %s\n",s,info)
+	}
+	return s
 }
 
 func (n *insertNode) Type() txnbase.NodeType { return NTInsert }

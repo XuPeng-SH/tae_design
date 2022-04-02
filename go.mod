@@ -4,6 +4,7 @@ go 1.17
 
 require (
 	github.com/RoaringBitmap/roaring v0.9.4
+	github.com/google/btree v1.0.1
 	github.com/jiangxinmeng1/logstore v0.0.0-20220317024418-f73b3d9931a1
 	github.com/matrixorigin/matrixone v0.3.1-0.20220316031920-c10d896170be
 	github.com/panjf2000/ants/v2 v2.4.7
@@ -16,7 +17,7 @@ require (
 	github.com/BurntSushi/toml v0.4.1 // indirect
 	github.com/bits-and-blooms/bitset v1.2.0 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
-	github.com/google/btree v1.0.1 // indirect
+	github.com/google/go-cmp v0.5.7 // indirect
 	github.com/mschoch/smat v0.2.0 // indirect
 	github.com/pierrec/lz4 v2.6.1+incompatible // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect

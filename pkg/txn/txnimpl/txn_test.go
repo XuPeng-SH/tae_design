@@ -589,3 +589,35 @@ func TestTransaction2(t *testing.T) {
 	assert.Nil(t, err)
 	t.Log(rel.String())
 }
+
+func TestSubcommands(t *testing.T) {
+	dir := initTestPath(t)
+	tbl := makeTable(t, dir, 1, common.K*6)
+	defer tbl.driver.Close()
+	bat := mock.MockBatch(tbl.GetSchema().Types(), 1024)
+
+	var cid common.ID
+	cid.BlockID = 0
+	cid.Idx = 0
+	n := NewInsertNode(tbl, tbl.nodesMgr, cid, tbl.driver)
+	h := tbl.nodesMgr.Pin(n)
+	var err error
+	if err = n.Expand(common.K*1, func() error {
+		n.Append(bat, 0)
+		return nil
+	}); err != nil {
+		n.Expand(common.K*1, func() error {
+			n.Append(bat, 0)
+			return nil
+		})
+	}
+	h.Close()
+
+	seg := NewMockBlocks(t, tbl.GetSchema(), 500)
+	n.MakeSubCommands(seg)
+
+	cmd,_,err:=n.MakeCommand(0,false)
+	t.Logf("cmd:%v",cmd)
+	assert.Nil(t,err)
+	n.Close()
+}
