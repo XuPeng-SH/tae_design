@@ -92,6 +92,9 @@ func (cmd *entryCmd) WriteTo(w io.Writer) (err error) {
 			return
 		}
 	case CmdCreateTable:
+		if err = binary.Write(w, binary.BigEndian, cmd.table.db.ID); err != nil {
+			return
+		}
 		if err = binary.Write(w, binary.BigEndian, cmd.entry.CreateAt); err != nil {
 			return
 		}
@@ -102,7 +105,14 @@ func (cmd *entryCmd) WriteTo(w io.Writer) (err error) {
 		if _, err = w.Write(schemaBuf); err != nil {
 			return
 		}
-	case CmdDropDatabase, CmdDropTable:
+	case CmdDropTable:
+		if err = binary.Write(w, binary.BigEndian, cmd.table.db.ID); err != nil {
+			return
+		}
+		if err = binary.Write(w, binary.BigEndian, cmd.entry.DeleteAt); err != nil {
+			return
+		}
+	case CmdDropDatabase:
 		if err = binary.Write(w, binary.BigEndian, cmd.entry.DeleteAt); err != nil {
 			return
 		}
@@ -137,6 +147,10 @@ func (cmd *entryCmd) ReadFrom(r io.Reader) (err error) {
 			return
 		}
 	case CmdCreateTable:
+		cmd.db = &DBEntry{BaseEntry2: &BaseEntry2{}}
+		if err = binary.Read(r, binary.BigEndian, &cmd.db.ID); err != nil {
+			return
+		}
 		if err = binary.Read(r, binary.BigEndian, &cmd.entry.CreateAt); err != nil {
 			return
 		}
@@ -147,7 +161,15 @@ func (cmd *entryCmd) ReadFrom(r io.Reader) (err error) {
 		if err = cmd.table.schema.ReadFrom(r); err != nil {
 			return
 		}
-	case CmdDropTable, CmdDropDatabase:
+	case CmdDropTable:
+		cmd.db = &DBEntry{BaseEntry2: &BaseEntry2{}}
+		if err = binary.Read(r, binary.BigEndian, &cmd.db.ID); err != nil {
+			return
+		}
+		if err = binary.Read(r, binary.BigEndian, &cmd.entry.DeleteAt); err != nil {
+			return
+		}
+	case CmdDropDatabase:
 		if err = binary.Read(r, binary.BigEndian, &cmd.entry.DeleteAt); err != nil {
 			return
 		}

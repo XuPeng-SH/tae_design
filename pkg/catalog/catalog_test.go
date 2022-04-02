@@ -399,4 +399,25 @@ func TestCommand(t *testing.T) {
 	assert.Equal(t, tb.ID, eCmd.table.ID)
 	assert.Equal(t, tb.CreateAt, eCmd.table.CreateAt)
 	assert.Equal(t, tb.GetSchema().Name, eCmd.table.GetSchema().Name)
+	assert.Equal(t, tb.db.ID, eCmd.db.ID)
+
+	tb.DeleteAt = common.NextGlobalSeqNum()
+	tb.CurrOp = OpSoftDelete
+
+	cmd, err = tb.MakeCommand(3)
+	assert.Nil(t, err)
+
+	w.Reset()
+	err = cmd.WriteTo(&w)
+	assert.Nil(t, err)
+
+	buf = w.Bytes()
+	r = bytes.NewBuffer(buf)
+
+	cmd, err = txnbase.BuildCommandFrom(r)
+	assert.Nil(t, err)
+	eCmd = cmd.(*entryCmd)
+	assert.Equal(t, tb.ID, eCmd.entry.ID)
+	assert.Equal(t, tb.DeleteAt, eCmd.entry.DeleteAt)
+	assert.Equal(t, tb.db.ID, eCmd.db.ID)
 }
