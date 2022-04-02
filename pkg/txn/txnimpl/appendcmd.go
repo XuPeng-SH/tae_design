@@ -5,11 +5,18 @@ import (
 	"encoding/binary"
 	"fmt"
 	"io"
+	"tae/pkg/iface/txnif"
 	"tae/pkg/txn/txnbase"
 )
 
+const (
+	CmdAppend int16 = txnbase.CmdCustomized + iota
+	CmdUpdate
+	CmdDelete
+)
+
 func init() {
-	txnbase.RegisterCmdFactory(txnbase.CmdAppend, func() txnbase.TxnCmd {
+	txnif.RegisterCmdFactory(CmdAppend, func() txnif.TxnCmd {
 		return NewEmptyAppendCmd()
 	})
 }
@@ -39,7 +46,7 @@ func (c *AppendCmd) String() string {
 	return s
 }
 
-func (e *AppendCmd) GetType() int16 { return txnbase.CmdAppend }
+func (e *AppendCmd) GetType() int16 { return CmdAppend }
 func (c *AppendCmd) WriteTo(w io.Writer) (err error) {
 	if err = binary.Write(w, binary.BigEndian, c.ID); err != nil {
 		return

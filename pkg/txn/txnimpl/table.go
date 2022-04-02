@@ -371,7 +371,7 @@ func (tbl *txnTable) ApplyRollback() (err error) {
 // 	return
 // }
 
-func (tbl *txnTable) buildCommitCmd(cmdSeq *uint32) (cmd txnbase.TxnCmd, entries []txnbase.NodeEntry, err error) {
+func (tbl *txnTable) buildCommitCmd(cmdSeq *uint32) (cmd txnif.TxnCmd, entries []txnbase.NodeEntry, err error) {
 	composedCmd := txnbase.NewComposedCmd()
 
 	for i, inode := range tbl.inodes {

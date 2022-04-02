@@ -173,7 +173,7 @@ func (n *blockUpdates) WriteTo(w io.Writer) error {
 	return err
 }
 
-func (n *blockUpdates) MakeCommand(id uint32, forceFlush bool) (cmd txnbase.TxnCmd, entry txnbase.NodeEntry, err error) {
+func (n *blockUpdates) MakeCommand(id uint32, forceFlush bool) (cmd txnif.TxnCmd, entry txnbase.NodeEntry, err error) {
 	cmd = NewUpdateCmd(id, n)
 	return
 }

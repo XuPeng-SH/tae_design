@@ -175,3 +175,39 @@ func (e *DBEntry) addEntryLocked(table *TableEntry) error {
 	}
 	return nil
 }
+
+// func (e *DBEntry) MarshalTxnRecord() (buf []byte, err error) {
+// 	e.RLock()
+// 	defer e.RUnlock()
+// 	if e.CreateAndDropInSameTxn() {
+// 		return
+// 	}
+// 	var w bytes.Buffer
+// 	switch e.CurrOp {
+// 	case OpCreate:
+// 		if err = binary.Write(&w, binary.BigEndian, TxnETCreateDatabase); err != nil {
+// 			return
+// 		}
+// 		if err = binary.Write(&w, binary.BigEndian, e.GetID()); err != nil {
+// 			return
+// 		}
+// 		if err = binary.Write(&w, binary.BigEndian, e.CreateAt); err != nil {
+// 			return
+// 		}
+// 		if _, err = common.WriteString(e.name, &w); err != nil {
+// 			return
+// 		}
+// 	case OpSoftDelete:
+// 		if err = binary.Write(&w, binary.BigEndian, TxnETDropDatabase); err != nil {
+// 			return
+// 		}
+// 		if err = binary.Write(&w, binary.BigEndian, e.GetID()); err != nil {
+// 			return
+// 		}
+// 		if err = binary.Write(&w, binary.BigEndian, e.DeleteAt); err != nil {
+// 			return
+// 		}
+// 	}
+// 	buf = w.Bytes()
+// 	return
+// }

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"sync/atomic"
+	"tae/pkg/iface/txnif"
 	"tae/pkg/txn/txnbase"
 
 	"github.com/RoaringBitmap/roaring"
@@ -41,7 +42,7 @@ type InsertNode interface {
 	GetSpace() uint32
 	Rows() uint32
 	GetValue(col int, row uint32) (interface{}, error)
-	MakeCommand(uint32, bool) (txnbase.TxnCmd, txnbase.NodeEntry, error)
+	MakeCommand(uint32, bool) (txnif.TxnCmd, txnbase.NodeEntry, error)
 	ToTransient()
 }
 
@@ -69,7 +70,7 @@ func NewInsertNode(tbl Table, mgr base.INodeManager, id common.ID, driver txnbas
 	return impl
 }
 
-func (n *insertNode) MakeCommand(id uint32, forceFlush bool) (cmd txnbase.TxnCmd, entry txnbase.NodeEntry, err error) {
+func (n *insertNode) MakeCommand(id uint32, forceFlush bool) (cmd txnif.TxnCmd, entry txnbase.NodeEntry, err error) {
 	if n.data == nil {
 		return
 	}

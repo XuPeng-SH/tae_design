@@ -4,11 +4,12 @@ import (
 	"bytes"
 	"encoding/binary"
 	"io"
+	"tae/pkg/iface/txnif"
 	"tae/pkg/txn/txnbase"
 )
 
 func init() {
-	txnbase.RegisterCmdFactory(txnbase.CmdUpdate, func() txnbase.TxnCmd {
+	txnif.RegisterCmdFactory(CmdUpdate, func() txnif.TxnCmd {
 		return NewEmptyUpdateCmd()
 	})
 }
@@ -36,7 +37,7 @@ func (c *UpdateCmd) String() string {
 	return ""
 }
 
-func (c *UpdateCmd) GetType() int16 { return txnbase.CmdUpdate }
+func (c *UpdateCmd) GetType() int16 { return CmdUpdate }
 
 func (c *UpdateCmd) WriteTo(w io.Writer) (err error) {
 	if err = binary.Write(w, binary.BigEndian, c.GetType()); err != nil {

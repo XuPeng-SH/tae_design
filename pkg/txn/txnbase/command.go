@@ -5,6 +5,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"io"
+	"tae/pkg/iface/txnif"
 
 	"github.com/RoaringBitmap/roaring"
 	"github.com/matrixorigin/matrixone/pkg/container/types"
@@ -19,43 +20,26 @@ const (
 	CmdCustomized
 )
 
-const (
-	CmdAppend int16 = CmdCustomized + iota
-	CmdUpdate
-	CmdDelete
-)
-
-type CmdFactory func() TxnCmd
-
-var cmdFactories = map[int16]CmdFactory{
-	CmdPointer:      func() TxnCmd { return new(PointerCmd) },
-	CmdDeleteBitmap: func() TxnCmd { return new(DeleteBitmapCmd) },
-	CmdBatch:        func() TxnCmd { return new(BatchCmd) },
-	CmdComposed:     func() TxnCmd { return new(ComposedCmd) },
-}
-
-func RegisterCmdFactory(cmdType int16, factory CmdFactory) {
-	_, ok := cmdFactories[cmdType]
-	if ok {
-		panic(fmt.Sprintf("duplicate cmd type: %d", cmdType))
-	}
-	cmdFactories[cmdType] = factory
-}
-
-type TxnCmd interface {
-	WriteTo(io.Writer) error
-	ReadFrom(io.Reader) error
-	Marshal() ([]byte, error)
-	Unmarshal([]byte) error
-	GetType() int16
-	String() string
+func init() {
+	txnif.RegisterCmdFactory(CmdPointer, func() txnif.TxnCmd {
+		return new(PointerCmd)
+	})
+	txnif.RegisterCmdFactory(CmdDeleteBitmap, func() txnif.TxnCmd {
+		return new(DeleteBitmapCmd)
+	})
+	txnif.RegisterCmdFactory(CmdBatch, func() txnif.TxnCmd {
+		return new(BatchCmd)
+	})
+	txnif.RegisterCmdFactory(CmdComposed, func() txnif.TxnCmd {
+		return new(ComposedCmd)
+	})
 }
 
 type CustomizedCmd interface {
 	GetID() uint32
 }
 
-func IsCustomizedCmd(cmd TxnCmd) bool {
+func IsCustomizedCmd(cmd txnif.TxnCmd) bool {
 	ctype := cmd.GetType()
 	return ctype >= CmdCustomized
 }
@@ -81,15 +65,15 @@ type BatchCmd struct {
 
 type ComposedCmd struct {
 	BaseCmd
-	Cmds []TxnCmd
+	Cmds []txnif.TxnCmd
 }
 
 type BaseCustomizedCmd struct {
 	ID   uint32
-	Impl TxnCmd
+	Impl txnif.TxnCmd
 }
 
-func NewBaseCustomizedCmd(id uint32, impl TxnCmd) *BaseCustomizedCmd {
+func NewBaseCustomizedCmd(id uint32, impl txnif.TxnCmd) *BaseCustomizedCmd {
 	return &BaseCustomizedCmd{
 		ID:   id,
 		Impl: impl,
@@ -111,7 +95,7 @@ func NewBatchCmd(bat batch.IBatch, colTypes []types.Type) *BatchCmd {
 
 func NewComposedCmd() *ComposedCmd {
 	return &ComposedCmd{
-		Cmds: make([]TxnCmd, 0),
+		Cmds: make([]txnif.TxnCmd, 0),
 	}
 }
 
@@ -287,7 +271,7 @@ func (cc *ComposedCmd) ReadFrom(r io.Reader) (err error) {
 	if err = binary.Read(r, binary.BigEndian, &cmds); err != nil {
 		return
 	}
-	cc.Cmds = make([]TxnCmd, cmds)
+	cc.Cmds = make([]txnif.TxnCmd, cmds)
 	for i := 0; i < int(cmds); i++ {
 		if cc.Cmds[i], err = BuildCommandFrom(r); err != nil {
 			break
@@ -296,7 +280,7 @@ func (cc *ComposedCmd) ReadFrom(r io.Reader) (err error) {
 	return
 }
 
-func (cc *ComposedCmd) AddCmd(cmd TxnCmd) {
+func (cc *ComposedCmd) AddCmd(cmd txnif.TxnCmd) {
 	cc.Cmds = append(cc.Cmds, cmd)
 }
 
@@ -312,16 +296,13 @@ func (cc *ComposedCmd) String() string {
 	return cc.ToString("")
 }
 
-func BuildCommandFrom(r io.Reader) (cmd TxnCmd, err error) {
+func BuildCommandFrom(r io.Reader) (cmd txnif.TxnCmd, err error) {
 	var cmdType int16
 	if err = binary.Read(r, binary.BigEndian, &cmdType); err != nil {
 		return
 	}
 
-	factory := cmdFactories[cmdType]
-	if factory == nil {
-		panic(fmt.Sprintf("no factory found for cmd: %d", cmdType))
-	}
+	factory := txnif.GetCmdFactory(cmdType)
 
 	cmd = factory()
 	err = cmd.ReadFrom(r)

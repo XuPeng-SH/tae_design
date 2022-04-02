@@ -132,4 +132,5 @@ type TxnEntry interface {
 	PrepareRollback() error
 	ApplyCommit() error
 	ApplyRollback() error
+	// MakeCommand()
 }

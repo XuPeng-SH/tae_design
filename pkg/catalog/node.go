@@ -279,14 +279,14 @@ func (n *nodeList) TxnGetDBNodeLocked(txnCtx txnif.TxnReader) *DLNode {
 	return dn
 }
 
-func (n *nodeList) PString(level PPLevel) string {
+func (n *nodeList) PString(level common.PPLevel) string {
 	curr := n.GetNext()
 	if curr == nil {
 		return fmt.Sprintf("TableNode[\"%s\"](Len=0)", n.name)
 	}
 	node := curr.(*nameNode)
 	s := fmt.Sprintf("TableNode[\"%s\"](Len=%d)->[%d", n.name, n.Length(), node.Id)
-	if level == PPL0 {
+	if level == common.PPL0 {
 		s = fmt.Sprintf("%s]", s)
 		return s
 	}

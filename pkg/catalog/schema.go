@@ -1,12 +1,16 @@
 package catalog
 
 import (
+	"bytes"
+	"encoding/binary"
 	"encoding/json"
 	"fmt"
 	"math/rand"
+	"tae/pkg/common"
 	"time"
 
 	"github.com/matrixorigin/matrixone/pkg/container/types"
+	"github.com/matrixorigin/matrixone/pkg/encoding"
 )
 
 type IndexT uint16
@@ -55,6 +59,35 @@ func NewEmptySchema(name string) *Schema {
 		ColDefs:   make([]*ColDef, 0),
 		NameIndex: make(map[string]int),
 	}
+}
+
+func (s *Schema) Marshal() (buf []byte, err error) {
+	var w bytes.Buffer
+	if err = binary.Write(&w, binary.BigEndian, s.BlockMaxRows); err != nil {
+		return
+	}
+	if err = binary.Write(&w, binary.BigEndian, s.PrimaryKey); err != nil {
+		return
+	}
+	if err = binary.Write(&w, binary.BigEndian, s.SegmentMaxBlocks); err != nil {
+		return
+	}
+	if _, err = common.WriteString(s.Name, &w); err != nil {
+		return
+	}
+	if err = binary.Write(&w, binary.BigEndian, uint16(len(s.ColDefs))); err != nil {
+		return
+	}
+	for _, colDef := range s.ColDefs {
+		if _, err = w.Write(encoding.EncodeType(colDef.Type)); err != nil {
+			return
+		}
+		if _, err = common.WriteString(colDef.Name, &w); err != nil {
+			return
+		}
+	}
+	buf = w.Bytes()
+	return
 }
 
 func (s *Schema) AppendCol(name string, typ types.Type) {

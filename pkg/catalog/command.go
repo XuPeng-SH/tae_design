@@ -2,35 +2,36 @@ package catalog
 
 import (
 	"io"
+	"tae/pkg/iface/txnif"
 	"tae/pkg/txn/txnbase"
 )
 
 const (
 	CmdCreateDatabase = int16(256) + iota
-	// CmdDropDatabase
-	// CmdCreateTable
-	// CmdDropTable
+	CmdDropDatabase
+	CmdCreateTable
+	CmdDropTable
 	// CmdCreateSegment
 	// CmdDropSegment
 )
 
 func init() {
-	txnbase.RegisterCmdFactory(CmdCreateDatabase, func() txnbase.TxnCmd {
-		return newEmptyCreateDBCmd()
+	txnif.RegisterCmdFactory(CmdCreateDatabase, func() txnif.TxnCmd {
+		return newEmptyDBCmd()
 	})
 }
 
-type createDBCmd struct {
+type dbCmd struct {
 	*txnbase.BaseCustomizedCmd
 	entry *DBEntry
 }
 
-func newEmptyCreateDBCmd() *createDBCmd {
+func newEmptyDBCmd() *dbCmd {
 	return newCreateDBCmd(0, nil)
 }
 
-func newCreateDBCmd(id uint32, entry *DBEntry) *createDBCmd {
-	impl := &createDBCmd{
+func newCreateDBCmd(id uint32, entry *DBEntry) *dbCmd {
+	impl := &dbCmd{
 		entry: entry,
 	}
 	impl.BaseCustomizedCmd = txnbase.NewBaseCustomizedCmd(id, impl)
@@ -38,20 +39,20 @@ func newCreateDBCmd(id uint32, entry *DBEntry) *createDBCmd {
 }
 
 // TODO
-func (cmd *createDBCmd) String() string {
+func (cmd *dbCmd) String() string {
 	return ""
 }
-func (cmd *createDBCmd) GetType() int16 { return CmdCreateDatabase }
+func (cmd *dbCmd) GetType() int16 { return CmdCreateDatabase }
 
-func (cmd *createDBCmd) WriteTo(w io.Writer) (err error) {
+func (cmd *dbCmd) WriteTo(w io.Writer) (err error) {
 	return
 }
-func (cmd *createDBCmd) Marshal() (buf []byte, err error) {
+func (cmd *dbCmd) Marshal() (buf []byte, err error) {
 	return
 }
-func (cmd *createDBCmd) ReadFrom(r io.Reader) (err error) {
+func (cmd *dbCmd) ReadFrom(r io.Reader) (err error) {
 	return
 }
-func (cmd *createDBCmd) Unmarshal(buf []byte) (err error) {
+func (cmd *dbCmd) Unmarshal(buf []byte) (err error) {
 	return
 }
