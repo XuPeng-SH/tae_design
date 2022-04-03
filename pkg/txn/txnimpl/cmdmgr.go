@@ -31,6 +31,11 @@ func (mgr *commandManager) AddCmd(cmd txnif.TxnCmd) {
 }
 
 func (mgr *commandManager) ApplyTxnRecord() (logEntry entry.Entry, err error) {
+	// schema := catalog.MockSchema(13)
+	// bat := mock.MockBatch(schema.Types(), 100)
+	// data, _ := txnbase.CopyToIBatch(bat)
+	// batCmd := txnbase.NewBatchCmd(data, schema.Types())
+	// mgr.cmd.AddCmd(batCmd)
 	if mgr.driver == nil {
 		return
 	}
@@ -43,6 +48,6 @@ func (mgr *commandManager) ApplyTxnRecord() (logEntry entry.Entry, err error) {
 	logEntry.Unmarshal(buf)
 
 	lsn, err := mgr.driver.AppendEntry(txnbase.GroupC, logEntry)
-	logrus.Debugf("ApplyTxnRecord LSN=%d", lsn)
+	logrus.Debugf("ApplyTxnRecord LSN=%d, Size=%d", lsn, len(buf))
 	return
 }

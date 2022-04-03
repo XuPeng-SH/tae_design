@@ -241,6 +241,7 @@ func (cc *ComposedCmd) Marshal() (buf []byte, err error) {
 	if err = cc.WriteTo(&bbuf); err != nil {
 		return
 	}
+	buf = bbuf.Bytes()
 	return
 }
 
