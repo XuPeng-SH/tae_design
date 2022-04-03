@@ -47,6 +47,7 @@ type Table interface {
 	GetMeta() *catalog.TableEntry
 
 	CreateSegment() (seg handle.Segment, err error)
+	CollectCmd(*commandManager) error
 }
 
 type txnTable struct {
@@ -80,6 +81,18 @@ func newTxnTable(txn txnif.AsyncTxn, handle handle.Relation, driver txnbase.Node
 		dsegs:    make([]*catalog.SegmentEntry, 0),
 	}
 	return tbl
+}
+
+func (tbl *txnTable) CollectCmd(cmdMgr *commandManager) error {
+	for _, seg := range tbl.csegs {
+		csn := cmdMgr.GetCSN()
+		cmd, err := seg.MakeCommand(uint32(csn))
+		if err != nil {
+			return err
+		}
+		cmdMgr.AddCmd(cmd)
+	}
+	return nil
 }
 
 func (tbl *txnTable) CreateSegment() (seg handle.Segment, err error) {

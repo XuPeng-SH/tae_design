@@ -29,6 +29,16 @@ func NewSegmentEntry(table *TableEntry, txn txnif.AsyncTxn) *SegmentEntry {
 	return e
 }
 
+func (entry *SegmentEntry) MakeCommand(id uint32) (cmd txnif.TxnCmd, err error) {
+	cmdType := CmdCreateSegment
+	entry.RLock()
+	defer entry.RUnlock()
+	if entry.CurrOp == OpSoftDelete {
+		cmdType = CmdDropSegment
+	}
+	return newSegmentCmd(id, cmdType, entry), nil
+}
+
 func (entry *SegmentEntry) String() string {
 	entry.RLock()
 	defer entry.RUnlock()

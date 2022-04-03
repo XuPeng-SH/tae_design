@@ -280,6 +280,11 @@ func (store *txnStore) PrepareCommit() (err error) {
 		}
 		store.cmdMgr.AddCmd(cmd)
 	}
+	for _, table := range store.tables {
+		if err = table.CollectCmd(store.cmdMgr); err != nil {
+			panic(err)
+		}
+	}
 
 	logEntry, err := store.cmdMgr.ApplyTxnRecord()
 	if err != nil {

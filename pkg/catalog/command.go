@@ -14,8 +14,10 @@ const (
 	CmdDropDatabase
 	CmdCreateTable
 	CmdDropTable
-	// CmdCreateSegment
-	// CmdDropSegment
+	CmdCreateSegment
+	CmdDropSegment
+	CmdCreateBlock
+	CmdDropBlock
 )
 
 func init() {
@@ -38,6 +40,7 @@ type entryCmd struct {
 	db      *DBEntry
 	table   *TableEntry
 	entry   *BaseEntry
+	segment *SegmentEntry
 	cmdType int16
 }
 
@@ -45,11 +48,23 @@ func newEmptyEntryCmd(cmdType int16) *entryCmd {
 	return newDBCmd(0, cmdType, nil)
 }
 
+func newSegmentCmd(id uint32, cmdType int16, entry *SegmentEntry) *entryCmd {
+	impl := &entryCmd{
+		db:      entry.table.db,
+		table:   entry.table,
+		cmdType: cmdType,
+		entry:   entry.BaseEntry,
+	}
+	impl.BaseCustomizedCmd = txnbase.NewBaseCustomizedCmd(id, impl)
+	return impl
+}
+
 func newTableCmd(id uint32, cmdType int16, entry *TableEntry) *entryCmd {
 	impl := &entryCmd{
 		table:   entry,
 		cmdType: cmdType,
 		entry:   entry.BaseEntry,
+		db:      entry.db,
 	}
 	impl.BaseCustomizedCmd = txnbase.NewBaseCustomizedCmd(id, impl)
 	return impl
@@ -103,6 +118,16 @@ func (cmd *entryCmd) WriteTo(w io.Writer) (err error) {
 			return
 		}
 		if _, err = w.Write(schemaBuf); err != nil {
+			return
+		}
+	case CmdCreateSegment:
+		if err = binary.Write(w, binary.BigEndian, cmd.db.ID); err != nil {
+			return
+		}
+		if err = binary.Write(w, binary.BigEndian, cmd.table.ID); err != nil {
+			return
+		}
+		if err = binary.Write(w, binary.BigEndian, cmd.entry.CreateAt); err != nil {
 			return
 		}
 	case CmdDropTable:
@@ -160,6 +185,21 @@ func (cmd *entryCmd) ReadFrom(r io.Reader) (err error) {
 		}
 		if err = cmd.table.schema.ReadFrom(r); err != nil {
 			return
+		}
+	case CmdCreateSegment:
+		cmd.db = &DBEntry{BaseEntry: &BaseEntry{}}
+		cmd.table = &TableEntry{BaseEntry: &BaseEntry{}}
+		if err = binary.Read(r, binary.BigEndian, &cmd.db.ID); err != nil {
+			return
+		}
+		if err = binary.Read(r, binary.BigEndian, &cmd.table.ID); err != nil {
+			return
+		}
+		if err = binary.Read(r, binary.BigEndian, &cmd.entry.CreateAt); err != nil {
+			return
+		}
+		cmd.segment = &SegmentEntry{
+			BaseEntry: cmd.entry,
 		}
 	case CmdDropTable:
 		cmd.db = &DBEntry{BaseEntry: &BaseEntry{}}
