@@ -33,6 +33,7 @@ func (store *NoopTxnStore) CreateDatabase(name string) (db handle.Database, err 
 func (store *NoopTxnStore) DropDatabase(name string) (db handle.Database, err error)        { return }
 func (store *NoopTxnStore) GetDatabase(name string) (db handle.Database, err error)         { return }
 func (store *NoopTxnStore) UseDatabase(name string) (err error)                             { return }
+func (store *NoopTxnStore) CreateSegment(uint64) (seg handle.Segment, err error)            { return }
 
 // func (store *NoopTxnStore) DropDBEntry(name string) error                           { return nil }
 // func (store *NoopTxnStore) CreateTableEntry(database string, def interface{}) error { return nil }

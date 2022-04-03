@@ -26,8 +26,10 @@ func NewTableEntry(db *DBEntry, schema *Schema, txnCtx txnif.AsyncTxn) *TableEnt
 			RWMutex: new(sync.RWMutex),
 			ID:      id,
 		},
-		db:     db,
-		schema: schema,
+		db:      db,
+		schema:  schema,
+		link:    new(Link),
+		entries: make(map[uint64]*DLNode),
 	}
 	return e
 }
@@ -40,6 +42,18 @@ func MockStaloneTableEntry(id uint64, schema *Schema) *TableEntry {
 		},
 		schema: schema,
 	}
+}
+
+func (entry *TableEntry) MakeSegmentIt(reverse bool) *LinkIt {
+	return NewLinkIt(entry.RWMutex, entry.link, reverse)
+}
+
+func (entry *TableEntry) CreateSegment(txn txnif.AsyncTxn) (created *SegmentEntry, err error) {
+	entry.Lock()
+	defer entry.Unlock()
+	created = NewSegmentEntry(entry, txn)
+	entry.addEntryLocked(created)
+	return
 }
 
 func (entry *TableEntry) MakeCommand(id uint32) (cmd txnif.TxnCmd, err error) {

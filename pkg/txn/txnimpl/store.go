@@ -157,7 +157,7 @@ func (store *txnStore) CreateRelation(def interface{}) (relation handle.Relation
 	}
 	relation = newRelation(store.txn, meta)
 
-	table := newTxnTable(nil, relation, store.driver, store.nodesMgr)
+	table := newTxnTable(store.txn, relation, store.driver, store.nodesMgr)
 	table.SetCreateEntry(meta)
 	// table.AddCreateCommand() // TODO
 	store.tables[relation.ID()] = table
@@ -174,7 +174,7 @@ func (store *txnStore) DropRelationByName(name string) (relation handle.Relation
 	table := store.tables[meta.GetID()]
 	if table == nil {
 		relation = newRelation(store.txn, meta)
-		table := newTxnTable(nil, relation, store.driver, store.nodesMgr)
+		table := newTxnTable(store.txn, relation, store.driver, store.nodesMgr)
 		table.SetDropEntry(meta)
 		store.tables[meta.GetID()] = table
 	}
@@ -192,6 +192,20 @@ func (store *txnStore) GetRelationByName(name string) (relation handle.Relation,
 	}
 	relation = newRelation(store.txn, meta)
 	return
+}
+
+func (store *txnStore) CreateSegment(tid uint64) (seg handle.Segment, err error) {
+	table := store.tables[tid]
+	if table == nil {
+		var entry *catalog.TableEntry
+		if entry, err = store.database.GetMeta().(*catalog.DBEntry).GetTableEntryByID(tid); err != nil {
+			return
+		}
+		relation := newRelation(store.txn, entry)
+		table = newTxnTable(store.txn, relation, store.driver, store.nodesMgr)
+		store.tables[tid] = table
+	}
+	return table.CreateSegment()
 }
 
 func (store *txnStore) ApplyRollback() (err error) {

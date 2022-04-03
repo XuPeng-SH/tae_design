@@ -80,6 +80,17 @@ func (e *DBEntry) PPString(level common.PPLevel, depth int, prefix string) strin
 	return fmt.Sprintf("%s\n%s", s, body)
 }
 
+func (e *DBEntry) GetTableEntryByID(id uint64) (table *TableEntry, err error) {
+	e.RLock()
+	defer e.RUnlock()
+	node := e.entries[id]
+	if node == nil {
+		return nil, ErrNotFound
+	}
+	table = node.payload.(*TableEntry)
+	return
+}
+
 func (e *DBEntry) txnGetNodeByNameLocked(name string, txnCtx txnif.AsyncTxn) *DLNode {
 	node := e.nameNodes[name]
 	if node == nil {

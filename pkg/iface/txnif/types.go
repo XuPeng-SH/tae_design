@@ -119,6 +119,8 @@ type TxnStore interface {
 	DropDatabase(name string) (handle.Database, error)
 	UseDatabase(name string) error
 
+	CreateSegment(tid uint64) (handle.Segment, error)
+
 	AddTxnEntry(TxnEntryType, TxnEntry)
 }
 

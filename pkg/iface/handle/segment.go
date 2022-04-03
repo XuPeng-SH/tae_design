@@ -18,6 +18,7 @@ type SegmentReader interface {
 	MakeReader() Reader
 	GetByFilter(filter Filter, offsetOnly bool) (map[uint64]*batch.Batch, error)
 	String() string
+	GetMeta() interface{}
 }
 
 type SegmentWriter interface {

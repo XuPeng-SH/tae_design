@@ -26,6 +26,7 @@ type Relation interface {
 	String() string
 
 	GetMeta() interface{}
+	CreateSegment() (Segment, error)
 }
 
 type RelationIt interface {

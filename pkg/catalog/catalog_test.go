@@ -421,3 +421,34 @@ func TestCommand(t *testing.T) {
 	assert.Equal(t, tb.DeleteAt, eCmd.entry.DeleteAt)
 	assert.Equal(t, tb.db.ID, eCmd.db.ID)
 }
+
+// UT Steps
+// 1. Start Txn1, create a database "db", table "tb" and segment "seg1", then commit Txn1
+// 1. Start Txn2, create a segment "seg2". Txn2 scan "tb" and "seg1, seg2" found
+// 2. Start Txn3, scan "tb" and only "seg1" found
+// 3. Commit Txn2
+// 4. Txn3 scan "tb" and also only "seg1" found
+// 5. Start Txn4, scan "tb" and both "seg1" and "seg2" found
+func TestSegment1(t *testing.T) {
+	dir := initTestPath(t)
+	catalog := MockCatalog(dir, "mock", nil)
+	defer catalog.Close()
+	txnMgr := txnbase.NewTxnManager(MockTxnStoreFactory(catalog), MockTxnFactory(catalog))
+	txnMgr.Start()
+	defer txnMgr.Stop()
+	name := "db"
+	tbName := "tb"
+	txn1 := txnMgr.StartTxn(nil)
+	db, err := catalog.CreateDBEntry(name, txn1)
+	assert.Nil(t, err)
+	schema := MockSchema(1)
+	schema.Name = tbName
+	tb, err := db.CreateTableEntry(schema, txn1)
+	assert.Nil(t, err)
+	seg1, err := tb.CreateSegment(txn1)
+	assert.Nil(t, err)
+	err = txn1.Commit()
+	assert.Nil(t, err)
+	t.Log(seg1.String())
+	t.Log(tb.String())
+}

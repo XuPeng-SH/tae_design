@@ -26,8 +26,8 @@ type Table interface {
 	io.Closer
 	GetSchema() *catalog.Schema
 	GetID() uint64
-	Append(data *batch.Batch) error
 	RangeDeleteLocalRows(start, end uint32) error
+	Append(data *batch.Batch) error
 	LocalDeletesToString() string
 	IsLocalDeleted(row uint32) bool
 	GetLocalPhysicalAxis(row uint32) (int, uint32)
@@ -44,10 +44,13 @@ type Table interface {
 
 	SetCreateEntry(txnif.TxnEntry)
 	SetDropEntry(txnif.TxnEntry)
+	GetMeta() *catalog.TableEntry
+
+	CreateSegment() (seg handle.Segment, err error)
 }
 
 type txnTable struct {
-	*txnbase.TxnState
+	txn         txnif.AsyncTxn
 	createEntry txnif.TxnEntry
 	dropEntry   txnif.TxnEntry
 	inodes      []InsertNode
@@ -59,23 +62,34 @@ type txnTable struct {
 	nodesMgr    base.INodeManager
 	index       TableIndex
 	rows        uint32
+	csegs       []*catalog.SegmentEntry
+	dsegs       []*catalog.SegmentEntry
 }
 
-func newTxnTable(txnState *txnbase.TxnState, handle handle.Relation, driver txnbase.NodeDriver, mgr base.INodeManager) *txnTable {
-	if txnState == nil {
-		txnState = new(txnbase.TxnState)
-	}
+func newTxnTable(txn txnif.AsyncTxn, handle handle.Relation, driver txnbase.NodeDriver, mgr base.INodeManager) *txnTable {
 	tbl := &txnTable{
+		txn:      txn,
 		inodes:   make([]InsertNode, 0),
 		nodesMgr: mgr,
 		handle:   handle,
 		entry:    handle.GetMeta().(*catalog.TableEntry),
 		driver:   driver,
 		index:    NewSimpleTableIndex(),
-		TxnState: txnState,
 		updates:  make(map[common.ID]*blockUpdates),
+		csegs:    make([]*catalog.SegmentEntry, 0),
+		dsegs:    make([]*catalog.SegmentEntry, 0),
 	}
 	return tbl
+}
+
+func (tbl *txnTable) CreateSegment() (seg handle.Segment, err error) {
+	var meta *catalog.SegmentEntry
+	if meta, err = tbl.entry.CreateSegment(tbl.txn); err != nil {
+		return
+	}
+	seg = newSegment(tbl.txn, meta)
+	tbl.csegs = append(tbl.csegs, meta)
+	return
 }
 
 func (tbl *txnTable) SetCreateEntry(e txnif.TxnEntry) {
@@ -98,6 +112,10 @@ func (tbl *txnTable) IsDeleted() bool {
 
 func (tbl *txnTable) GetSchema() *catalog.Schema {
 	return tbl.entry.GetSchema()
+}
+
+func (tbl *txnTable) GetMeta() *catalog.TableEntry {
+	return tbl.entry
 }
 
 func (tbl *txnTable) GetID() uint64 {
