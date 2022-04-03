@@ -26,6 +26,7 @@ type Filter struct {
 
 type BlockReader interface {
 	io.Closer
+	ID() uint64
 	String() string
 	GetByFilter(filter Filter, offsetOnly bool) (*batch.Batch, error)
 	GetBatch(ctx interface{}) (*batch.Batch, error)

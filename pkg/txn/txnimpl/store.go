@@ -195,17 +195,33 @@ func (store *txnStore) GetRelationByName(name string) (relation handle.Relation,
 }
 
 func (store *txnStore) CreateSegment(tid uint64) (seg handle.Segment, err error) {
-	table := store.tables[tid]
+	var table Table
+	if table, err = store.getOrSetTable(tid); err != nil {
+		return
+	}
+	return table.CreateSegment()
+}
+
+func (store *txnStore) getOrSetTable(id uint64) (table Table, err error) {
+	table = store.tables[id]
 	if table == nil {
 		var entry *catalog.TableEntry
-		if entry, err = store.database.GetMeta().(*catalog.DBEntry).GetTableEntryByID(tid); err != nil {
+		if entry, err = store.database.GetMeta().(*catalog.DBEntry).GetTableEntryByID(id); err != nil {
 			return
 		}
 		relation := newRelation(store.txn, entry)
 		table = newTxnTable(store.txn, relation, store.driver, store.nodesMgr)
-		store.tables[tid] = table
+		store.tables[id] = table
 	}
-	return table.CreateSegment()
+	return
+}
+
+func (store *txnStore) CreateBlock(tid, sid uint64) (blk handle.Block, err error) {
+	var table Table
+	if table, err = store.getOrSetTable(tid); err != nil {
+		return
+	}
+	return table.CreateBlock(sid)
 }
 
 func (store *txnStore) ApplyRollback() (err error) {

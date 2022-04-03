@@ -46,7 +46,8 @@ type Table interface {
 	SetDropEntry(txnif.TxnEntry)
 	GetMeta() *catalog.TableEntry
 
-	CreateSegment() (seg handle.Segment, err error)
+	CreateSegment() (handle.Segment, error)
+	CreateBlock(sid uint64) (handle.Block, error)
 	CollectCmd(*commandManager) error
 }
 
@@ -65,6 +66,8 @@ type txnTable struct {
 	rows        uint32
 	csegs       []*catalog.SegmentEntry
 	dsegs       []*catalog.SegmentEntry
+	cblks       []*catalog.BlockEntry
+	dblks       []*catalog.BlockEntry
 }
 
 func newTxnTable(txn txnif.AsyncTxn, handle handle.Relation, driver txnbase.NodeDriver, mgr base.INodeManager) *txnTable {
@@ -92,6 +95,14 @@ func (tbl *txnTable) CollectCmd(cmdMgr *commandManager) error {
 		}
 		cmdMgr.AddCmd(cmd)
 	}
+	for _, blk := range tbl.cblks {
+		csn := cmdMgr.GetCSN()
+		cmd, err := blk.MakeCommand(uint32(csn))
+		if err != nil {
+			return err
+		}
+		cmdMgr.AddCmd(cmd)
+	}
 	return nil
 }
 
@@ -103,6 +114,19 @@ func (tbl *txnTable) CreateSegment() (seg handle.Segment, err error) {
 	seg = newSegment(tbl.txn, meta)
 	tbl.csegs = append(tbl.csegs, meta)
 	return
+}
+
+func (tbl *txnTable) CreateBlock(sid uint64) (blk handle.Block, err error) {
+	var seg *catalog.SegmentEntry
+	if seg, err = tbl.entry.GetSegmentByID(sid); err != nil {
+		return
+	}
+	meta, err := seg.CreateBlock(tbl.txn)
+	if err != nil {
+		return
+	}
+	tbl.cblks = append(tbl.cblks, meta)
+	return newBlock(tbl.txn, meta), err
 }
 
 func (tbl *txnTable) SetCreateEntry(e txnif.TxnEntry) {
@@ -326,6 +350,7 @@ func (tbl *txnTable) PrepareRollback() (err error) {
 }
 
 func (tbl *txnTable) PrepareCommit() (err error) {
+	// TODO: consider committing delete scenario later. Important!!!
 	tbl.entry.RLock()
 	if tbl.entry.CreateAndDropInSameTxn() {
 		tbl.entry.RUnlock()
@@ -379,6 +404,41 @@ func (tbl *txnTable) PrepareCommit() (err error) {
 			return
 		}
 	}
+	for _, blk := range tbl.cblks {
+		seg := blk.GetSegment()
+		tb := seg.GetTable()
+		db := tb.GetDB()
+		// R-W Check DB
+		db.RLock()
+		if db.DeleteBefore(commitTs) {
+			err = txnif.TxnRWConflictErr
+		}
+		db.RUnlock()
+		if err != nil {
+			return
+		}
+		// R-W Check Table
+		tb.RLock()
+		if tb.DeleteBefore(commitTs) {
+			err = txnif.TxnRWConflictErr
+		}
+		tb.RUnlock()
+		if err != nil {
+			return
+		}
+		// R-W Check Table
+		seg.RLock()
+		if seg.DeleteAfter(commitTs) {
+			err = txnif.TxnRWConflictErr
+		}
+		seg.RUnlock()
+		if err != nil {
+			return
+		}
+		if err = seg.PrepareCommit(); err != nil {
+			return
+		}
+	}
 	// TODO
 	return
 }
@@ -402,6 +462,11 @@ func (tbl *txnTable) ApplyCommit() (err error) {
 	}
 	for _, seg := range tbl.csegs {
 		if err = seg.ApplyCommit(); err != nil {
+			break
+		}
+	}
+	for _, blk := range tbl.cblks {
+		if err = blk.ApplyCommit(); err != nil {
 			break
 		}
 	}

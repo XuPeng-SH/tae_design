@@ -44,6 +44,16 @@ func MockStaloneTableEntry(id uint64, schema *Schema) *TableEntry {
 	}
 }
 
+func (entry *TableEntry) GetSegmentByID(id uint64) (seg *SegmentEntry, err error) {
+	entry.RLock()
+	defer entry.RUnlock()
+	node := entry.entries[id]
+	if node == nil {
+		return nil, ErrNotFound
+	}
+	return node.GetPayload().(*SegmentEntry), nil
+}
+
 func (entry *TableEntry) MakeSegmentIt(reverse bool) *LinkIt {
 	return NewLinkIt(entry.RWMutex, entry.link, reverse)
 }

@@ -120,6 +120,7 @@ type TxnStore interface {
 	UseDatabase(name string) error
 
 	CreateSegment(tid uint64) (handle.Segment, error)
+	CreateBlock(tid, sid uint64) (handle.Block, error)
 
 	AddTxnEntry(TxnEntryType, TxnEntry)
 }

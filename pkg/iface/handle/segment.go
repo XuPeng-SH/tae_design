@@ -30,6 +30,8 @@ type SegmentWriter interface {
 
 	PushDeleteOp(filter Filter) error
 	PushUpdateOp(filter Filter, attr string, val interface{}) error
+
+	CreateBlock() (Block, error)
 }
 
 type Segment interface {

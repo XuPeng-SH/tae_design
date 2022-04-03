@@ -727,3 +727,42 @@ func TestSegment2(t *testing.T) {
 	// assert.Nil(t, err)
 	t.Log(c.SimplePPString(com.PPL1))
 }
+
+func TestBlock1(t *testing.T) {
+	dir := initTestPath(t)
+	c, mgr, driver := initTestContext(t, dir)
+	defer driver.Close()
+	defer mgr.Stop()
+	defer c.Close()
+
+	txn1 := mgr.StartTxn(nil)
+	db, _ := txn1.CreateDatabase("db")
+	schema := catalog.MockSchema(1)
+	rel, _ := db.CreateRelation(schema)
+	seg, _ := rel.CreateSegment()
+
+	blkCnt := 100
+	for i := 0; i < blkCnt; i++ {
+		_, err := seg.CreateBlock()
+		assert.Nil(t, err)
+	}
+
+	it := seg.MakeBlockIt()
+	cnt := 0
+	for it.Valid() {
+		cnt++
+		it.Next()
+	}
+	assert.Equal(t, blkCnt, cnt)
+
+	err := txn1.Commit()
+	assert.Nil(t, err)
+	it = seg.MakeBlockIt()
+	cnt = 0
+	for it.Valid() {
+		cnt++
+		it.Next()
+	}
+	assert.Equal(t, blkCnt, cnt)
+	// t.Log(c.SimplePPString(com.PPL1))
+}

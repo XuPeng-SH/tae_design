@@ -70,3 +70,16 @@ func (seg *TxnSegment) RangeDelete(uint64, uint32, uint32) (err error)         {
 
 func (seg *TxnSegment) PushDeleteOp(handle.Filter) (err error)                      { return }
 func (seg *TxnSegment) PushUpdateOp(handle.Filter, string, interface{}) (err error) { return }
+func (seg *TxnSegment) CreateBlock() (blk handle.Block, err error)                  { return }
+
+func (blk *TxnBlock) ID() uint64                                                    { return 0 }
+func (blk *TxnBlock) String() string                                                { return "" }
+func (blk *TxnBlock) Close() error                                                  { return nil }
+func (blk *TxnBlock) GetByFilter(handle.Filter, bool) (bat *batch.Batch, err error) { return }
+func (blk *TxnBlock) GetBatch(ctx interface{}) (bat *batch.Batch, err error)        { return }
+
+func (blk *TxnBlock) Append(*batch.Batch, uint32) (n uint32, err error)           { return }
+func (blk *TxnBlock) Update(uint32, uint16, interface{}) (err error)              { return }
+func (blk *TxnBlock) RangeDelete(uint32, uint32) (err error)                      { return }
+func (blk *TxnBlock) PushDeleteOp(handle.Filter) (err error)                      { return }
+func (blk *TxnBlock) PushUpdateOp(handle.Filter, string, interface{}) (err error) { return }

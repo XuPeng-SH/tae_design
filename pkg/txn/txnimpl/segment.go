@@ -73,3 +73,10 @@ func newSegment(txn txnif.AsyncTxn, meta *catalog.SegmentEntry) *txnSegment {
 func (seg *txnSegment) GetMeta() interface{} { return seg.entry }
 func (seg *txnSegment) String() string       { return seg.entry.String() }
 func (seg *txnSegment) GetID() uint64        { return seg.entry.GetID() }
+func (seg *txnSegment) MakeBlockIt() (it handle.BlockIt) {
+	return newBlockIt(seg.Txn, seg.entry)
+}
+
+func (seg *txnSegment) CreateBlock() (blk handle.Block, err error) {
+	return seg.Txn.GetStore().CreateBlock(seg.entry.GetTable().GetID(), seg.entry.GetID())
+}

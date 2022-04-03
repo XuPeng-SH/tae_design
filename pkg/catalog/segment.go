@@ -10,7 +10,7 @@ import (
 type SegmentEntry struct {
 	*BaseEntry
 	table   *TableEntry
-	entries map[uint64]*BlockEntry
+	entries map[uint64]*DLNode
 	link    *Link
 }
 
@@ -25,7 +25,9 @@ func NewSegmentEntry(table *TableEntry, txn txnif.AsyncTxn) *SegmentEntry {
 			RWMutex: new(sync.RWMutex),
 			ID:      id,
 		},
-		table: table,
+		table:   table,
+		link:    new(Link),
+		entries: make(map[uint64]*DLNode),
 	}
 	return e
 }
@@ -42,7 +44,24 @@ func (entry *SegmentEntry) MakeCommand(id uint32) (cmd txnif.TxnCmd, err error) 
 
 func (entry *SegmentEntry) PPString(level common.PPLevel, depth int, prefix string) string {
 	s := fmt.Sprintf("%s%s%s", common.RepeatStr("\t", depth), prefix, entry.StringLocked())
-	return s
+	if level == common.PPL0 {
+		return s
+	}
+	var body string
+	it := entry.MakeBlockIt(true)
+	for it.Valid() {
+		block := it.curr.payload.(*BlockEntry)
+		if len(body) == 0 {
+			body = block.PPString(level, depth+1, prefix)
+		} else {
+			body = fmt.Sprintf("%s\n%s", body, block.PPString(level, depth+1, prefix))
+		}
+		it.Next()
+	}
+	if len(body) == 0 {
+		return s
+	}
+	return fmt.Sprintf("%s\n%s", s, body)
 }
 
 func (entry *SegmentEntry) StringLocked() string {
@@ -64,4 +83,19 @@ func (entry *SegmentEntry) Compare(o NodePayload) int {
 	return entry.DoCompre(oe)
 }
 
-// func (e *SegmentEntry) CreateSegmentEntry()
+func (entry *SegmentEntry) CreateBlock(txn txnif.AsyncTxn) (created *BlockEntry, err error) {
+	entry.Lock()
+	defer entry.Unlock()
+	created = NewBlockEntry(entry, txn)
+	entry.addEntryLocked(created)
+	return
+}
+
+func (entry *SegmentEntry) MakeBlockIt(reverse bool) *LinkIt {
+	return NewLinkIt(entry.RWMutex, entry.link, reverse)
+}
+
+func (entry *SegmentEntry) addEntryLocked(block *BlockEntry) {
+	n := entry.link.Insert(block)
+	entry.entries[block.GetID()] = n
+}

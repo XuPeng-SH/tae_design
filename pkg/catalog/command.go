@@ -33,6 +33,18 @@ func init() {
 	txnif.RegisterCmdFactory(CmdDropTable, func(cmdType int16) txnif.TxnCmd {
 		return newEmptyEntryCmd(cmdType)
 	})
+	txnif.RegisterCmdFactory(CmdCreateSegment, func(cmdType int16) txnif.TxnCmd {
+		return newEmptyEntryCmd(cmdType)
+	})
+	txnif.RegisterCmdFactory(CmdDropSegment, func(cmdType int16) txnif.TxnCmd {
+		return newEmptyEntryCmd(cmdType)
+	})
+	txnif.RegisterCmdFactory(CmdCreateBlock, func(cmdType int16) txnif.TxnCmd {
+		return newEmptyEntryCmd(cmdType)
+	})
+	txnif.RegisterCmdFactory(CmdDropBlock, func(cmdType int16) txnif.TxnCmd {
+		return newEmptyEntryCmd(cmdType)
+	})
 }
 
 type entryCmd struct {
@@ -41,6 +53,7 @@ type entryCmd struct {
 	table   *TableEntry
 	entry   *BaseEntry
 	segment *SegmentEntry
+	block   *BlockEntry
 	cmdType int16
 }
 
@@ -48,10 +61,24 @@ func newEmptyEntryCmd(cmdType int16) *entryCmd {
 	return newDBCmd(0, cmdType, nil)
 }
 
+func newBlockCmd(id uint32, cmdType int16, entry *BlockEntry) *entryCmd {
+	impl := &entryCmd{
+		db:      entry.GetSegment().GetTable().GetDB(),
+		table:   entry.GetSegment().GetTable(),
+		segment: entry.GetSegment(),
+		block:   entry,
+		cmdType: cmdType,
+		entry:   entry.BaseEntry,
+	}
+	impl.BaseCustomizedCmd = txnbase.NewBaseCustomizedCmd(id, impl)
+	return impl
+}
+
 func newSegmentCmd(id uint32, cmdType int16, entry *SegmentEntry) *entryCmd {
 	impl := &entryCmd{
-		db:      entry.table.db,
-		table:   entry.table,
+		db:      entry.GetTable().GetDB(),
+		table:   entry.GetTable(),
+		segment: entry,
 		cmdType: cmdType,
 		entry:   entry.BaseEntry,
 	}
@@ -61,10 +88,10 @@ func newSegmentCmd(id uint32, cmdType int16, entry *SegmentEntry) *entryCmd {
 
 func newTableCmd(id uint32, cmdType int16, entry *TableEntry) *entryCmd {
 	impl := &entryCmd{
+		db:      entry.GetDB(),
 		table:   entry,
 		cmdType: cmdType,
 		entry:   entry.BaseEntry,
-		db:      entry.db,
 	}
 	impl.BaseCustomizedCmd = txnbase.NewBaseCustomizedCmd(id, impl)
 	return impl
@@ -125,6 +152,19 @@ func (cmd *entryCmd) WriteTo(w io.Writer) (err error) {
 			return
 		}
 		if err = binary.Write(w, binary.BigEndian, cmd.table.ID); err != nil {
+			return
+		}
+		if err = binary.Write(w, binary.BigEndian, cmd.entry.CreateAt); err != nil {
+			return
+		}
+	case CmdCreateBlock:
+		if err = binary.Write(w, binary.BigEndian, cmd.db.ID); err != nil {
+			return
+		}
+		if err = binary.Write(w, binary.BigEndian, cmd.table.ID); err != nil {
+			return
+		}
+		if err = binary.Write(w, binary.BigEndian, cmd.segment.ID); err != nil {
 			return
 		}
 		if err = binary.Write(w, binary.BigEndian, cmd.entry.CreateAt); err != nil {
@@ -193,6 +233,25 @@ func (cmd *entryCmd) ReadFrom(r io.Reader) (err error) {
 			return
 		}
 		if err = binary.Read(r, binary.BigEndian, &cmd.table.ID); err != nil {
+			return
+		}
+		if err = binary.Read(r, binary.BigEndian, &cmd.entry.CreateAt); err != nil {
+			return
+		}
+		cmd.segment = &SegmentEntry{
+			BaseEntry: cmd.entry,
+		}
+	case CmdCreateBlock:
+		cmd.db = &DBEntry{BaseEntry: &BaseEntry{}}
+		cmd.table = &TableEntry{BaseEntry: &BaseEntry{}}
+		cmd.segment = &SegmentEntry{BaseEntry: &BaseEntry{}}
+		if err = binary.Read(r, binary.BigEndian, &cmd.db.ID); err != nil {
+			return
+		}
+		if err = binary.Read(r, binary.BigEndian, &cmd.table.ID); err != nil {
+			return
+		}
+		if err = binary.Read(r, binary.BigEndian, &cmd.segment.ID); err != nil {
 			return
 		}
 		if err = binary.Read(r, binary.BigEndian, &cmd.entry.CreateAt); err != nil {
