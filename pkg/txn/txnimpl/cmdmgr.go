@@ -43,6 +43,6 @@ func (mgr *commandManager) ApplyTxnRecord() (logEntry entry.Entry, err error) {
 	logEntry.Unmarshal(buf)
 
 	lsn, err := mgr.driver.AppendEntry(txnbase.GroupC, logEntry)
-	logrus.Infof("ApplyTxnRecord LSN=%d", lsn)
+	logrus.Debugf("ApplyTxnRecord LSN=%d", lsn)
 	return
 }

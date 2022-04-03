@@ -5,9 +5,12 @@ import (
 	"tae/pkg/iface/handle"
 	"tae/pkg/iface/txnif"
 	"tae/pkg/txn/txnbase"
+	"time"
 
+	"github.com/jiangxinmeng1/logstore/pkg/entry"
 	"github.com/matrixorigin/matrixone/pkg/container/batch"
 	"github.com/matrixorigin/matrixone/pkg/vm/engine/aoe/storage/mutation/buffer/base"
+	"github.com/sirupsen/logrus"
 )
 
 type txnStore struct {
@@ -23,6 +26,7 @@ type txnStore struct {
 	createEntry txnif.TxnEntry
 	dropEntry   txnif.TxnEntry
 	cmdMgr      *commandManager
+	logs        []entry.Entry
 }
 
 var TxnStoreFactory = func(catalog *catalog.Catalog, driver txnbase.NodeDriver) txnbase.TxnStoreFactory {
@@ -37,6 +41,7 @@ func newStore(catalog *catalog.Catalog, driver txnbase.NodeDriver) *txnStore {
 		catalog: catalog,
 		cmdMgr:  newCommandManager(driver),
 		driver:  driver,
+		logs:    make([]entry.Entry, 0),
 	}
 }
 
@@ -208,6 +213,11 @@ func (store *txnStore) ApplyRollback() (err error) {
 }
 
 func (store *txnStore) ApplyCommit() (err error) {
+	now := time.Now()
+	for _, e := range store.logs {
+		e.WaitDone()
+		e.Free()
+	}
 	if store.createEntry != nil {
 		if err = store.createEntry.ApplyCommit(); err != nil {
 			return
@@ -218,10 +228,12 @@ func (store *txnStore) ApplyCommit() (err error) {
 			break
 		}
 	}
+	logrus.Debugf("Txn-%d ApplyCommit Takes %s", store.txn.GetID(), time.Since(now))
 	return
 }
 
 func (store *txnStore) PrepareCommit() (err error) {
+	now := time.Now()
 	if store.createEntry != nil {
 		if err = store.createEntry.PrepareCommit(); err != nil {
 			return
@@ -260,9 +272,9 @@ func (store *txnStore) PrepareCommit() (err error) {
 		panic(err)
 	}
 	if logEntry != nil {
-		logEntry.WaitDone()
-		logEntry.Free()
+		store.logs = append(store.logs, logEntry)
 	}
+	logrus.Debugf("Txn-%d PrepareCommit Takes %s", store.txn.GetID(), time.Since(now))
 
 	return
 }
