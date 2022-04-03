@@ -22,18 +22,21 @@ type txnStore struct {
 	database    handle.Database
 	createEntry txnif.TxnEntry
 	dropEntry   txnif.TxnEntry
+	cmdMgr      *commandManager
 }
 
-var TxnStoreFactory = func(catalog *catalog.Catalog) txnbase.TxnStoreFactory {
+var TxnStoreFactory = func(catalog *catalog.Catalog, driver txnbase.NodeDriver) txnbase.TxnStoreFactory {
 	return func() txnif.TxnStore {
-		return newStore(catalog)
+		return newStore(catalog, driver)
 	}
 }
 
-func newStore(catalog *catalog.Catalog) *txnStore {
+func newStore(catalog *catalog.Catalog, driver txnbase.NodeDriver) *txnStore {
 	return &txnStore{
 		tables:  make(map[uint64]Table),
 		catalog: catalog,
+		cmdMgr:  newCommandManager(driver),
+		driver:  driver,
 	}
 }
 
@@ -236,14 +239,31 @@ func (store *txnStore) PrepareCommit() (err error) {
 	}
 	// TODO: prepare commit inserts and updates
 
-	// if store.createEntry != nil {
-	// 	cmd, err := store.createEntry.MakeCommand(0)
-	// 	if err != nil {
-	// 		panic(err)
-	// 	}
-	// 	buf, _ := cmd.Marshal()
-	// 	logrus.Info(buf)
-	// }
+	if store.createEntry != nil {
+		csn := store.cmdMgr.GetCSN()
+		cmd, err := store.createEntry.MakeCommand(uint32(csn))
+		if err != nil {
+			panic(err)
+		}
+		store.cmdMgr.AddCmd(cmd)
+	} else if store.dropEntry != nil {
+		csn := store.cmdMgr.GetCSN()
+		cmd, err := store.dropEntry.MakeCommand(uint32(csn))
+		if err != nil {
+			panic(err)
+		}
+		store.cmdMgr.AddCmd(cmd)
+	}
+
+	logEntry, err := store.cmdMgr.ApplyTxnRecord()
+	if err != nil {
+		panic(err)
+	}
+	if logEntry != nil {
+		logEntry.WaitDone()
+		logEntry.Free()
+	}
+
 	return
 }
 

@@ -31,10 +31,12 @@ type Catalog struct {
 }
 
 func MockCatalog(dir, name string, cfg *store.StoreCfg) *Catalog {
-	driver, err := store.NewBaseStore(dir, name, cfg)
-	if err != nil {
-		panic(err)
-	}
+	var driver store.Store
+	// var err error
+	// driver, err = store.NewBaseStore(dir, name, cfg)
+	// if err != nil {
+	// 	panic(err)
+	// }
 	catalog := &Catalog{
 		RWMutex:    new(sync.RWMutex),
 		IDAlloctor: NewIDAllocator(),
@@ -48,8 +50,10 @@ func MockCatalog(dir, name string, cfg *store.StoreCfg) *Catalog {
 }
 
 func (catalog *Catalog) Close() error {
-	// catalog.Stop()
-	return catalog.store.Close()
+	if catalog.store != nil {
+		catalog.store.Close()
+	}
+	return nil
 }
 
 func (catalog *Catalog) addEntryLocked(database *DBEntry) error {

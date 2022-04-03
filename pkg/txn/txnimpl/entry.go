@@ -5,5 +5,6 @@ import (
 )
 
 const (
-	ETInsertNode = entry.ETCustomizedStart + 1
+	ETInsertNode = entry.ETCustomizedStart + 1 + iota
+	ETTxnRecord
 )

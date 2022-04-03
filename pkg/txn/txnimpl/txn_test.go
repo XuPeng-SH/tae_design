@@ -436,7 +436,7 @@ func TestApplyUpdateNode2(t *testing.T) {
 }
 
 func TestTxnManager1(t *testing.T) {
-	mgr := txnbase.NewTxnManager(TxnStoreFactory(nil), TxnFactory(nil))
+	mgr := txnbase.NewTxnManager(TxnStoreFactory(nil, nil), TxnFactory(nil))
 	mgr.Start()
 	txn := mgr.StartTxn(nil)
 
@@ -484,11 +484,12 @@ func TestTxnManager1(t *testing.T) {
 	assert.Equal(t, expected, seqs)
 }
 
-func initTestContext(t *testing.T, dir string) (*catalog.Catalog, *txnbase.TxnManager) {
+func initTestContext(t *testing.T, dir string) (*catalog.Catalog, *txnbase.TxnManager, txnbase.NodeDriver) {
 	c := catalog.MockCatalog(dir, "mock", nil)
-	mgr := txnbase.NewTxnManager(TxnStoreFactory(c), TxnFactory(c))
+	driver := txnbase.NewNodeDriver(dir, "store", nil)
+	mgr := txnbase.NewTxnManager(TxnStoreFactory(c, driver), TxnFactory(c))
 	mgr.Start()
-	return c, mgr
+	return c, mgr, driver
 }
 
 // 1. Txn1 create database "db" and table "tb1". Commit
@@ -498,7 +499,8 @@ func initTestContext(t *testing.T, dir string) (*catalog.Catalog, *txnbase.TxnMa
 // 5. Txn3 commit
 func TestTransaction1(t *testing.T) {
 	dir := initTestPath(t)
-	c, mgr := initTestContext(t, dir)
+	c, mgr, driver := initTestContext(t, dir)
+	defer driver.Close()
 	defer c.Close()
 	defer mgr.Stop()
 
@@ -537,10 +539,9 @@ func TestTransaction1(t *testing.T) {
 
 func TestTransaction2(t *testing.T) {
 	dir := initTestPath(t)
-	c := catalog.MockCatalog(dir, "mock", nil)
+	c, mgr, driver := initTestContext(t, dir)
+	defer driver.Close()
 	defer c.Close()
-	mgr := txnbase.NewTxnManager(TxnStoreFactory(c), TxnFactory(c))
-	mgr.Start()
 	defer mgr.Stop()
 
 	name := "db"
@@ -588,4 +589,37 @@ func TestTransaction2(t *testing.T) {
 	rel, err = db3.GetRelationByName(schema.Name)
 	assert.Nil(t, err)
 	t.Log(rel.String())
+}
+
+func TestTransaction3(t *testing.T) {
+	dir := initTestPath(t)
+	c, mgr, driver := initTestContext(t, dir)
+	defer driver.Close()
+	defer mgr.Stop()
+	defer c.Close()
+
+	pool, _ := ants.NewPool(20)
+
+	var wg sync.WaitGroup
+
+	flow := func(i int) func() {
+		return func() {
+			defer wg.Done()
+			txn := mgr.StartTxn(nil)
+			name := fmt.Sprintf("db-%d", i)
+			db, err := txn.CreateDatabase(name)
+			assert.Nil(t, err)
+			schema := catalog.MockSchemaAll(13)
+			_, err = db.CreateRelation(schema)
+			assert.Nil(t, err)
+			err = txn.Commit()
+			assert.Nil(t, err)
+		}
+	}
+
+	for i := 0; i < 10; i++ {
+		wg.Add(1)
+		pool.Submit(flow(i))
+	}
+	wg.Wait()
 }
