@@ -66,6 +66,8 @@ func (l *DLNode) Compare(o *DLNode) int {
 	return l.payload.Compare(o.payload)
 }
 
+func (l *DLNode) GetPayload() NodePayload { return l.payload }
+
 func (l *DLNode) Sort() (*DLNode, *DLNode) {
 	curr := l
 	head := curr
@@ -169,4 +171,8 @@ func (it *LinkIt) Next() {
 	it.linkLocker.RLock()
 	it.curr = it.nextFunc(it.curr)
 	it.linkLocker.RUnlock()
+}
+
+func (it *LinkIt) Get() *DLNode {
+	return it.curr
 }

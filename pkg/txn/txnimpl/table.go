@@ -206,7 +206,7 @@ func (tbl *txnTable) Append(data *batch.Batch) error {
 	return err
 }
 
-// 1. Split the interval to multiple intervals, with each interval belongs to only one insert node
+// 1. Split the interval into multiple intervals, with each interval belongs to only one insert node
 // 2. For each new interval, call insert node RangeDelete
 // 3. Update the table index
 func (tbl *txnTable) RangeDeleteLocalRows(start, end uint32) error {
@@ -341,6 +341,31 @@ func (tbl *txnTable) PrepareCommit() (err error) {
 			return
 		}
 	}
+
+	commitTs := tbl.txn.GetCommitTS()
+	for _, seg := range tbl.csegs {
+		tb := seg.GetTable()
+		db := tb.GetDB()
+		db.RLock()
+		if db.DeleteBefore(commitTs) {
+			err = txnif.TxnRWConflictErr
+		}
+		db.RUnlock()
+		if err != nil {
+			return
+		}
+		tb.RLock()
+		if tb.DeleteBefore(commitTs) {
+			err = txnif.TxnRWConflictErr
+		}
+		tb.RUnlock()
+		if err != nil {
+			return
+		}
+		if err = seg.PrepareCommit(); err != nil {
+			return
+		}
+	}
 	// TODO
 	return
 }
@@ -360,6 +385,11 @@ func (tbl *txnTable) ApplyCommit() (err error) {
 	} else if tbl.dropEntry != nil {
 		if err = tbl.dropEntry.ApplyCommit(); err != nil {
 			return
+		}
+	}
+	for _, seg := range tbl.csegs {
+		if err = seg.ApplyCommit(); err != nil {
+			break
 		}
 	}
 	// TODO

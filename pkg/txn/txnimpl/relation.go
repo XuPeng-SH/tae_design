@@ -13,7 +13,6 @@ import (
 type txnRelation struct {
 	*txnbase.TxnRelation
 	entry *catalog.TableEntry
-	store txnif.TxnStore
 }
 
 func newRelation(txn txnif.AsyncTxn, meta *catalog.TableEntry) *txnRelation {
@@ -36,7 +35,14 @@ func (h *txnRelation) Close() error                        { return nil }
 func (h *txnRelation) Rows() int64                         { return 0 }
 func (h *txnRelation) Size(attr string) int64              { return 0 }
 func (h *txnRelation) GetCardinality(attr string) int64    { return 0 }
-func (h *txnRelation) MakeSegmentIt() handle.SegmentIt     { return nil }
 func (h *txnRelation) MakeReader() handle.Reader           { return nil }
 func (h *txnRelation) BatchDedup(col *vector.Vector) error { return nil }
 func (h *txnRelation) Append(data *batch.Batch) error      { return nil }
+
+func (h *txnRelation) CreateSegment() (seg handle.Segment, err error) {
+	return h.Txn.GetStore().CreateSegment(h.entry.GetID())
+}
+
+func (h *txnRelation) MakeSegmentIt() handle.SegmentIt {
+	return newSegmentIt(h.Txn, h.entry)
+}

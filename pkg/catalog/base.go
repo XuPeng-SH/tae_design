@@ -221,6 +221,72 @@ func (be *BaseEntry) CreateAndDropInSameTxn() bool {
 	return false
 }
 
+func (be *BaseEntry) TxnCanRead(txn txnif.AsyncTxn, rwlocker *sync.RWMutex) bool {
+	if txn == nil {
+		return true
+	}
+	thisTxn := be.Txn
+	// No active txn is on this entry
+	if !be.HasActiveTxn() {
+		// This entry is created after txn starts, skip this entry
+		// This entry is deleted before txn starts, skip this entry
+		if be.CreateAfter(txn.GetStartTS()) || be.DeleteBefore(txn.GetStartTS()) {
+			return false
+		}
+		// Otherwise, use this entry
+		return true
+	}
+	// If this entry was written by the same txn as txn
+	if be.IsSameTxn(txn) {
+		// This entry was deleted by the same txn, skip this entry
+		if be.IsDroppedUncommitted() {
+			return false
+		}
+		// This entry was created by the same txn, use this entry
+		return true
+	}
+	// This entry is not created, skip this entry
+	if !be.HasCreated() {
+		return false
+	}
+	// This entry was created after txn start ts, skip this entry
+	if be.CreateAfter(txn.GetStartTS()) {
+		return false
+	}
+
+	// This entry was not dropped before or by any active tansactions, use this entry
+	if !be.HasDropped() {
+		return true
+	}
+
+	// This entry was dropped after txn starts, use this entry
+	if be.DeleteAfter(txn.GetStartTS()) {
+		return true
+	}
+
+	// This entry was deleted before txn start
+	// Delete is uncommited by other txn, skip this entry
+	if !be.IsCommitting() {
+		return false
+	}
+	if be.CreateAndDropInSameTxn() {
+		return false
+	}
+	// The txn is committing, wait till committed
+	if rwlocker != nil {
+		rwlocker.RUnlock()
+	}
+	state := thisTxn.GetTxnState(true)
+	if rwlocker != nil {
+		rwlocker.RLock()
+	}
+	if state == txnif.TxnStateRollbacked {
+		return true
+	}
+
+	return false
+}
+
 func (be *BaseEntry) String() string {
 	s := fmt.Sprintf("[Op=%s][ID=%d][%d,%d]", OpNames[be.CurrOp], be.ID, be.CreateAt, be.DeleteAt)
 	if be.Txn != nil {

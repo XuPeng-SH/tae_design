@@ -1,6 +1,7 @@
 package catalog
 
 import (
+	"fmt"
 	"sync"
 	"tae/pkg/iface/txnif"
 )
@@ -28,13 +29,19 @@ func NewSegmentEntry(table *TableEntry, txn txnif.AsyncTxn) *SegmentEntry {
 	return e
 }
 
-func (e *SegmentEntry) GetTable() *TableEntry {
-	return e.table
+func (entry *SegmentEntry) String() string {
+	entry.RLock()
+	defer entry.RUnlock()
+	return fmt.Sprintf("SEGMENT%s", entry.BaseEntry.String())
 }
 
-func (e *SegmentEntry) Compare(o NodePayload) int {
+func (entry *SegmentEntry) GetTable() *TableEntry {
+	return entry.table
+}
+
+func (entry *SegmentEntry) Compare(o NodePayload) int {
 	oe := o.(*SegmentEntry).BaseEntry
-	return e.DoCompre(oe)
+	return entry.DoCompre(oe)
 }
 
 // func (e *SegmentEntry) CreateSegmentEntry()

@@ -623,3 +623,77 @@ func TestTransaction3(t *testing.T) {
 	}
 	wg.Wait()
 }
+
+func TestSegment1(t *testing.T) {
+	dir := initTestPath(t)
+	c, mgr, driver := initTestContext(t, dir)
+	defer driver.Close()
+	defer mgr.Stop()
+	defer c.Close()
+
+	txn1 := mgr.StartTxn(nil)
+	name := "db"
+	schema := catalog.MockSchema(1)
+	db, err := txn1.CreateDatabase(name)
+	assert.Nil(t, err)
+	rel, err := db.CreateRelation(schema)
+	assert.Nil(t, err)
+	_, err = rel.CreateSegment()
+	assert.Nil(t, err)
+	err = txn1.Commit()
+	assert.Nil(t, err)
+
+	txn2 := mgr.StartTxn(nil)
+	db, err = txn2.GetDatabase(name)
+	assert.Nil(t, err)
+	rel, err = db.GetRelationByName(schema.Name)
+	assert.Nil(t, err)
+	segIt := rel.MakeSegmentIt()
+	cnt := 0
+	for segIt.Valid() {
+		iseg := segIt.GetSegment()
+		t.Log(iseg.String())
+		cnt++
+		segIt.Next()
+	}
+	assert.Equal(t, 1, cnt)
+
+	_, err = rel.CreateSegment()
+	assert.Nil(t, err)
+
+	segIt = rel.MakeSegmentIt()
+	cnt = 0
+	for segIt.Valid() {
+		iseg := segIt.GetSegment()
+		t.Log(iseg.String())
+		cnt++
+		segIt.Next()
+	}
+	assert.Equal(t, 2, cnt)
+
+	txn3 := mgr.StartTxn(nil)
+	db, _ = txn3.GetDatabase(name)
+	rel, _ = db.GetRelationByName(schema.Name)
+	segIt = rel.MakeSegmentIt()
+	cnt = 0
+	for segIt.Valid() {
+		iseg := segIt.GetSegment()
+		t.Log(iseg.String())
+		cnt++
+		segIt.Next()
+	}
+	assert.Equal(t, 1, cnt)
+
+	err = txn2.Commit()
+	assert.Nil(t, err)
+
+	segIt = rel.MakeSegmentIt()
+	cnt = 0
+	for segIt.Valid() {
+		iseg := segIt.GetSegment()
+		t.Log(iseg.String())
+		cnt++
+		segIt.Next()
+	}
+	assert.Equal(t, 1, cnt)
+}

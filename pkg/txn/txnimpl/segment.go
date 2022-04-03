@@ -1,7 +1,9 @@
 package txnimpl
 
 import (
+	"sync"
 	"tae/pkg/catalog"
+	"tae/pkg/iface/handle"
 	"tae/pkg/iface/txnif"
 	"tae/pkg/txn/txnbase"
 )
@@ -10,6 +12,52 @@ type txnSegment struct {
 	*txnbase.TxnSegment
 	entry *catalog.SegmentEntry
 	store txnif.TxnStore
+}
+
+type segmentIt struct {
+	rwlock sync.RWMutex
+	txn    txnif.AsyncTxn
+	linkIt *catalog.LinkIt
+	curr   *catalog.SegmentEntry
+}
+
+func newSegmentIt(txn txnif.AsyncTxn, meta *catalog.TableEntry) *segmentIt {
+	it := &segmentIt{
+		txn:    txn,
+		linkIt: meta.MakeSegmentIt(true),
+	}
+	if it.linkIt.Valid() {
+		it.curr = it.linkIt.Get().GetPayload().(*catalog.SegmentEntry)
+	}
+	return it
+}
+
+func (it *segmentIt) Close() error { return nil }
+
+func (it *segmentIt) Valid() bool { return it.linkIt.Valid() }
+
+func (it *segmentIt) Next() {
+	valid := true
+	for {
+		it.linkIt.Next()
+		node := it.linkIt.Get()
+		if node == nil {
+			it.curr = nil
+			break
+		}
+		entry := node.GetPayload().(*catalog.SegmentEntry)
+		entry.RLock()
+		valid = entry.TxnCanRead(it.txn, entry.RWMutex)
+		entry.RUnlock()
+		if valid {
+			it.curr = entry
+			break
+		}
+	}
+}
+
+func (it *segmentIt) GetSegment() handle.Segment {
+	return newSegment(it.txn, it.curr)
 }
 
 func newSegment(txn txnif.AsyncTxn, meta *catalog.SegmentEntry) *txnSegment {
