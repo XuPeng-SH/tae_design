@@ -11,7 +11,7 @@ import (
 
 type DBEntry struct {
 	// *BaseEntry
-	*BaseEntry2
+	*BaseEntry
 	catalog *Catalog
 	name    string
 
@@ -25,8 +25,8 @@ type DBEntry struct {
 func NewDBEntry(catalog *Catalog, name string, txnCtx txnif.AsyncTxn) *DBEntry {
 	id := catalog.NextDB()
 	e := &DBEntry{
-		BaseEntry2: &BaseEntry2{
-			CommitInfo2: CommitInfo2{
+		BaseEntry: &BaseEntry{
+			CommitInfo: CommitInfo{
 				CurrOp: OpCreate,
 				Txn:    txnCtx,
 			},
@@ -43,14 +43,14 @@ func NewDBEntry(catalog *Catalog, name string, txnCtx txnif.AsyncTxn) *DBEntry {
 }
 
 func (e *DBEntry) Compare(o NodePayload) int {
-	oe := o.(*DBEntry).BaseEntry2
+	oe := o.(*DBEntry).BaseEntry
 	return e.DoCompre(oe)
 }
 
 func (e *DBEntry) GetName() string { return e.name }
 
 func (e *DBEntry) String() string {
-	return fmt.Sprintf("DB%s[name=%s]", e.BaseEntry2.String(), e.name)
+	return fmt.Sprintf("DB%s[name=%s]", e.BaseEntry.String(), e.name)
 }
 
 func (e *DBEntry) MakeTableIt(reverse bool) *LinkIt {

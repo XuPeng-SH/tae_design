@@ -37,7 +37,7 @@ type entryCmd struct {
 	*txnbase.BaseCustomizedCmd
 	db      *DBEntry
 	table   *TableEntry
-	entry   *BaseEntry2
+	entry   *BaseEntry
 	cmdType int16
 }
 
@@ -49,7 +49,7 @@ func newTableCmd(id uint32, cmdType int16, entry *TableEntry) *entryCmd {
 	impl := &entryCmd{
 		table:   entry,
 		cmdType: cmdType,
-		entry:   entry.BaseEntry2,
+		entry:   entry.BaseEntry,
 	}
 	impl.BaseCustomizedCmd = txnbase.NewBaseCustomizedCmd(id, impl)
 	return impl
@@ -61,7 +61,7 @@ func newDBCmd(id uint32, cmdType int16, entry *DBEntry) *entryCmd {
 		cmdType: cmdType,
 	}
 	if entry != nil {
-		impl.entry = entry.BaseEntry2
+		impl.entry = entry.BaseEntry
 	}
 	impl.BaseCustomizedCmd = txnbase.NewBaseCustomizedCmd(id, impl)
 	return impl
@@ -131,7 +131,7 @@ func (cmd *entryCmd) ReadFrom(r io.Reader) (err error) {
 	if err = binary.Read(r, binary.BigEndian, &cmd.ID); err != nil {
 		return
 	}
-	cmd.entry = &BaseEntry2{}
+	cmd.entry = &BaseEntry{}
 	if err = binary.Read(r, binary.BigEndian, &cmd.entry.ID); err != nil {
 		return
 	}
@@ -141,13 +141,13 @@ func (cmd *entryCmd) ReadFrom(r io.Reader) (err error) {
 			return
 		}
 		cmd.db = &DBEntry{
-			BaseEntry2: cmd.entry,
+			BaseEntry: cmd.entry,
 		}
 		if cmd.db.name, err = common.ReadString(r); err != nil {
 			return
 		}
 	case CmdCreateTable:
-		cmd.db = &DBEntry{BaseEntry2: &BaseEntry2{}}
+		cmd.db = &DBEntry{BaseEntry: &BaseEntry{}}
 		if err = binary.Read(r, binary.BigEndian, &cmd.db.ID); err != nil {
 			return
 		}
@@ -155,14 +155,14 @@ func (cmd *entryCmd) ReadFrom(r io.Reader) (err error) {
 			return
 		}
 		cmd.table = &TableEntry{
-			BaseEntry2: cmd.entry,
-			schema:     new(Schema),
+			BaseEntry: cmd.entry,
+			schema:    new(Schema),
 		}
 		if err = cmd.table.schema.ReadFrom(r); err != nil {
 			return
 		}
 	case CmdDropTable:
-		cmd.db = &DBEntry{BaseEntry2: &BaseEntry2{}}
+		cmd.db = &DBEntry{BaseEntry: &BaseEntry{}}
 		if err = binary.Read(r, binary.BigEndian, &cmd.db.ID); err != nil {
 			return
 		}

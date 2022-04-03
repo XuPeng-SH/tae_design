@@ -8,7 +8,7 @@ import (
 )
 
 type TableEntry struct {
-	*BaseEntry2
+	*BaseEntry
 	db      *DBEntry
 	schema  *Schema
 	entries map[uint64]*DLNode
@@ -18,8 +18,8 @@ type TableEntry struct {
 func NewTableEntry(db *DBEntry, schema *Schema, txnCtx txnif.AsyncTxn) *TableEntry {
 	id := db.catalog.NextTable()
 	e := &TableEntry{
-		BaseEntry2: &BaseEntry2{
-			CommitInfo2: CommitInfo2{
+		BaseEntry: &BaseEntry{
+			CommitInfo: CommitInfo{
 				Txn:    txnCtx,
 				CurrOp: OpCreate,
 			},
@@ -34,7 +34,7 @@ func NewTableEntry(db *DBEntry, schema *Schema, txnCtx txnif.AsyncTxn) *TableEnt
 
 func MockStaloneTableEntry(id uint64, schema *Schema) *TableEntry {
 	return &TableEntry{
-		BaseEntry2: &BaseEntry2{
+		BaseEntry: &BaseEntry{
 			RWMutex: new(sync.RWMutex),
 			ID:      id,
 		},
@@ -71,7 +71,7 @@ func (entry *TableEntry) GetSchema() *Schema {
 }
 
 func (entry *TableEntry) Compare(o NodePayload) int {
-	oe := o.(*TableEntry).BaseEntry2
+	oe := o.(*TableEntry).BaseEntry
 	return entry.DoCompre(oe)
 }
 
@@ -86,5 +86,5 @@ func (entry *TableEntry) PPString(level common.PPLevel, depth int, prefix string
 func (entry *TableEntry) String() string {
 	entry.RLock()
 	defer entry.RUnlock()
-	return fmt.Sprintf("TABLE%s[name=%s]", entry.BaseEntry2.String(), entry.schema.Name)
+	return fmt.Sprintf("TABLE%s[name=%s]", entry.BaseEntry.String(), entry.schema.Name)
 }

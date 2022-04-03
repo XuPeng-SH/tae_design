@@ -1,12 +1,9 @@
 package catalog
 
 import (
+	"fmt"
 	"sync"
 	"tae/pkg/iface/txnif"
-)
-
-const (
-	UncommitTS = ^uint64(0)
 )
 
 func CompareUint64(left, right uint64) int {
@@ -18,112 +15,249 @@ func CompareUint64(left, right uint64) int {
 	return 0
 }
 
-type CommandInfo struct {
-	Op OpT
+type Waitable interface {
+	Wait() error
 }
 
-func IsCommitted(ts uint64) bool {
-	return ts != UncommitTS
+type waitable struct {
+	fn func() error
+}
+
+func (w *waitable) Wait() error {
+	return w.fn()
 }
 
 type CommitInfo struct {
-	CommandInfo
-	CreateStartTS, CreateCommitTS uint64
-	DropStartTS, DropCommitTS     uint64
+	// Ops    []OpT
+	CurrOp OpT
+	Txn    txnif.TxnReader
 }
 
 type BaseEntry struct {
 	*sync.RWMutex
 	CommitInfo
-	ID       uint64
-	CreateAt uint64
-	DeleteAt uint64
+	PrevCommit         *CommitInfo
+	ID                 uint64
+	CreateAt, DeleteAt uint64
 }
 
-func (e *BaseEntry) GetID() uint64 { return e.ID }
+func (be *BaseEntry) GetTxn() txnif.TxnReader { return be.Txn }
 
-func (e *BaseEntry) DoCompre(oe *BaseEntry) int {
-	ecommitted := IsCommitted(e.CreateAt)
-	oecommitted := IsCommitted(oe.CreateAt)
-	if ecommitted && !oecommitted {
-		return -1
+func (be *BaseEntry) IsTerminated(waitIfcommitting bool) bool {
+	return be.Txn.IsTerminated(waitIfcommitting)
+}
+
+func (be *BaseEntry) IsCommitted() bool {
+	if be.Txn == nil {
+		return true
 	}
-	if !ecommitted && oecommitted {
-		return 1
-	}
-	if ecommitted && oecommitted {
-		return CompareUint64(e.CreateAt, oe.CreateAt)
-	}
-	return CompareUint64(e.CreateStartTS, oe.CreateStartTS)
+	state := be.Txn.GetTxnState(true)
+	return state == txnif.TxnStateCommitted || state == txnif.TxnStateRollbacked
 }
 
-func (e *BaseEntry) IsSameTxn(ts uint64) bool {
-	return e.CreateStartTS == ts || (e.DropStartTS != 0 && e.DropStartTS == ts)
-}
+func (be *BaseEntry) GetID() uint64 { return be.ID }
 
-func (e *BaseEntry) IsSameTxnEntry(o *BaseEntry) bool {
-	// logrus.Infof("kkkkk-%d:%d----%d:%d", e.CreateStartTS, e.DropStartTS, o.CreateStartTS, o.DropStartTS)
-	return e.CreateStartTS == o.CreateStartTS || (e.DropStartTS != 0 && e.DropStartTS == o.DropStartTS)
-}
-
-func (e *BaseEntry) IsDroppedCommitted() bool {
-	return e.DeleteAt != 0
-}
-
-func (e *BaseEntry) IsDroppedUncommitted() bool {
-	return e.DeleteAt == 0 && e.DropStartTS != 0
-}
-
-func (e *BaseEntry) HasStarted() bool {
-	return e.CreateAt != 0
-}
-
-func (e *BaseEntry) HasDropped() bool {
-	return e.DeleteAt != 0
-}
-
-func (e *BaseEntry) CommitStart(ts uint64) error {
-	if e.HasStarted() {
-		panic("unexpected")
-	}
-	e.CommitInfo.CreateCommitTS = ts
-	e.CreateAt = ts
-	return nil
-}
-
-func (e *BaseEntry) CommitDrop(ts uint64) error {
-	if e.HasDropped() {
-		panic("unexpected")
-	}
-	e.CommitInfo.DropCommitTS = ts
-	e.DeleteAt = ts
-	return nil
-}
-
-func (e *BaseEntry) DropEntryLocked(txnCtx txnif.TxnReader) error {
-	startTS := txnCtx.GetStartTS()
-	if e.HasDropped() {
-		return ErrValidation
-	}
-	if e.DropStartTS != 0 {
-		return txnif.TxnWWConflictErr
-	}
-	if e.HasStarted() {
-		if startTS <= e.CreateAt {
-			return ErrValidation
-		}
-		e.DropStartTS = startTS
-		e.DropCommitTS = UncommitTS
+func (be *BaseEntry) DoCompre(oe *BaseEntry) int {
+	be.RLock()
+	defer be.RUnlock()
+	oe.RLock()
+	defer oe.RUnlock()
+	r := 0
+	if be.CreateAt != 0 && oe.CreateAt != 0 {
+		r = CompareUint64(be.CreateAt, oe.CreateAt)
+	} else if be.CreateAt != 0 {
+		r = -1
+	} else if oe.CreateAt != 0 {
+		r = 1
 	} else {
-		if !e.IsSameTxn(startTS) {
-			return ErrValidation
-		}
-		// In a same txn, if create then drop:
-		// CreateStartTS == DropStartTS
-		// CreateCommitTS == DropCommitTS
-		// The name node should be deleted from nameNodes during committing
-		e.DropStartTS = startTS
-		e.DropCommitTS = UncommitTS
+		r = CompareUint64(be.Txn.GetStartTS(), oe.Txn.GetStartTS())
+	}
+	return r
+}
+
+func (be *BaseEntry) PrepareCommit() error {
+	be.Lock()
+	defer be.Unlock()
+	if be.CreateAt == 0 {
+		be.CreateAt = be.Txn.GetCommitTS()
+	}
+	if be.CurrOp == OpSoftDelete {
+		be.DeleteAt = be.Txn.GetCommitTS()
 	}
 	return nil
+}
+
+func (be *BaseEntry) PrepareRollback() error {
+	be.Lock()
+	defer be.Unlock()
+	if be.PrevCommit != nil {
+		be.CurrOp = be.PrevCommit.CurrOp
+	}
+	be.Txn = nil
+	return nil
+}
+
+func (be *BaseEntry) ApplyRollback() error {
+	return nil
+}
+
+func (be *BaseEntry) ApplyCommit() error {
+	be.Lock()
+	defer be.Unlock()
+	// if be.Txn == nil {
+	// 	panic("logic error")
+	// }
+	if be.PrevCommit != nil {
+		be.PrevCommit = nil
+	}
+	be.Txn = nil
+	return nil
+}
+
+func (be *BaseEntry) HasDropped() bool {
+	return be.DeleteAt != 0
+}
+
+func (be *BaseEntry) CreateBefore(ts uint64) bool {
+	if be.CreateAt != 0 {
+		return be.CreateAt < ts
+	}
+	return false
+}
+
+func (be *BaseEntry) CreateAfter(ts uint64) bool {
+	if be.CreateAt != 0 {
+		return be.CreateAt > ts
+	}
+	return false
+}
+
+func (be *BaseEntry) DeleteBefore(ts uint64) bool {
+	if be.DeleteAt != 0 {
+		return be.DeleteAt < ts
+	}
+	return false
+}
+
+func (be *BaseEntry) DeleteAfter(ts uint64) bool {
+	if be.DeleteAt != 0 {
+		return be.DeleteAt > ts
+	}
+	return false
+}
+
+func (be *BaseEntry) HasCreated() bool {
+	return be.CreateAt != 0
+}
+
+func (be *BaseEntry) DropEntryLocked(txnCtx txnif.TxnReader) error {
+	if be.Txn == nil {
+		if be.HasDropped() {
+			return ErrNotFound
+		}
+		if be.CreateAt > txnCtx.GetStartTS() {
+			panic("unexpected")
+		}
+		be.PrevCommit = &CommitInfo{
+			CurrOp: be.CurrOp,
+		}
+		be.Txn = txnCtx
+		be.CurrOp = OpSoftDelete
+		return nil
+	}
+	if be.Txn.GetID() == txnCtx.GetID() {
+		if be.CurrOp == OpSoftDelete {
+			return ErrNotFound
+		}
+		be.CurrOp = OpSoftDelete
+		return nil
+	}
+	return txnif.TxnWWConflictErr
+}
+
+func (be *BaseEntry) SameTxn(o *BaseEntry) bool {
+	if be.Txn != nil && o.Txn != nil {
+		return be.Txn.GetID() == o.Txn.GetID()
+	}
+	return false
+}
+
+func (be *BaseEntry) IsDroppedUncommitted() bool {
+	if be.Txn != nil {
+		return be.CurrOp == OpSoftDelete
+	}
+	return false
+}
+
+func (be *BaseEntry) HasActiveTxn() bool {
+	return be.Txn != nil
+}
+
+func (be *BaseEntry) GetTxnID() uint64 {
+	if be.Txn != nil {
+		return be.Txn.GetID()
+	}
+	return 0
+}
+
+func (be *BaseEntry) IsSameTxn(ctx txnif.TxnReader) bool {
+	if be.Txn != nil {
+		return be.Txn.GetID() == ctx.GetID()
+	}
+	return false
+}
+
+func (be *BaseEntry) IsCommitting() bool {
+	if be.Txn != nil && be.Txn.GetCommitTS() != txnif.UncommitTS {
+		return true
+	}
+	return false
+}
+
+func (be *BaseEntry) CreateAndDropInSameTxn() bool {
+	if be.CreateAt != 0 && (be.CreateAt == be.DeleteAt) {
+		return true
+	}
+	return false
+}
+
+func (be *BaseEntry) String() string {
+	s := fmt.Sprintf("[Op=%s][ID=%d][%d,%d]", OpNames[be.CurrOp], be.ID, be.CreateAt, be.DeleteAt)
+	if be.Txn != nil {
+		s = fmt.Sprintf("%s%s", s, be.Txn.Repr())
+	}
+	return s
+}
+
+func (be *BaseEntry) PrepareWrite(txn txnif.TxnReader, rwlocker *sync.RWMutex) (err error) {
+	if txn == nil {
+		return
+	}
+	eTxn := be.Txn
+	// No active txn is on this entry
+	if eTxn == nil {
+		return
+	}
+	// The same txn is on this entry
+	if eTxn.GetID() == txn.GetID() {
+		return
+	}
+	commitTS := be.Txn.GetCommitTS()
+	// Another active txn is on this entry
+	if commitTS == txnif.UncommitTS {
+		err = txnif.TxnWWConflictErr
+		return
+	}
+	// Another committing|rollbacking|committed|rollbacked txn commits|rollbacks after txn starts
+	if commitTS > txn.GetStartTS() {
+		return
+	}
+	if rwlocker != nil {
+		rwlocker.RUnlock()
+	}
+	eTxn.GetTxnState(true)
+	if rwlocker != nil {
+		rwlocker.RLock()
+	}
+	return
 }
