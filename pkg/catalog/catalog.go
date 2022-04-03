@@ -32,11 +32,11 @@ type Catalog struct {
 
 func MockCatalog(dir, name string, cfg *store.StoreCfg) *Catalog {
 	var driver store.Store
-	// var err error
-	// driver, err = store.NewBaseStore(dir, name, cfg)
-	// if err != nil {
-	// 	panic(err)
-	// }
+	var err error
+	driver, err = store.NewBaseStore(dir, name, cfg)
+	if err != nil {
+		panic(err)
+	}
 	catalog := &Catalog{
 		RWMutex:    new(sync.RWMutex),
 		IDAlloctor: NewIDAllocator(),
