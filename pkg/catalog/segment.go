@@ -3,6 +3,7 @@ package catalog
 import (
 	"fmt"
 	"sync"
+	"tae/pkg/common"
 	"tae/pkg/iface/txnif"
 )
 
@@ -39,10 +40,19 @@ func (entry *SegmentEntry) MakeCommand(id uint32) (cmd txnif.TxnCmd, err error) 
 	return newSegmentCmd(id, cmdType, entry), nil
 }
 
+func (entry *SegmentEntry) PPString(level common.PPLevel, depth int, prefix string) string {
+	s := fmt.Sprintf("%s%s%s", common.RepeatStr("\t", depth), prefix, entry.StringLocked())
+	return s
+}
+
+func (entry *SegmentEntry) StringLocked() string {
+	return fmt.Sprintf("SEGMENT%s", entry.BaseEntry.String())
+}
+
 func (entry *SegmentEntry) String() string {
 	entry.RLock()
 	defer entry.RUnlock()
-	return fmt.Sprintf("SEGMENT%s", entry.BaseEntry.String())
+	return entry.StringLocked()
 }
 
 func (entry *SegmentEntry) GetTable() *TableEntry {

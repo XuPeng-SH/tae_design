@@ -94,7 +94,25 @@ func (entry *TableEntry) GetDB() *DBEntry {
 }
 
 func (entry *TableEntry) PPString(level common.PPLevel, depth int, prefix string) string {
-	return fmt.Sprintf("%s%s%s", common.RepeatStr("\t", depth), prefix, entry.String())
+	s := fmt.Sprintf("%s%s%s", common.RepeatStr("\t", depth), prefix, entry.String())
+	if level == common.PPL0 {
+		return s
+	}
+	var body string
+	it := entry.MakeSegmentIt(true)
+	for it.Valid() {
+		segment := it.curr.payload.(*SegmentEntry)
+		if len(body) == 0 {
+			body = segment.PPString(level, depth+1, prefix)
+		} else {
+			body = fmt.Sprintf("%s\n%s", body, segment.PPString(level, depth+1, prefix))
+		}
+		it.Next()
+	}
+	if len(body) == 0 {
+		return s
+	}
+	return fmt.Sprintf("%s\n%s", s, body)
 }
 
 func (entry *TableEntry) String() string {

@@ -697,3 +697,33 @@ func TestSegment1(t *testing.T) {
 	}
 	assert.Equal(t, 1, cnt)
 }
+
+func TestSegment2(t *testing.T) {
+	dir := initTestPath(t)
+	c, mgr, driver := initTestContext(t, dir)
+	defer driver.Close()
+	defer mgr.Stop()
+	defer c.Close()
+
+	txn1 := mgr.StartTxn(nil)
+	db, _ := txn1.CreateDatabase("db")
+	schema := catalog.MockSchema(1)
+	rel, _ := db.CreateRelation(schema)
+	segCnt := 10
+	for i := 0; i < segCnt; i++ {
+		_, err := rel.CreateSegment()
+		assert.Nil(t, err)
+	}
+
+	it := rel.MakeSegmentIt()
+	cnt := 0
+	for it.Valid() {
+		cnt++
+		// iseg := it.GetSegment()
+		it.Next()
+	}
+	assert.Equal(t, segCnt, cnt)
+	// err := txn1.Commit()
+	// assert.Nil(t, err)
+	t.Log(c.SimplePPString(com.PPL1))
+}
