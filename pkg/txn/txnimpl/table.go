@@ -364,18 +364,6 @@ func (tbl *txnTable) PrepareCommit() (err error) {
 		return
 	}
 	tbl.entry.RUnlock()
-	if tbl.createEntry != nil || tbl.dropEntry != nil {
-		dbEntry := tbl.entry.GetDB()
-		commitTs := tbl.entry.GetTxn().GetCommitTS()
-		dbEntry.RLock()
-		if dbEntry.DeleteBefore(commitTs) {
-			err = txnif.TxnRWConflictErr
-		}
-		dbEntry.RUnlock()
-	}
-	if err != nil {
-		return err
-	}
 	if tbl.createEntry != nil {
 		if err = tbl.createEntry.PrepareCommit(); err != nil {
 			return
@@ -386,62 +374,13 @@ func (tbl *txnTable) PrepareCommit() (err error) {
 		}
 	}
 
-	commitTs := tbl.txn.GetCommitTS()
 	for _, seg := range tbl.csegs {
-		tb := seg.GetTable()
-		db := tb.GetDB()
-		db.RLock()
-		if db.DeleteBefore(commitTs) {
-			err = txnif.TxnRWConflictErr
-		}
-		db.RUnlock()
-		if err != nil {
-			return
-		}
-		tb.RLock()
-		if tb.DeleteBefore(commitTs) {
-			err = txnif.TxnRWConflictErr
-		}
-		tb.RUnlock()
-		if err != nil {
-			return
-		}
 		if err = seg.PrepareCommit(); err != nil {
 			return
 		}
 	}
 	for _, blk := range tbl.cblks {
-		seg := blk.GetSegment()
-		tb := seg.GetTable()
-		db := tb.GetDB()
-		// R-W Check DB
-		db.RLock()
-		if db.DeleteBefore(commitTs) {
-			err = txnif.TxnRWConflictErr
-		}
-		db.RUnlock()
-		if err != nil {
-			return
-		}
-		// R-W Check Table
-		tb.RLock()
-		if tb.DeleteBefore(commitTs) {
-			err = txnif.TxnRWConflictErr
-		}
-		tb.RUnlock()
-		if err != nil {
-			return
-		}
-		// R-W Check Table
-		seg.RLock()
-		if seg.DeleteAfter(commitTs) {
-			err = txnif.TxnRWConflictErr
-		}
-		seg.RUnlock()
-		if err != nil {
-			return
-		}
-		if err = seg.PrepareCommit(); err != nil {
+		if err = blk.PrepareCommit(); err != nil {
 			return
 		}
 	}

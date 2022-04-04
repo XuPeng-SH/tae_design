@@ -760,12 +760,19 @@ func TestBlock1(t *testing.T) {
 
 	err := txn1.Commit()
 	assert.Nil(t, err)
-	it = seg.MakeBlockIt()
+	txn2 := mgr.StartTxn(nil)
+	db, _ = txn2.GetDatabase("db")
+	rel, _ = db.GetRelationByName(schema.Name)
+	segIt := rel.MakeSegmentIt()
 	cnt = 0
-	for it.Valid() {
-		cnt++
-		it.Next()
+	for segIt.Valid() {
+		seg = segIt.GetSegment()
+		it = seg.MakeBlockIt()
+		for it.Valid() {
+			cnt++
+			it.Next()
+		}
+		segIt.Next()
 	}
 	assert.Equal(t, blkCnt, cnt)
-	// t.Log(c.SimplePPString(com.PPL1))
 }
