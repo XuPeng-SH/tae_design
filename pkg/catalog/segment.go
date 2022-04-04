@@ -32,6 +32,18 @@ func NewSegmentEntry(table *TableEntry, txn txnif.AsyncTxn) *SegmentEntry {
 	return e
 }
 
+func (entry *SegmentEntry) GetBlockEntryByID(id uint64) (blk *BlockEntry, err error) {
+	entry.RLock()
+	defer entry.RUnlock()
+	node := entry.entries[id]
+	if node == nil {
+		err = ErrNotFound
+		return
+	}
+	blk = node.payload.(*BlockEntry)
+	return
+}
+
 func (entry *SegmentEntry) MakeCommand(id uint32) (cmd txnif.TxnCmd, err error) {
 	cmdType := CmdCreateSegment
 	entry.RLock()

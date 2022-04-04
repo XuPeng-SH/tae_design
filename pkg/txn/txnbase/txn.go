@@ -85,7 +85,11 @@ func (txn *Txn) Rollback() error {
 
 func (txn *Txn) Done() {
 	txn.DoneCond.L.Lock()
-	txn.ToCommittedLocked()
+	if txn.State == txnif.TxnStateCommitting {
+		txn.ToCommittedLocked()
+	} else {
+		txn.ToRollbackedLocked()
+	}
 	txn.WaitGroup.Done()
 	txn.DoneCond.Broadcast()
 	txn.DoneCond.L.Unlock()
@@ -148,7 +152,6 @@ func (txn *Txn) PrepareRollback() error {
 }
 
 func (txn *Txn) WaitDone() error {
-	// TODO
 	// logrus.Infof("Wait %s Done", txn.String())
 	txn.Done()
 	return txn.Err

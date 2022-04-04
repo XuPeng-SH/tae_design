@@ -11,6 +11,7 @@ import (
 	"sync/atomic"
 	"tae/pkg/catalog"
 	com "tae/pkg/common"
+	"tae/pkg/iface/txnif"
 	"tae/pkg/txn/txnbase"
 	"testing"
 	"time"
@@ -63,7 +64,7 @@ func makeTable(t *testing.T, dir string, colCnt int, bufSize uint64) *txnTable {
 	id := common.NextGlobalSeqNum()
 	schema := catalog.MockSchemaAll(colCnt)
 	rel := mockTestRelation(id, schema)
-	return newTxnTable(nil, rel, driver, mgr)
+	return newTxnTable(nil, rel, driver, mgr, nil)
 }
 
 func TestInsertNode(t *testing.T) {
@@ -531,6 +532,8 @@ func TestTransaction1(t *testing.T) {
 	err = txn2.Commit()
 	assert.Nil(t, err)
 	err = txn3.Commit()
+	assert.Equal(t, txnif.TxnStateRollbacked, txn3.GetTxnState(true))
+	t.Log(txn3.String())
 	// assert.NotNil(t, err)
 	t.Log(db2.String())
 	t.Log(rel.String())

@@ -11,6 +11,10 @@ import (
 	"github.com/matrixorigin/matrixone/pkg/vm/engine/aoe/storage/common"
 )
 
+// type TxnRecord interface {
+// 	GetReadDependencies() []
+// }
+
 type Txn2PC interface {
 	PrepareRollback() error
 	PrepareCommit() error

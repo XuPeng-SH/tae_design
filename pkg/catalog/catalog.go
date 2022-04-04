@@ -56,6 +56,18 @@ func (catalog *Catalog) Close() error {
 	return nil
 }
 
+func (catalog *Catalog) GetDatabaseByID(id uint64) (db *DBEntry, err error) {
+	catalog.RLock()
+	defer catalog.RUnlock()
+	node := catalog.entries[id]
+	if node == nil {
+		err = ErrNotFound
+		return
+	}
+	db = node.payload.(*DBEntry)
+	return
+}
+
 func (catalog *Catalog) addEntryLocked(database *DBEntry) error {
 	nn := catalog.nameNodes[database.name]
 	if nn == nil {

@@ -68,20 +68,22 @@ type txnTable struct {
 	dsegs       []*catalog.SegmentEntry
 	cblks       []*catalog.BlockEntry
 	dblks       []*catalog.BlockEntry
+	warChecker  *warChecker
 }
 
-func newTxnTable(txn txnif.AsyncTxn, handle handle.Relation, driver txnbase.NodeDriver, mgr base.INodeManager) *txnTable {
+func newTxnTable(txn txnif.AsyncTxn, handle handle.Relation, driver txnbase.NodeDriver, mgr base.INodeManager, checker *warChecker) *txnTable {
 	tbl := &txnTable{
-		txn:      txn,
-		inodes:   make([]InsertNode, 0),
-		nodesMgr: mgr,
-		handle:   handle,
-		entry:    handle.GetMeta().(*catalog.TableEntry),
-		driver:   driver,
-		index:    NewSimpleTableIndex(),
-		updates:  make(map[common.ID]*blockUpdates),
-		csegs:    make([]*catalog.SegmentEntry, 0),
-		dsegs:    make([]*catalog.SegmentEntry, 0),
+		warChecker: checker,
+		txn:        txn,
+		inodes:     make([]InsertNode, 0),
+		nodesMgr:   mgr,
+		handle:     handle,
+		entry:      handle.GetMeta().(*catalog.TableEntry),
+		driver:     driver,
+		index:      NewSimpleTableIndex(),
+		updates:    make(map[common.ID]*blockUpdates),
+		csegs:      make([]*catalog.SegmentEntry, 0),
+		dsegs:      make([]*catalog.SegmentEntry, 0),
 	}
 	return tbl
 }
@@ -113,6 +115,7 @@ func (tbl *txnTable) CreateSegment() (seg handle.Segment, err error) {
 	}
 	seg = newSegment(tbl.txn, meta)
 	tbl.csegs = append(tbl.csegs, meta)
+	tbl.warChecker.readTableVar(meta.GetTable())
 	return
 }
 
@@ -126,6 +129,7 @@ func (tbl *txnTable) CreateBlock(sid uint64) (blk handle.Block, err error) {
 		return
 	}
 	tbl.cblks = append(tbl.cblks, meta)
+	tbl.warChecker.readSegmentVar(seg)
 	return newBlock(tbl.txn, meta), err
 }
 
@@ -134,6 +138,7 @@ func (tbl *txnTable) SetCreateEntry(e txnif.TxnEntry) {
 		panic("logic error")
 	}
 	tbl.createEntry = e
+	tbl.warChecker.readDBVar(tbl.entry.GetDB())
 }
 
 func (tbl *txnTable) SetDropEntry(e txnif.TxnEntry) {
@@ -141,6 +146,7 @@ func (tbl *txnTable) SetDropEntry(e txnif.TxnEntry) {
 		panic("logic error")
 	}
 	tbl.dropEntry = e
+	tbl.warChecker.readDBVar(tbl.entry.GetDB())
 }
 
 func (tbl *txnTable) IsDeleted() bool {

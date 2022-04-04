@@ -27,6 +27,7 @@ type txnStore struct {
 	dropEntry   txnif.TxnEntry
 	cmdMgr      *commandManager
 	logs        []entry.Entry
+	warChecker  *warChecker
 }
 
 var TxnStoreFactory = func(catalog *catalog.Catalog, driver txnbase.NodeDriver) txnbase.TxnStoreFactory {
@@ -54,16 +55,6 @@ func (store *txnStore) Close() error {
 	}
 	return err
 }
-
-// func (store *txnStore) InitTable(id uint64, schema *catalog.Schema) error {
-// 	table := store.tables[id]
-// 	if table != nil {
-// 		return ErrDuplicateNode
-// 	}
-// 	store.tables[id] = newTxnTable(nil, id, schema, store.driver, store.nodesMgr)
-// 	store.tableIndex[schema.Name] = id
-// 	return nil
-// }
 
 func (store *txnStore) BindTxn(txn txnif.AsyncTxn) {
 	store.txn = txn
@@ -155,13 +146,12 @@ func (store *txnStore) CreateRelation(def interface{}) (relation handle.Relation
 	if err != nil {
 		return
 	}
+	table, err := store.getOrSetTable(meta.GetID())
+	if err != nil {
+		return
+	}
 	relation = newRelation(store.txn, meta)
-
-	table := newTxnTable(store.txn, relation, store.driver, store.nodesMgr)
 	table.SetCreateEntry(meta)
-	// table.AddCreateCommand() // TODO
-	store.tables[relation.ID()] = table
-
 	return
 }
 
@@ -171,16 +161,12 @@ func (store *txnStore) DropRelationByName(name string) (relation handle.Relation
 	if err != nil {
 		return nil, err
 	}
-	table := store.tables[meta.GetID()]
-	if table == nil {
-		relation = newRelation(store.txn, meta)
-		table := newTxnTable(store.txn, relation, store.driver, store.nodesMgr)
-		table.SetDropEntry(meta)
-		store.tables[meta.GetID()] = table
+	table, err := store.getOrSetTable(meta.GetID())
+	if err != nil {
+		return nil, err
 	}
-	if relation == nil {
-		relation = newRelation(store.txn, meta)
-	}
+	relation = newRelation(store.txn, meta)
+	table.SetDropEntry(meta)
 	return
 }
 
@@ -210,7 +196,10 @@ func (store *txnStore) getOrSetTable(id uint64) (table Table, err error) {
 			return
 		}
 		relation := newRelation(store.txn, entry)
-		table = newTxnTable(store.txn, relation, store.driver, store.nodesMgr)
+		if store.warChecker == nil {
+			store.warChecker = newWarChecker(store.txn, entry.GetDB())
+		}
+		table = newTxnTable(store.txn, relation, store.driver, store.nodesMgr, store.warChecker)
 		store.tables[id] = table
 	}
 	return
@@ -264,6 +253,11 @@ func (store *txnStore) ApplyCommit() (err error) {
 
 func (store *txnStore) PrepareCommit() (err error) {
 	now := time.Now()
+	if store.warChecker != nil {
+		if err = store.warChecker.check(); err != nil {
+			return err
+		}
+	}
 	if store.createEntry != nil {
 		if err = store.createEntry.PrepareCommit(); err != nil {
 			return
