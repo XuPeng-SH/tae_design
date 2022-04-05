@@ -3,8 +3,10 @@ package catalog
 import (
 	"fmt"
 	"sync"
-	"tae/pkg/common"
+	com "tae/pkg/common"
 	"tae/pkg/iface/txnif"
+
+	"github.com/matrixorigin/matrixone/pkg/vm/engine/aoe/storage/common"
 )
 
 type BlockEntry struct {
@@ -47,8 +49,8 @@ func (entry *BlockEntry) Compare(o NodePayload) int {
 	return entry.DoCompre(oe)
 }
 
-func (entry *BlockEntry) PPString(level common.PPLevel, depth int, prefix string) string {
-	s := fmt.Sprintf("%s%s%s", common.RepeatStr("\t", depth), prefix, entry.StringLocked())
+func (entry *BlockEntry) PPString(level com.PPLevel, depth int, prefix string) string {
+	s := fmt.Sprintf("%s%s%s", com.RepeatStr("\t", depth), prefix, entry.StringLocked())
 	return s
 }
 
@@ -60,4 +62,12 @@ func (entry *BlockEntry) String() string {
 
 func (entry *BlockEntry) StringLocked() string {
 	return fmt.Sprintf("BLOCK%s", entry.BaseEntry.String())
+}
+
+func (entry *BlockEntry) AsCommonID() *common.ID {
+	return &common.ID{
+		TableID:   entry.GetSegment().GetTable().GetID(),
+		SegmentID: entry.GetSegment().GetID(),
+		BlockID:   entry.GetID(),
+	}
 }

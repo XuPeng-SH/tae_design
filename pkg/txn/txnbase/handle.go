@@ -75,6 +75,7 @@ func (seg *TxnSegment) CreateBlock() (blk handle.Block, err error)              
 func (blk *TxnBlock) ID() uint64                                                    { return 0 }
 func (blk *TxnBlock) String() string                                                { return "" }
 func (blk *TxnBlock) Close() error                                                  { return nil }
+func (blk *TxnBlock) GetMeta() interface{}                                          { return nil }
 func (blk *TxnBlock) GetByFilter(handle.Filter, bool) (bat *batch.Batch, err error) { return }
 func (blk *TxnBlock) GetBatch(ctx interface{}) (bat *batch.Batch, err error)        { return }
 

@@ -30,6 +30,7 @@ type BlockReader interface {
 	String() string
 	GetByFilter(filter Filter, offsetOnly bool) (*batch.Batch, error)
 	GetBatch(ctx interface{}) (*batch.Batch, error)
+	GetMeta() interface{}
 }
 
 type BlockWriter interface {

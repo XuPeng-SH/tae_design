@@ -3,8 +3,10 @@ package catalog
 import (
 	"fmt"
 	"sync"
-	"tae/pkg/common"
+	com "tae/pkg/common"
 	"tae/pkg/iface/txnif"
+
+	"github.com/matrixorigin/matrixone/pkg/vm/engine/aoe/storage/common"
 )
 
 type SegmentEntry struct {
@@ -54,9 +56,9 @@ func (entry *SegmentEntry) MakeCommand(id uint32) (cmd txnif.TxnCmd, err error) 
 	return newSegmentCmd(id, cmdType, entry), nil
 }
 
-func (entry *SegmentEntry) PPString(level common.PPLevel, depth int, prefix string) string {
-	s := fmt.Sprintf("%s%s%s", common.RepeatStr("\t", depth), prefix, entry.StringLocked())
-	if level == common.PPL0 {
+func (entry *SegmentEntry) PPString(level com.PPLevel, depth int, prefix string) string {
+	s := fmt.Sprintf("%s%s%s", com.RepeatStr("\t", depth), prefix, entry.StringLocked())
+	if level == com.PPL0 {
 		return s
 	}
 	var body string
@@ -110,4 +112,11 @@ func (entry *SegmentEntry) MakeBlockIt(reverse bool) *LinkIt {
 func (entry *SegmentEntry) addEntryLocked(block *BlockEntry) {
 	n := entry.link.Insert(block)
 	entry.entries[block.GetID()] = n
+}
+
+func (entry *SegmentEntry) AsCommonID() *common.ID {
+	return &common.ID{
+		TableID:   entry.GetTable().GetID(),
+		SegmentID: entry.GetID(),
+	}
 }

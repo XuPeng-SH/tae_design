@@ -70,6 +70,6 @@ func newBlock(txn txnif.AsyncTxn, meta *catalog.BlockEntry) *txnBlock {
 	return blk
 }
 
-func (seg *txnBlock) GetMeta() interface{} { return seg.entry }
-func (seg *txnBlock) String() string       { return seg.entry.String() }
-func (seg *txnBlock) ID() uint64           { return seg.entry.GetID() }
+func (blk *txnBlock) GetMeta() interface{} { return blk.entry }
+func (blk *txnBlock) String() string       { return blk.entry.String() }
+func (blk *txnBlock) ID() uint64           { return blk.entry.GetID() }
