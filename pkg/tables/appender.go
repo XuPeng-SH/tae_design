@@ -1,0 +1,42 @@
+package tables
+
+import (
+	gbat "github.com/matrixorigin/matrixone/pkg/container/batch"
+	"github.com/matrixorigin/matrixone/pkg/vm/engine/aoe/storage/common"
+	"github.com/matrixorigin/matrixone/pkg/vm/engine/aoe/storage/mutation/buffer/base"
+)
+
+type blockAppender struct {
+	node   *appendableNode
+	handle base.INodeHandle
+}
+
+func newAppender(node *appendableNode) *blockAppender {
+	appender := new(blockAppender)
+	appender.node = node
+	appender.handle = node.mgr.Pin(node)
+	return appender
+}
+
+func (appender *blockAppender) Close() error {
+	if appender.handle != nil {
+		appender.handle.Close()
+		appender.handle = nil
+	}
+	return nil
+}
+
+func (appender *blockAppender) GetID() *common.ID {
+	return appender.node.meta.AsCommonID()
+}
+
+func (appender *blockAppender) PrepareAppend(rows uint32) (n uint32, err error) {
+	return appender.node.PrepareAppend(rows)
+}
+
+func (appender *blockAppender) ApplyAppend(bat *gbat.Batch, offset, length uint32, ctx interface{}) (err error) {
+	return appender.node.Expand(uint64(length*20), func() error {
+		appender.node.rows += length
+		return nil
+	})
+}
