@@ -3,42 +3,42 @@ package dataio
 import (
 	"fmt"
 
+	gvec "github.com/matrixorigin/matrixone/pkg/container/vector"
 	"github.com/matrixorigin/matrixone/pkg/vm/engine/aoe/storage/container/batch"
+	"github.com/matrixorigin/matrixone/pkg/vm/engine/aoe/storage/wal/shard"
 )
 
 var SegmentFileMockFactory = func(dir string, id uint64) SegmentFile {
-	return mockAppendableSegment(dir, id)
+	return mockSegment(dir, id)
 }
 
 type mockBlockFile struct {
 	NoopBlockFile
-	id         uint64
-	rows       uint32
-	sorted     bool
-	appendable bool
-	segFile    SegmentFile
-	maxTs      uint64
-	data       batch.IBatch
+	id       uint64
+	rows     uint32
+	segFile  SegmentFile
+	maxTs    uint64
+	data     batch.IBatch
+	logIndex *shard.Index
+	ts       *gvec.Vector
 }
 
 type mockSegmentFile struct {
 	NoopSegmentFile
-	files      map[uint64]*mockBlockFile
-	appendable bool
-	sorted     bool
-	name       string
+	files  map[uint64]*mockBlockFile
+	name   string
+	sorted bool
 }
 
-func mockAppendableBlock(id uint64, bat batch.IBatch, segFile SegmentFile) *mockBlockFile {
+func mockBlock(id uint64, bat batch.IBatch, segFile SegmentFile) *mockBlockFile {
 	return &mockBlockFile{
-		id:         id,
-		appendable: true,
-		segFile:    segFile,
-		data:       bat,
+		id:      id,
+		segFile: segFile,
+		data:    bat,
 	}
 }
 
-func mockAppendableSegment(dir string, id uint64) *mockSegmentFile {
+func mockSegment(dir string, id uint64) *mockSegmentFile {
 	name := fmt.Sprintf("%s-mock-%d", dir, id)
 	return &mockSegmentFile{
 		files: make(map[uint64]*mockBlockFile),
@@ -46,23 +46,16 @@ func mockAppendableSegment(dir string, id uint64) *mockSegmentFile {
 	}
 }
 
-func (bf *mockBlockFile) IsAppendable() bool { return bf.appendable }
-func (bf *mockBlockFile) Rows() uint32 {
-	if bf.appendable {
-		panic("not expected")
-	}
-	return bf.rows
-}
-func (bf *mockBlockFile) GetSegmentFile() SegmentFile { return bf.segFile }
-func (bf *mockBlockFile) MaxTS() uint64 {
-	if bf.appendable {
-		panic("not expected")
-	}
-	return bf.maxTs
-}
+func (bf *mockBlockFile) Rows() uint32   { return bf.rows }
+func (bf *mockBlockFile) IsSorted() bool { return bf.rows > 0 && bf.ts == nil }
 
-func (bf *mockBlockFile) WriteData(bat batch.IBatch) error {
+func (bf *mockBlockFile) GetSegmentFile() SegmentFile { return bf.segFile }
+
+func (bf *mockBlockFile) WriteData(bat batch.IBatch, logIndex *shard.Index, ts *gvec.Vector) error {
 	bf.data = bat
+	bf.rows = uint32(bat.Length())
+	bf.logIndex = logIndex
+	bf.ts = ts
 	return nil
 }
 
@@ -71,12 +64,20 @@ func (bf *mockBlockFile) LoadData() (bat batch.IBatch, err error) {
 	return
 }
 
-func (sf *mockSegmentFile) IsAppendable() bool { return sf.appendable }
-func (sf *mockSegmentFile) IsSorted() bool     { return sf.sorted }
+func (bf *mockBlockFile) GetMaxIndex() *shard.Index {
+	return bf.logIndex
+}
+
+func (bf *mockBlockFile) GetTimeStamps() (ts *gvec.Vector, err error) {
+	ts = bf.ts
+	return
+}
+
+func (sf *mockSegmentFile) IsSorted() bool { return sf.sorted }
 func (sf *mockSegmentFile) GetBlockFile(id uint64) BlockFile {
 	bf := sf.files[id]
 	if bf == nil {
-		bf = mockAppendableBlock(id, nil, sf)
+		bf = mockBlock(id, nil, sf)
 		sf.files[id] = bf
 	}
 	return bf

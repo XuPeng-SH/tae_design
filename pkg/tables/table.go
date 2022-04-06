@@ -24,6 +24,13 @@ func newTable(meta *catalog.TableEntry, fileFactory dataio.SegmentFileFactory, b
 	}
 }
 
+func (table *dataTable) HasAppendableSegment() bool {
+	if table.aSeg == nil {
+		return false
+	}
+	return table.aSeg.IsAppendable()
+}
+
 func (table *dataTable) GetAppender() (id *common.ID, appender data.BlockAppender, err error) {
 	if table.aSeg == nil {
 		err = data.ErrAppendableSegmentNotFound
@@ -43,6 +50,10 @@ func (table *dataTable) setAppendableSegment(id uint64) {
 func (table *dataTable) SetAppender(id *common.ID) (appender data.BlockAppender, err error) {
 	if table.aSeg == nil || table.aSeg.GetID() != id.SegmentID {
 		table.setAppendableSegment(id.SegmentID)
+		_, appender, err = table.aSeg.GetAppender()
+		if err == nil {
+			return
+		}
 	}
 	return table.aSeg.SetAppender(id.BlockID)
 }

@@ -14,9 +14,10 @@ type SegmentEntry struct {
 	table   *TableEntry
 	entries map[uint64]*DLNode
 	link    *Link
+	state   EntryState
 }
 
-func NewSegmentEntry(table *TableEntry, txn txnif.AsyncTxn) *SegmentEntry {
+func NewSegmentEntry(table *TableEntry, txn txnif.AsyncTxn, state EntryState) *SegmentEntry {
 	id := table.GetDB().catalog.NextSegment()
 	e := &SegmentEntry{
 		BaseEntry: &BaseEntry{
@@ -30,6 +31,7 @@ func NewSegmentEntry(table *TableEntry, txn txnif.AsyncTxn) *SegmentEntry {
 		table:   table,
 		link:    new(Link),
 		entries: make(map[uint64]*DLNode),
+		state:   state,
 	}
 	return e
 }
@@ -88,6 +90,10 @@ func (entry *SegmentEntry) String() string {
 	return entry.StringLocked()
 }
 
+func (entry *SegmentEntry) IsAppendable() bool {
+	return entry.state == ES_Appendable
+}
+
 func (entry *SegmentEntry) GetTable() *TableEntry {
 	return entry.table
 }
@@ -97,10 +103,34 @@ func (entry *SegmentEntry) Compare(o NodePayload) int {
 	return entry.DoCompre(oe)
 }
 
-func (entry *SegmentEntry) CreateBlock(txn txnif.AsyncTxn) (created *BlockEntry, err error) {
+func (entry *SegmentEntry) GetAppendableBlockCnt() int {
+	cnt := 0
+	it := entry.MakeBlockIt(true)
+	for it.Valid() {
+		if it.Get().GetPayload().(*BlockEntry).IsAppendable() {
+			cnt++
+		}
+		it.Next()
+	}
+	return cnt
+}
+
+func (entry *SegmentEntry) LastAppendableBlock() (blk *BlockEntry) {
+	it := entry.MakeBlockIt(false)
+	for it.Valid() {
+		itBlk := it.Get().GetPayload().(*BlockEntry)
+		if itBlk.IsAppendable() {
+			blk = itBlk
+		}
+		it.Next()
+	}
+	return blk
+}
+
+func (entry *SegmentEntry) CreateBlock(txn txnif.AsyncTxn, state EntryState) (created *BlockEntry, err error) {
 	entry.Lock()
 	defer entry.Unlock()
-	created = NewBlockEntry(entry, txn)
+	created = NewBlockEntry(entry, txn, state)
 	entry.addEntryLocked(created)
 	return
 }

@@ -22,15 +22,34 @@ type dataSegment struct {
 
 func newSegment(meta *catalog.SegmentEntry, factory dataio.SegmentFileFactory, bufMgr base.INodeManager) *dataSegment {
 	segFile := factory("xxx", meta.GetID())
-	// TODO:
-	// 1. Open segment file
-	// 2. Read segment file meta and reset segment and block meta
+	blkMeta := meta.LastAppendableBlock()
+	var blk data.Block
+	if blkMeta != nil {
+		blk = newBlock(blkMeta, segFile, bufMgr)
+	}
 	seg := &dataSegment{
 		meta:   meta,
 		file:   segFile,
 		bufMgr: bufMgr,
+		aBlk:   blk,
 	}
 	return seg
+}
+
+func (segment *dataSegment) IsAppendable() bool {
+	if !segment.meta.IsAppendable() {
+		return false
+	}
+	if segment.aBlk != nil {
+		if blkAppendable := segment.aBlk.IsAppendable(); blkAppendable {
+			return true
+		}
+	}
+	blkCnt := segment.meta.GetAppendableBlockCnt()
+	if blkCnt >= int(segment.meta.GetTable().GetSchema().SegmentMaxBlocks) {
+		return false
+	}
+	return true
 }
 
 func (segment *dataSegment) GetID() uint64 { return segment.meta.GetID() }
@@ -38,15 +57,20 @@ func (segment *dataSegment) GetID() uint64 { return segment.meta.GetID() }
 func (segment *dataSegment) GetAppender() (id *common.ID, appender data.BlockAppender, err error) {
 	id = segment.meta.AsCommonID()
 	if segment.aBlk == nil {
-		if !segment.file.IsAppendable() {
-			err = data.ErrNotAppendable
+		if !segment.meta.IsAppendable() {
+			err = data.ErrAppendableSegmentNotFound
 			return
 		}
+		err = data.ErrAppendableBlockNotFound
 		return
 	}
 	appender, err = segment.aBlk.MakeAppender()
-	if err != nil && segment.file.IsAppendable() {
-		err = nil
+	if err != nil {
+		if segment.meta.GetAppendableBlockCnt() >= int(segment.meta.GetTable().GetSchema().SegmentMaxBlocks) {
+			err = data.ErrAppendableSegmentNotFound
+		} else {
+			err = data.ErrAppendableBlockNotFound
+		}
 	}
 	return
 }

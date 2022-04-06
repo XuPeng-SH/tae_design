@@ -60,6 +60,10 @@ func TestBlock1(t *testing.T) {
 	assert.Nil(t, err)
 	t.Log(toAppend)
 	assert.Nil(t, appender.ApplyAppend(nil, 0, toAppend, nil))
+
+	has := table.HasAppendableSegment()
+	t.Log(has)
+
 	appender.Close()
 	t.Log(bufMgr.String())
 }

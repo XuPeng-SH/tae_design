@@ -12,9 +12,10 @@ import (
 type BlockEntry struct {
 	*BaseEntry
 	segment *SegmentEntry
+	state   EntryState
 }
 
-func NewBlockEntry(segment *SegmentEntry, txn txnif.AsyncTxn) *BlockEntry {
+func NewBlockEntry(segment *SegmentEntry, txn txnif.AsyncTxn, state EntryState) *BlockEntry {
 	id := segment.GetTable().GetDB().catalog.NextBlock()
 	e := &BlockEntry{
 		BaseEntry: &BaseEntry{
@@ -26,8 +27,13 @@ func NewBlockEntry(segment *SegmentEntry, txn txnif.AsyncTxn) *BlockEntry {
 			ID:      id,
 		},
 		segment: segment,
+		state:   state,
 	}
 	return e
+}
+
+func (entry *BlockEntry) IsAppendable() bool {
+	return entry.state == ES_Appendable
 }
 
 func (entry *BlockEntry) GetSegment() *SegmentEntry {

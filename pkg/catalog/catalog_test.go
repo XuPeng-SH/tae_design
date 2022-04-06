@@ -445,7 +445,7 @@ func TestSegment1(t *testing.T) {
 	schema.Name = tbName
 	tb, err := db.CreateTableEntry(schema, txn1)
 	assert.Nil(t, err)
-	seg1, err := tb.CreateSegment(txn1)
+	seg1, err := tb.CreateSegment(txn1, ES_Appendable)
 	assert.Nil(t, err)
 	err = txn1.Commit()
 	assert.Nil(t, err)

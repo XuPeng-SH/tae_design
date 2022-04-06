@@ -58,10 +58,10 @@ func (entry *TableEntry) MakeSegmentIt(reverse bool) *LinkIt {
 	return NewLinkIt(entry.RWMutex, entry.link, reverse)
 }
 
-func (entry *TableEntry) CreateSegment(txn txnif.AsyncTxn) (created *SegmentEntry, err error) {
+func (entry *TableEntry) CreateSegment(txn txnif.AsyncTxn, state EntryState) (created *SegmentEntry, err error) {
 	entry.Lock()
 	defer entry.Unlock()
-	created = NewSegmentEntry(entry, txn)
+	created = NewSegmentEntry(entry, txn, state)
 	entry.addEntryLocked(created)
 	return
 }

@@ -13,6 +13,7 @@ func IsBlockID(id *common.ID) bool {
 type Table interface {
 	GetAppender() (*common.ID, BlockAppender, error)
 	SetAppender(id *common.ID) (BlockAppender, error)
+	HasAppendableSegment() bool
 }
 
 // func append() {

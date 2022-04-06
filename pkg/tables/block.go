@@ -1,7 +1,6 @@
 package tables
 
 import (
-	"io"
 	"tae/pkg/catalog"
 	"tae/pkg/dataio"
 	"tae/pkg/iface/data"
@@ -13,10 +12,6 @@ import (
 	"github.com/matrixorigin/matrixone/pkg/vm/engine/aoe/storage/mutation/buffer"
 	"github.com/matrixorigin/matrixone/pkg/vm/engine/aoe/storage/mutation/buffer/base"
 )
-
-type ColumnBlockFile interface {
-	io.Reader
-}
 
 type appendableNode struct {
 	*buffer.Node
@@ -65,7 +60,7 @@ func (node *appendableNode) OnLoad() {
 }
 
 func (node *appendableNode) OnUnload() {
-	if err := node.file.WriteData(node.data); err != nil {
+	if err := node.file.WriteData(node.data, nil, nil); err != nil {
 		panic(err)
 	}
 	if err := node.file.Sync(); err != nil {
@@ -136,7 +131,7 @@ type dataBlock struct {
 func newBlock(meta *catalog.BlockEntry, segFile dataio.SegmentFile, bufMgr base.INodeManager) *dataBlock {
 	file := segFile.GetBlockFile(meta.GetID())
 	var node *appendableNode
-	if file.IsAppendable() {
+	if meta.IsAppendable() {
 		node = newNode(bufMgr, meta, file)
 	}
 	return &dataBlock{
@@ -147,24 +142,24 @@ func newBlock(meta *catalog.BlockEntry, segFile dataio.SegmentFile, bufMgr base.
 }
 
 func (blk *dataBlock) IsAppendable() bool {
-	return blk.node != nil
+	if !blk.meta.IsAppendable() {
+		return false
+	}
+	if blk.node.Rows(nil, true) == blk.meta.GetSegment().GetTable().GetSchema().BlockMaxRows {
+		return false
+	}
+	return true
 }
 
 func (blk *dataBlock) Rows(txn txnif.AsyncTxn, coarse bool) uint32 {
-	if blk.node != nil {
+	if blk.IsAppendable() {
 		return blk.node.Rows(txn, coarse)
 	}
-	if coarse || blk.file.MaxTS() < txn.GetStartTS() {
-		return blk.file.Rows()
-	}
-	// TODO: fine row count
-	// 1. Load txn ts zonemap
-	// 2. Calculate rows
-	return 0
+	return blk.file.Rows()
 }
 
 func (blk *dataBlock) MakeAppender() (appender data.BlockAppender, err error) {
-	if blk.node == nil {
+	if !blk.IsAppendable() {
 		err = data.ErrNotAppendable
 		return
 	}

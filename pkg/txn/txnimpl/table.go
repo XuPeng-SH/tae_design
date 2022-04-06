@@ -110,7 +110,7 @@ func (tbl *txnTable) CollectCmd(cmdMgr *commandManager) error {
 
 func (tbl *txnTable) CreateSegment() (seg handle.Segment, err error) {
 	var meta *catalog.SegmentEntry
-	if meta, err = tbl.entry.CreateSegment(tbl.txn); err != nil {
+	if meta, err = tbl.entry.CreateSegment(tbl.txn, catalog.ES_Appendable); err != nil {
 		return
 	}
 	seg = newSegment(tbl.txn, meta)
@@ -124,7 +124,7 @@ func (tbl *txnTable) CreateBlock(sid uint64) (blk handle.Block, err error) {
 	if seg, err = tbl.entry.GetSegmentByID(sid); err != nil {
 		return
 	}
-	meta, err := seg.CreateBlock(tbl.txn)
+	meta, err := seg.CreateBlock(tbl.txn, catalog.ES_Appendable)
 	if err != nil {
 		return
 	}
