@@ -5,6 +5,7 @@ import (
 	"tae/pkg/dataio"
 	"tae/pkg/iface/txnif"
 
+	gbat "github.com/matrixorigin/matrixone/pkg/container/batch"
 	"github.com/matrixorigin/matrixone/pkg/vm/engine/aoe/storage/container/batch"
 	"github.com/matrixorigin/matrixone/pkg/vm/engine/aoe/storage/mutation/buffer"
 	"github.com/matrixorigin/matrixone/pkg/vm/engine/aoe/storage/mutation/buffer/base"
@@ -82,4 +83,9 @@ func (node *appendableNode) PrepareAppend(rows uint32) (n uint32, err error) {
 	// 	node.meta.GetSegment().GetID(),
 	// 	node.meta.GetID(),
 	// )
+}
+
+func (node *appendableNode) ApplyAppend(bat *gbat.Batch, offset, length uint32, ctx interface{}) (err error) {
+	node.rows += length
+	return
 }
