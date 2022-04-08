@@ -95,13 +95,13 @@ func (n *nodeList) Length() int {
 	return n.LengthLocked()
 }
 
-func (n *nodeList) GetTableNode() *DLNode {
+func (n *nodeList) GetTableNode() *common.DLNode {
 	n.rwlocker.RLock()
 	defer n.rwlocker.RUnlock()
 	return n.GetNext().(*nameNode).GetTableNode()
 }
 
-func (n *nodeList) GetDBNode() *DLNode {
+func (n *nodeList) GetDBNode() *common.DLNode {
 	n.rwlocker.RLock()
 	defer n.rwlocker.RUnlock()
 	return n.GetNext().(*nameNode).GetDBNode()
@@ -122,11 +122,11 @@ func (n *nodeList) GetDBNode() *DLNode {
 // 7. Txn3 commit
 // 8. Txn4 can still find "tb1"
 // 9. Txn5 start and cannot find "tb1"
-func (n *nodeList) TxnGetTableNodeLocked(txnCtx txnif.TxnReader) *DLNode {
-	var dn *DLNode
+func (n *nodeList) TxnGetTableNodeLocked(txnCtx txnif.TxnReader) *common.DLNode {
+	var dn *common.DLNode
 	fn := func(nn *nameNode) (goNext bool) {
 		dlNode := nn.GetTableNode()
-		entry := dlNode.payload.(*TableEntry)
+		entry := dlNode.GetPayload().(*TableEntry)
 		entry.RLock()
 		goNext = true
 		// A txn is writing the entry
@@ -206,11 +206,11 @@ func (n *nodeList) TxnGetTableNodeLocked(txnCtx txnif.TxnReader) *DLNode {
 	return dn
 }
 
-func (n *nodeList) TxnGetDBNodeLocked(txnCtx txnif.TxnReader) *DLNode {
-	var dn *DLNode
+func (n *nodeList) TxnGetDBNodeLocked(txnCtx txnif.TxnReader) *common.DLNode {
+	var dn *common.DLNode
 	fn := func(nn *nameNode) (goNext bool) {
 		dlNode := nn.GetDBNode()
-		entry := dlNode.payload.(*DBEntry)
+		entry := dlNode.GetPayload().(*DBEntry)
 		entry.RLock()
 		goNext = true
 		if entry.HasActiveTxn() {
@@ -315,14 +315,14 @@ func newNameNode(host interface{}, id uint64) *nameNode {
 	}
 }
 
-func (n *nameNode) GetDBNode() *DLNode {
+func (n *nameNode) GetDBNode() *common.DLNode {
 	if n == nil {
 		return nil
 	}
 	return n.host.(*Catalog).entries[n.Id]
 }
 
-func (n *nameNode) GetTableNode() *DLNode {
+func (n *nameNode) GetTableNode() *common.DLNode {
 	if n == nil {
 		return nil
 	}

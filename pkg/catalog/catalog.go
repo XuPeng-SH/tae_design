@@ -22,9 +22,9 @@ type Catalog struct {
 	*sync.RWMutex
 	store store.Store
 
-	entries   map[uint64]*DLNode
+	entries   map[uint64]*common.DLNode
 	nameNodes map[string]*nodeList
-	link      *Link
+	link      *common.Link
 
 	nodesMu  sync.RWMutex
 	commitMu sync.RWMutex
@@ -41,9 +41,9 @@ func MockCatalog(dir, name string, cfg *store.StoreCfg) *Catalog {
 		RWMutex:    new(sync.RWMutex),
 		IDAlloctor: NewIDAllocator(),
 		store:      driver,
-		entries:    make(map[uint64]*DLNode),
+		entries:    make(map[uint64]*common.DLNode),
 		nameNodes:  make(map[string]*nodeList),
-		link:       new(Link),
+		link:       new(common.Link),
 	}
 	// catalog.StateMachine.Start()
 	return catalog
@@ -64,7 +64,7 @@ func (catalog *Catalog) GetDatabaseByID(id uint64) (db *DBEntry, err error) {
 		err = ErrNotFound
 		return
 	}
-	db = node.payload.(*DBEntry)
+	db = node.GetPayload().(*DBEntry)
 	return
 }
 
@@ -80,7 +80,7 @@ func (catalog *Catalog) addEntryLocked(database *DBEntry) error {
 		nn.CreateNode(database.GetID())
 	} else {
 		node := nn.GetDBNode()
-		record := node.payload.(*DBEntry)
+		record := node.GetPayload().(*DBEntry)
 		record.RLock()
 		err := record.PrepareWrite(database.GetTxn(), record.RWMutex)
 		if err != nil {
@@ -106,8 +106,8 @@ func (catalog *Catalog) addEntryLocked(database *DBEntry) error {
 	return nil
 }
 
-func (catalog *Catalog) MakeDBIt(reverse bool) *LinkIt {
-	return NewLinkIt(catalog.RWMutex, catalog.link, reverse)
+func (catalog *Catalog) MakeDBIt(reverse bool) *common.LinkIt {
+	return common.NewLinkIt(catalog.RWMutex, catalog.link, reverse)
 }
 
 func (catalog *Catalog) SimplePPString(level common.PPLevel) string {
@@ -120,7 +120,7 @@ func (catalog *Catalog) PPString(level common.PPLevel, depth int, prefix string)
 	it := catalog.MakeDBIt(true)
 	for it.Valid() {
 		cnt++
-		table := it.curr.payload.(*DBEntry)
+		table := it.Get().GetPayload().(*DBEntry)
 		if len(body) == 0 {
 			body = table.PPString(level, depth+1, "")
 		} else {
@@ -151,7 +151,7 @@ func (catalog *Catalog) RemoveEntry(database *DBEntry) error {
 	return nil
 }
 
-func (catalog *Catalog) txnGetNodeByNameLocked(name string, txnCtx txnif.AsyncTxn) *DLNode {
+func (catalog *Catalog) txnGetNodeByNameLocked(name string, txnCtx txnif.AsyncTxn) *common.DLNode {
 	node := catalog.nameNodes[name]
 	if node == nil {
 		return nil
@@ -166,7 +166,7 @@ func (catalog *Catalog) GetDBEntry(name string, txnCtx txnif.AsyncTxn) (*DBEntry
 	if n == nil {
 		return nil, ErrNotFound
 	}
-	return n.payload.(*DBEntry), nil
+	return n.GetPayload().(*DBEntry), nil
 }
 
 func (catalog *Catalog) DropDBEntry(name string, txnCtx txnif.AsyncTxn) (deleted *DBEntry, err error) {
@@ -177,7 +177,7 @@ func (catalog *Catalog) DropDBEntry(name string, txnCtx txnif.AsyncTxn) (deleted
 		err = ErrNotFound
 		return
 	}
-	entry := dn.payload.(*DBEntry)
+	entry := dn.GetPayload().(*DBEntry)
 	entry.Lock()
 	defer entry.Unlock()
 	err = entry.DropEntryLocked(txnCtx)

@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"sync"
+	com "tae/pkg/common"
 	"tae/pkg/iface/txnif"
 	"tae/pkg/txn/txnbase"
 	"testing"
@@ -39,8 +40,8 @@ func TestCreateDB1(t *testing.T) {
 
 	assert.Equal(t, 1, len(catalog.entries))
 	cnt := 0
-	catalog.link.Loop(func(n *DLNode) bool {
-		t.Log(n.payload.(*DBEntry).GetID())
+	catalog.link.Loop(func(n *com.DLNode) bool {
+		t.Log(n.GetPayload().(*DBEntry).GetID())
 		cnt++
 		return true
 	}, true)
@@ -77,7 +78,7 @@ func TestCreateDB1(t *testing.T) {
 	assert.Nil(t, err)
 
 	cnt = 0
-	catalog.link.Loop(func(n *DLNode) bool {
+	catalog.link.Loop(func(n *com.DLNode) bool {
 		// t.Log(n.payload.(*DBEntry).String())
 		cnt++
 		return true

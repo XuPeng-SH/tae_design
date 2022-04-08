@@ -3,6 +3,7 @@ package txnimpl
 import (
 	"sync"
 	"tae/pkg/catalog"
+	com "tae/pkg/common"
 	"tae/pkg/iface/handle"
 	"tae/pkg/iface/txnif"
 	"tae/pkg/txn/txnbase"
@@ -17,7 +18,7 @@ type txnSegment struct {
 type segmentIt struct {
 	rwlock sync.RWMutex
 	txn    txnif.AsyncTxn
-	linkIt *catalog.LinkIt
+	linkIt *com.LinkIt
 	curr   *catalog.SegmentEntry
 }
 

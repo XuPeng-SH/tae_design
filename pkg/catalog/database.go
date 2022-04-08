@@ -15,9 +15,9 @@ type DBEntry struct {
 	catalog *Catalog
 	name    string
 
-	entries   map[uint64]*DLNode
+	entries   map[uint64]*common.DLNode
 	nameNodes map[string]*nodeList
-	link      *Link
+	link      *common.Link
 
 	nodesMu sync.RWMutex
 }
@@ -35,14 +35,14 @@ func NewDBEntry(catalog *Catalog, name string, txnCtx txnif.AsyncTxn) *DBEntry {
 		},
 		catalog:   catalog,
 		name:      name,
-		entries:   make(map[uint64]*DLNode),
+		entries:   make(map[uint64]*common.DLNode),
 		nameNodes: make(map[string]*nodeList),
-		link:      new(Link),
+		link:      new(common.Link),
 	}
 	return e
 }
 
-func (e *DBEntry) Compare(o NodePayload) int {
+func (e *DBEntry) Compare(o common.NodePayload) int {
 	oe := o.(*DBEntry).BaseEntry
 	return e.DoCompre(oe)
 }
@@ -53,8 +53,8 @@ func (e *DBEntry) String() string {
 	return fmt.Sprintf("DB%s[name=%s]", e.BaseEntry.String(), e.name)
 }
 
-func (e *DBEntry) MakeTableIt(reverse bool) *LinkIt {
-	return NewLinkIt(e.RWMutex, e.link, reverse)
+func (e *DBEntry) MakeTableIt(reverse bool) *common.LinkIt {
+	return common.NewLinkIt(e.RWMutex, e.link, reverse)
 }
 
 func (e *DBEntry) PPString(level common.PPLevel, depth int, prefix string) string {
@@ -65,7 +65,7 @@ func (e *DBEntry) PPString(level common.PPLevel, depth int, prefix string) strin
 	var body string
 	it := e.MakeTableIt(true)
 	for it.Valid() {
-		table := it.curr.payload.(*TableEntry)
+		table := it.Get().GetPayload().(*TableEntry)
 		if len(body) == 0 {
 			body = table.PPString(level, depth+1, "")
 		} else {
@@ -87,11 +87,11 @@ func (e *DBEntry) GetTableEntryByID(id uint64) (table *TableEntry, err error) {
 	if node == nil {
 		return nil, ErrNotFound
 	}
-	table = node.payload.(*TableEntry)
+	table = node.GetPayload().(*TableEntry)
 	return
 }
 
-func (e *DBEntry) txnGetNodeByNameLocked(name string, txnCtx txnif.AsyncTxn) *DLNode {
+func (e *DBEntry) txnGetNodeByNameLocked(name string, txnCtx txnif.AsyncTxn) *common.DLNode {
 	node := e.nameNodes[name]
 	if node == nil {
 		return nil
@@ -106,7 +106,7 @@ func (e *DBEntry) GetTableEntry(name string, txnCtx txnif.AsyncTxn) (entry *Tabl
 	if n == nil {
 		return nil, ErrNotFound
 	}
-	entry = n.payload.(*TableEntry)
+	entry = n.GetPayload().(*TableEntry)
 	return
 }
 
@@ -118,7 +118,7 @@ func (e *DBEntry) DropTableEntry(name string, txnCtx txnif.AsyncTxn) (deleted *T
 		err = ErrNotFound
 		return
 	}
-	entry := dn.payload.(*TableEntry)
+	entry := dn.GetPayload().(*TableEntry)
 	entry.Lock()
 	defer entry.Unlock()
 	err = entry.DropEntryLocked(txnCtx)
@@ -163,7 +163,7 @@ func (e *DBEntry) addEntryLocked(table *TableEntry) error {
 		nn.CreateNode(table.GetID())
 	} else {
 		node := nn.GetTableNode()
-		record := node.payload.(*TableEntry)
+		record := node.GetPayload().(*TableEntry)
 		record.RLock()
 		err := record.PrepareWrite(table.GetTxn(), record.RWMutex)
 		if err != nil {

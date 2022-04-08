@@ -1,6 +1,7 @@
 package catalog
 
 import (
+	com "tae/pkg/common"
 	"testing"
 	"time"
 
@@ -15,7 +16,7 @@ func newTestNode(val int) *testNode {
 	return &testNode{val: val}
 }
 
-func (n *testNode) Compare(o NodePayload) int {
+func (n *testNode) Compare(o com.NodePayload) int {
 	on := o.(*testNode)
 	if n.val > on.val {
 		return 1
@@ -26,9 +27,9 @@ func (n *testNode) Compare(o NodePayload) int {
 }
 
 func TestDLNode(t *testing.T) {
-	link := new(Link)
+	link := new(com.Link)
 	now := time.Now()
-	var node *DLNode
+	var node *com.DLNode
 	// for i := 10; i >= 0; i-- {
 	nodeCnt := 10
 	for i := 0; i < nodeCnt; i++ {
@@ -39,17 +40,17 @@ func TestDLNode(t *testing.T) {
 	}
 	t.Log(time.Since(now))
 	cnt := 0
-	link.Loop(func(node *DLNode) bool {
+	link.Loop(func(node *com.DLNode) bool {
 		cnt++
 		return true
 	}, true)
 	assert.Equal(t, nodeCnt, cnt)
-	assert.Equal(t, 5, node.payload.(*testNode).val)
+	assert.Equal(t, 5, node.GetPayload().(*testNode).val)
 
 	link.Delete(node)
 	cnt = 0
-	link.Loop(func(node *DLNode) bool {
-		t.Logf("%d", node.payload.(*testNode).val)
+	link.Loop(func(node *com.DLNode) bool {
+		t.Logf("%d", node.GetPayload().(*testNode).val)
 		cnt++
 		return true
 	}, true)

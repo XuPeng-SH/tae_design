@@ -12,8 +12,8 @@ import (
 type SegmentEntry struct {
 	*BaseEntry
 	table   *TableEntry
-	entries map[uint64]*DLNode
-	link    *Link
+	entries map[uint64]*com.DLNode
+	link    *com.Link
 	state   EntryState
 }
 
@@ -29,8 +29,8 @@ func NewSegmentEntry(table *TableEntry, txn txnif.AsyncTxn, state EntryState) *S
 			ID:      id,
 		},
 		table:   table,
-		link:    new(Link),
-		entries: make(map[uint64]*DLNode),
+		link:    new(com.Link),
+		entries: make(map[uint64]*com.DLNode),
 		state:   state,
 	}
 	return e
@@ -44,7 +44,7 @@ func (entry *SegmentEntry) GetBlockEntryByID(id uint64) (blk *BlockEntry, err er
 		err = ErrNotFound
 		return
 	}
-	blk = node.payload.(*BlockEntry)
+	blk = node.GetPayload().(*BlockEntry)
 	return
 }
 
@@ -66,7 +66,7 @@ func (entry *SegmentEntry) PPString(level com.PPLevel, depth int, prefix string)
 	var body string
 	it := entry.MakeBlockIt(true)
 	for it.Valid() {
-		block := it.curr.payload.(*BlockEntry)
+		block := it.Get().GetPayload().(*BlockEntry)
 		if len(body) == 0 {
 			body = block.PPString(level, depth+1, prefix)
 		} else {
@@ -98,7 +98,7 @@ func (entry *SegmentEntry) GetTable() *TableEntry {
 	return entry.table
 }
 
-func (entry *SegmentEntry) Compare(o NodePayload) int {
+func (entry *SegmentEntry) Compare(o com.NodePayload) int {
 	oe := o.(*SegmentEntry).BaseEntry
 	return entry.DoCompre(oe)
 }
@@ -135,8 +135,8 @@ func (entry *SegmentEntry) CreateBlock(txn txnif.AsyncTxn, state EntryState) (cr
 	return
 }
 
-func (entry *SegmentEntry) MakeBlockIt(reverse bool) *LinkIt {
-	return NewLinkIt(entry.RWMutex, entry.link, reverse)
+func (entry *SegmentEntry) MakeBlockIt(reverse bool) *com.LinkIt {
+	return com.NewLinkIt(entry.RWMutex, entry.link, reverse)
 }
 
 func (entry *SegmentEntry) addEntryLocked(block *BlockEntry) {

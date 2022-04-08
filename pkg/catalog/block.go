@@ -50,7 +50,7 @@ func (entry *BlockEntry) MakeCommand(id uint32) (cmd txnif.TxnCmd, err error) {
 	return newBlockCmd(id, cmdType, entry), nil
 }
 
-func (entry *BlockEntry) Compare(o NodePayload) int {
+func (entry *BlockEntry) Compare(o com.NodePayload) int {
 	oe := o.(*BlockEntry).BaseEntry
 	return entry.DoCompre(oe)
 }
