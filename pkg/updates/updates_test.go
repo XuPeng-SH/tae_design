@@ -29,7 +29,7 @@ func newTestUpdateNode(ntype int8, meta *catalog.BlockEntry, start uint64, delet
 		ntype:    ntype,
 		startTs:  start,
 		commitTs: ^uint64(0),
-		updates:  NewBlockUpdates(meta, nil, deletes),
+		updates:  NewBlockUpdates(nil, meta, nil, deletes),
 	}
 }
 

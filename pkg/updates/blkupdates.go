@@ -20,6 +20,9 @@ type BlockUpdates struct {
 	cols         map[uint16]*ColumnUpdates
 	baseDeletes  *roaring.Bitmap
 	localDeletes *roaring.Bitmap
+	txn          txnif.AsyncTxn
+	startTs      uint64
+	commitTs     uint64
 }
 
 func NewEmptyBlockUpdates() *BlockUpdates {
@@ -28,17 +31,23 @@ func NewEmptyBlockUpdates() *BlockUpdates {
 	}
 }
 
-func NewBlockUpdates(meta *catalog.BlockEntry, rwlocker *sync.RWMutex, baseDeletes *roaring.Bitmap) *BlockUpdates {
+func NewBlockUpdates(txn txnif.AsyncTxn, meta *catalog.BlockEntry, rwlocker *sync.RWMutex, baseDeletes *roaring.Bitmap) *BlockUpdates {
 	if rwlocker == nil {
 		rwlocker = new(sync.RWMutex)
 	}
-	return &BlockUpdates{
+	updates := &BlockUpdates{
 		rwlocker:    rwlocker,
 		id:          meta.AsCommonID(),
 		meta:        meta,
 		cols:        make(map[uint16]*ColumnUpdates),
 		baseDeletes: baseDeletes,
+		txn:         txn,
 	}
+	if txn != nil {
+		updates.startTs = txn.GetStartTS()
+		updates.commitTs = txnif.UncommitTS
+	}
+	return updates
 }
 
 func (n *BlockUpdates) GetID() *common.ID { return n.id }
@@ -188,4 +197,60 @@ func (n *BlockUpdates) MakeCommand(id uint32, forceFlush bool) (cmd txnif.TxnCmd
 func (n *BlockUpdates) Compare(o com.NodePayload) int {
 	// op := o.(*BlockUpdates)
 	return 0
+}
+
+func (n *BlockUpdates) PrepareCommit() error {
+	n.rwlocker.Lock()
+	defer n.rwlocker.Unlock()
+	if n.commitTs != txnif.UncommitTS {
+		panic("not expected")
+	}
+	n.commitTs = n.txn.GetCommitTS()
+	return nil
+}
+
+func (n *BlockUpdates) ApplyCommit() (err error) {
+	n.rwlocker.Lock()
+	defer n.rwlocker.Unlock()
+	if n.txn == nil {
+		panic("not expected")
+	}
+	n.txn = nil
+	return
+}
+
+func (n *BlockUpdates) TxnCanRead(txn txnif.AsyncTxn, rwlocker *sync.RWMutex) bool {
+	if txn == nil {
+		return true
+	}
+	updateTxn := n.txn
+	// The update txn was committed, it is visible to read txn that started after the commitTs
+	if updateTxn == nil {
+		return n.commitTs < txn.GetStartTS()
+	}
+
+	// Read in the same txn
+	if updateTxn.GetID() == txn.GetID() {
+		return true
+	}
+
+	// The update txn is not committed
+	if n.commitTs == txnif.UncommitTS {
+		return false
+	}
+
+	// The update txn is committing and the commitTs is after the read txn startTs
+	if n.commitTs > txn.GetStartTS() {
+		return false
+	}
+
+	// The update txn is committing and the commitTs is before the read txn startTs
+	if rwlocker != nil {
+		rwlocker.RUnlock()
+	}
+	state := updateTxn.GetTxnState(true)
+	if rwlocker != nil {
+		rwlocker.RLock()
+	}
+	return state != txnif.TxnStateRollbacked
 }
