@@ -6,6 +6,8 @@ import (
 	"os"
 	"path/filepath"
 	"tae/pkg/catalog"
+	com "tae/pkg/common"
+	"tae/pkg/iface/txnif"
 	"tae/pkg/txn/txnbase"
 	"testing"
 	"time"
@@ -312,4 +314,121 @@ func TestUpdates(t *testing.T) {
 	cmd2, err := txnbase.BuildCommandFrom(r)
 	assert.Nil(t, err)
 	assert.NotNil(t, cmd2)
+}
+
+func TestUpdates2(t *testing.T) {
+	schema := catalog.MockSchema(1)
+	c := catalog.MockCatalog(initTestPath(t), "mock", nil)
+	defer c.Close()
+
+	db, _ := c.CreateDBEntry("db", nil)
+	table, _ := db.CreateTableEntry(schema, nil)
+	seg, _ := table.CreateSegment(nil, catalog.ES_Appendable)
+	blk, _ := seg.CreateBlock(nil, catalog.ES_Appendable)
+
+	uncommitted := new(com.Link)
+
+	cnt1 := 11
+	cnt2 := 10
+	link := new(com.Link)
+
+	for i := 0; i < cnt1+cnt2; i++ {
+		txn := new(txnbase.Txn)
+		txn.TxnCtx = new(txnbase.TxnCtx)
+		txn.StartTS = uint64(i) * 2
+		node := NewBlockUpdates(txn, blk, nil, nil)
+		node.DeleteLocked(uint32(i)*10, uint32(i+1)*10-1)
+		err := node.UpdateLocked(uint32(i+1)*10000, 0, (i+1)*10000)
+		if i < cnt1 {
+			node.commitTs = txn.StartTS + 1
+			node.txn = nil
+		} else {
+			uncommitted.Insert(node)
+		}
+		assert.Nil(t, err)
+		link.Insert(node)
+	}
+	uncommittedCnt := 0
+	uncommitted.Loop(func(node *com.DLNode) bool {
+		uncommittedCnt++
+		return true
+	}, true)
+	assert.Equal(t, cnt2, uncommittedCnt)
+
+	totalCnt := 0
+	link.Loop(func(node *com.DLNode) bool {
+		totalCnt++
+		return true
+	}, true)
+	assert.Equal(t, cnt2+cnt1, totalCnt)
+
+	makeMerge := func() *BlockUpdates {
+		var merge *BlockUpdates
+		link.Loop(func(node *com.DLNode) bool {
+			update := node.GetPayload().(*BlockUpdates)
+			if update.commitTs == txnif.UncommitTS {
+				return true
+			}
+			if merge == nil {
+				merge = NewMergeBlockUpdates(update.commitTs, update.meta, nil, nil)
+			}
+			merge.MergeLocked(update)
+			if update.nodeType == NT_Merge {
+				return false
+			}
+			return true
+		}, false)
+		return merge
+	}
+	m := makeMerge()
+	t.Log(m.String())
+	t.Log(m.localDeletes.String())
+
+	assert.Equal(t, cnt1*10, int(m.localDeletes.GetCardinality()))
+	assert.Equal(t, cnt1, int(m.cols[0].txnMask.GetCardinality()))
+	link.Insert(m)
+
+	totalCnt = 0
+	link.Loop(func(node *com.DLNode) bool {
+		totalCnt++
+		update := node.GetPayload().(*BlockUpdates)
+		if totalCnt == uncommittedCnt+1 {
+			assert.Equal(t, NT_Merge, update.nodeType)
+		}
+		t.Log(update.String())
+		return true
+	}, false)
+	assert.Equal(t, cnt2+cnt1+1, totalCnt)
+	// t.Log(link.GetHead().GetPayload().(*BlockUpdates).String())
+
+	commitTs := link.GetHead().GetPayload().(*BlockUpdates).startTs + uint64(100)
+	for {
+		node := link.GetHead()
+		update := node.GetPayload().(*BlockUpdates)
+		if update.commitTs != txnif.UncommitTS {
+			break
+		}
+		update.commitTs = commitTs
+		commitTs++
+		link.Update(node)
+	}
+
+	prev := txnif.UncommitTS
+	link.Loop(func(node *com.DLNode) bool {
+		update := node.GetPayload().(*BlockUpdates)
+		assert.True(t, update.commitTs <= prev)
+		prev = update.commitTs
+		return true
+	}, false)
+
+	m = makeMerge()
+	link.Insert(m)
+
+	link.Loop(func(node *com.DLNode) bool {
+		update := node.GetPayload().(*BlockUpdates)
+		t.Log(update.String())
+		return true
+	}, false)
+
+	t.Log(m.localDeletes.String())
 }

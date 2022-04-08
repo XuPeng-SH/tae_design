@@ -15,6 +15,16 @@ func (l *Link) GetTail() *DLNode {
 	return l.tail
 }
 
+func (l *Link) Update(n *DLNode) {
+	nhead, ntail := n.Sort()
+	if nhead != nil {
+		l.head = nhead
+	}
+	if ntail != nil {
+		l.tail = ntail
+	}
+}
+
 func (l *Link) Insert(payload NodePayload) *DLNode {
 	var (
 		n    *DLNode
@@ -100,7 +110,7 @@ func (l *DLNode) Sort() (*DLNode, *DLNode) {
 	return head, tail
 }
 
-func InsertDLNode(payload NodePayload, head *DLNode) (node, nhead *DLNode, ntail *DLNode) {
+func InsertDLNode(payload NodePayload, head *DLNode) (node, nhead, ntail *DLNode) {
 	node = &DLNode{
 		payload: payload,
 	}

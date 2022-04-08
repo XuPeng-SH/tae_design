@@ -2,6 +2,7 @@ package updates
 
 import (
 	"encoding/binary"
+	"fmt"
 	"io"
 	"sync"
 	"tae/pkg/catalog"
@@ -11,6 +12,13 @@ import (
 
 	"github.com/RoaringBitmap/roaring"
 	"github.com/matrixorigin/matrixone/pkg/vm/engine/aoe/storage/common"
+)
+
+type NodeType int8
+
+const (
+	NT_Normal NodeType = iota
+	NT_Merge
 )
 
 type BlockUpdates struct {
@@ -23,6 +31,7 @@ type BlockUpdates struct {
 	txn          txnif.AsyncTxn
 	startTs      uint64
 	commitTs     uint64
+	nodeType     NodeType
 }
 
 func NewEmptyBlockUpdates() *BlockUpdates {
@@ -42,12 +51,45 @@ func NewBlockUpdates(txn txnif.AsyncTxn, meta *catalog.BlockEntry, rwlocker *syn
 		cols:        make(map[uint16]*ColumnUpdates),
 		baseDeletes: baseDeletes,
 		txn:         txn,
+		nodeType:    NT_Normal,
 	}
 	if txn != nil {
 		updates.startTs = txn.GetStartTS()
 		updates.commitTs = txnif.UncommitTS
 	}
 	return updates
+}
+
+func NewMergeBlockUpdates(commitTs uint64, meta *catalog.BlockEntry, rwlocker *sync.RWMutex, baseDeletes *roaring.Bitmap) *BlockUpdates {
+	if rwlocker == nil {
+		rwlocker = new(sync.RWMutex)
+	}
+	updates := &BlockUpdates{
+		rwlocker:    rwlocker,
+		id:          meta.AsCommonID(),
+		meta:        meta,
+		cols:        make(map[uint16]*ColumnUpdates),
+		baseDeletes: baseDeletes,
+		startTs:     commitTs,
+		commitTs:    commitTs,
+		nodeType:    NT_Merge,
+	}
+	return updates
+}
+
+func (n *BlockUpdates) String() string {
+	n.rwlocker.RLock()
+	defer n.rwlocker.RUnlock()
+	commitState := "C"
+	if n.commitTs == txnif.UncommitTS {
+		commitState = "UC"
+	}
+	ntype := "TXN"
+	if n.nodeType == NT_Merge {
+		ntype = "MERGE"
+	}
+	s := fmt.Sprintf("[%s:%s:%s](%d-%d)", ntype, commitState, n.id.BlockString(), n.startTs, n.commitTs)
+	return s
 }
 
 func (n *BlockUpdates) GetID() *common.ID { return n.id }
@@ -195,8 +237,30 @@ func (n *BlockUpdates) MakeCommand(id uint32, forceFlush bool) (cmd txnif.TxnCmd
 }
 
 func (n *BlockUpdates) Compare(o com.NodePayload) int {
-	// op := o.(*BlockUpdates)
-	return 0
+	op := o.(*BlockUpdates)
+	n.rwlocker.RLock()
+	defer n.rwlocker.RUnlock()
+	op.rwlocker.RLock()
+	defer op.rwlocker.RUnlock()
+	if n.commitTs < op.commitTs {
+		return -1
+	}
+	if n.commitTs > op.commitTs {
+		return 1
+	}
+	if n.commitTs == txnif.UncommitTS {
+		if n.startTs < op.startTs {
+			return -1
+		} else if n.startTs > op.startTs {
+			return 1
+		}
+		return 0
+	}
+	if op.nodeType == NT_Merge {
+		return -1
+	}
+
+	return 1
 }
 
 func (n *BlockUpdates) PrepareCommit() error {
