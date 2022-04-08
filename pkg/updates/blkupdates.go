@@ -5,6 +5,7 @@ import (
 	"io"
 	"sync"
 	"tae/pkg/catalog"
+	com "tae/pkg/common"
 	"tae/pkg/iface/txnif"
 	"tae/pkg/txn/txnbase"
 
@@ -14,21 +15,27 @@ import (
 
 type BlockUpdates struct {
 	rwlocker     *sync.RWMutex
-	schema       *catalog.Schema
 	id           *common.ID
+	meta         *catalog.BlockEntry
 	cols         map[uint16]*ColumnUpdates
 	baseDeletes  *roaring.Bitmap
 	localDeletes *roaring.Bitmap
 }
 
-func NewBlockUpdates(id *common.ID, schema *catalog.Schema, rwlocker *sync.RWMutex, baseDeletes *roaring.Bitmap) *BlockUpdates {
+func NewEmptyBlockUpdates() *BlockUpdates {
+	return &BlockUpdates{
+		cols: make(map[uint16]*ColumnUpdates),
+	}
+}
+
+func NewBlockUpdates(meta *catalog.BlockEntry, rwlocker *sync.RWMutex, baseDeletes *roaring.Bitmap) *BlockUpdates {
 	if rwlocker == nil {
 		rwlocker = new(sync.RWMutex)
 	}
 	return &BlockUpdates{
-		id:          id,
-		schema:      schema,
 		rwlocker:    rwlocker,
+		id:          meta.AsCommonID(),
+		meta:        meta,
 		cols:        make(map[uint16]*ColumnUpdates),
 		baseDeletes: baseDeletes,
 	}
@@ -55,7 +62,7 @@ func (n *BlockUpdates) UpdateLocked(row uint32, colIdx uint16, v interface{}) er
 	}
 	col, ok := n.cols[colIdx]
 	if !ok {
-		col = NewColumnUpdates(n.id, n.schema.ColDefs[colIdx], n.rwlocker)
+		col = NewColumnUpdates(n.id, n.meta.GetSegment().GetTable().GetSchema().ColDefs[colIdx], n.rwlocker)
 		n.cols[colIdx] = col
 	}
 	return col.UpdateLocked(row, v)
@@ -79,7 +86,7 @@ func (n *BlockUpdates) MergeColumnLocked(ob txnif.BlockUpdates, colIdx uint16) e
 	}
 	currCol := n.cols[colIdx]
 	if currCol == nil {
-		currCol = NewColumnUpdates(n.id, n.schema.ColDefs[colIdx], n.rwlocker)
+		currCol = NewColumnUpdates(n.id, n.meta.GetSegment().GetTable().GetSchema().ColDefs[colIdx], n.rwlocker)
 		n.cols[colIdx] = currCol
 	}
 	currCol.MergeLocked(col)
@@ -96,7 +103,7 @@ func (n *BlockUpdates) MergeLocked(o *BlockUpdates) error {
 	for colIdx, col := range o.cols {
 		currCol := n.cols[colIdx]
 		if currCol == nil {
-			currCol = NewColumnUpdates(n.id, n.schema.ColDefs[colIdx], n.rwlocker)
+			currCol = NewColumnUpdates(n.id, n.meta.GetSegment().GetTable().GetSchema().ColDefs[colIdx], n.rwlocker)
 			n.cols[colIdx] = currCol
 		}
 		currCol.MergeLocked(col)
@@ -176,4 +183,9 @@ func (n *BlockUpdates) WriteTo(w io.Writer) error {
 func (n *BlockUpdates) MakeCommand(id uint32, forceFlush bool) (cmd txnif.TxnCmd, entry txnbase.NodeEntry, err error) {
 	cmd = NewUpdateCmd(id, n)
 	return
+}
+
+func (n *BlockUpdates) Compare(o com.NodePayload) int {
+	// op := o.(*BlockUpdates)
+	return 0
 }

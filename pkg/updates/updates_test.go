@@ -3,6 +3,8 @@ package updates
 import (
 	"bytes"
 	"fmt"
+	"os"
+	"path/filepath"
 	"tae/pkg/catalog"
 	"tae/pkg/txn/txnbase"
 	"testing"
@@ -20,18 +22,18 @@ type testUpdateNode struct {
 	next     *testUpdateNode
 	prev     *testUpdateNode
 	ntype    int8
-	id       *common.ID
 }
 
-func newTestUpdateNode(ntype int8, schema *catalog.Schema, id *common.ID, start uint64, deletes *roaring.Bitmap) *testUpdateNode {
+func newTestUpdateNode(ntype int8, meta *catalog.BlockEntry, start uint64, deletes *roaring.Bitmap) *testUpdateNode {
 	return &testUpdateNode{
-		id:       id,
 		ntype:    ntype,
 		startTs:  start,
 		commitTs: ^uint64(0),
-		updates:  NewBlockUpdates(id, schema, nil, deletes),
+		updates:  NewBlockUpdates(meta, nil, deletes),
 	}
 }
+
+func (update *testUpdateNode) getID() *common.ID { return update.updates.id }
 
 func (update *testUpdateNode) repr() string {
 	commitState := "C"
@@ -44,9 +46,9 @@ func (update *testUpdateNode) repr() string {
 	}
 	nextStr := "nil"
 	if update.next != nil {
-		nextStr = fmt.Sprintf("%s", update.next.id.BlockString())
+		nextStr = fmt.Sprintf("%s", update.next.getID().BlockString())
 	}
-	s := fmt.Sprintf("[%s:%s:%s](%d-%d)->%s", ntype, commitState, update.id.BlockString(), update.startTs, update.commitTs, nextStr)
+	s := fmt.Sprintf("[%s:%s:%s](%d-%d)->%s", ntype, commitState, update.getID().BlockString(), update.startTs, update.commitTs, nextStr)
 	return s
 }
 
@@ -147,17 +149,29 @@ func findHead(n *testUpdateNode) *testUpdateNode {
 	return head
 }
 
+func initTestPath(t *testing.T) string {
+	dir := filepath.Join("/tmp", t.Name())
+	os.RemoveAll(dir)
+	return dir
+}
+
 func TestUpdatesMerge(t *testing.T) {
-	id := common.ID{}
 	var head *testUpdateNode
 	cnt1 := 11
 	cnt2 := 10
 	nodes := make([]*testUpdateNode, 0)
 	schema := catalog.MockSchema(1)
+	c := catalog.MockCatalog(initTestPath(t), "mock", nil)
+	defer c.Close()
+
+	db, _ := c.CreateDBEntry("db", nil)
+	table, _ := db.CreateTableEntry(schema, nil)
+	seg, _ := table.CreateSegment(nil, catalog.ES_Appendable)
+	blk, _ := seg.CreateBlock(nil, catalog.ES_Appendable)
+
 	for i := 0; i < cnt1+cnt2; i++ {
-		nid := id.Next()
 		start := uint64(i) * 2
-		node := newTestUpdateNode(0, schema, nid, uint64(i)*2, nil)
+		node := newTestUpdateNode(0, blk, uint64(i)*2, nil)
 		node.updates.DeleteLocked(uint32(i)*10, uint32(i+1)*10-1)
 		err := node.updates.UpdateLocked(uint32(i+1)*10000, 0, (i+1)*10000)
 		if i < cnt1 {
@@ -179,7 +193,7 @@ func TestUpdatesMerge(t *testing.T) {
 				return true
 			}
 			if merge == nil {
-				merge = newTestUpdateNode(1, schema, n.id, n.startTs, nil)
+				merge = newTestUpdateNode(1, n.updates.meta, n.startTs, nil)
 				merge.commit(n.commitTs)
 			}
 			merge.updates.MergeLocked(n.updates)
@@ -229,14 +243,20 @@ func TestUpdatesMerge(t *testing.T) {
 }
 
 func TestUpdates(t *testing.T) {
-	id := common.ID{}
 	committed := 10
 	nodes := make([]*testUpdateNode, 0)
 	schema := catalog.MockSchema(1)
+	c := catalog.MockCatalog(initTestPath(t), "mock", nil)
+	defer c.Close()
+
+	db, _ := c.CreateDBEntry("db", nil)
+	table, _ := db.CreateTableEntry(schema, nil)
+	seg, _ := table.CreateSegment(nil, catalog.ES_Appendable)
+	blk, _ := seg.CreateBlock(nil, catalog.ES_Appendable)
+
 	var head *testUpdateNode
 	for i := 0; i < committed; i++ {
-		nid := id.Next()
-		node := newTestUpdateNode(0, schema, nid, uint64(committed-i)*10, nil)
+		node := newTestUpdateNode(0, blk, uint64(committed-i)*10, nil)
 		head = insertLink(node, head)
 		nodes = append(nodes, node)
 	}
@@ -251,11 +271,10 @@ func TestUpdates(t *testing.T) {
 	mergeIdx := len(nodes) / 2
 	for i := len(nodes) - 1; i >= 0; i-- {
 		nodes[i].commit(uint64(commitTs + committed - i))
-		// nodes[i].commit(uint64(commitTs + i))
 		sortNodes(nodes[i])
 	}
 
-	mergeNode := newTestUpdateNode(1, schema, nodes[mergeIdx].id, nodes[mergeIdx].startTs, nil)
+	mergeNode := newTestUpdateNode(1, nodes[mergeIdx].updates.meta, nodes[mergeIdx].startTs, nil)
 	mergeNode.commit(nodes[mergeIdx].commitTs)
 
 	head = findHead(nodes[0])
@@ -276,7 +295,7 @@ func TestUpdates(t *testing.T) {
 	m1 := mergeNode.updates
 	buf := w.Bytes()
 	r := bytes.NewBuffer(buf)
-	m2 := NewBlockUpdates(nil, nil, nil, nil)
+	m2 := NewEmptyBlockUpdates()
 	err = m2.ReadFrom(r)
 	assert.Equal(t, *m1.id, *m2.id)
 	// assert.True(t, m1.localDeletes.Equals(m2.localDeletes))

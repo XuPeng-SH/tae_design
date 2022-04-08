@@ -20,7 +20,7 @@ type UpdateCmd struct {
 }
 
 func NewEmptyUpdateCmd() *UpdateCmd {
-	updates := NewBlockUpdates(nil, nil, nil, nil)
+	updates := NewEmptyBlockUpdates()
 	return NewUpdateCmd(0, updates)
 }
 
