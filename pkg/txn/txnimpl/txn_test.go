@@ -13,6 +13,7 @@ import (
 	com "tae/pkg/common"
 	"tae/pkg/iface/txnif"
 	"tae/pkg/txn/txnbase"
+	"tae/pkg/updates"
 	"testing"
 	"time"
 
@@ -338,14 +339,14 @@ func TestBuildCommand(t *testing.T) {
 
 func TestColumnNode(t *testing.T) {
 	ncnt := 1000
-	nodes := make([]*columnUpdates, ncnt)
+	nodes := make([]*updates.ColumnUpdates, ncnt)
 
 	target := common.ID{}
 	start := time.Now()
 	ecnt := 100
 	schema := catalog.MockSchema(2)
 	for i, _ := range nodes {
-		node := NewColumnUpdates(&target, schema.ColDefs[0], nil)
+		node := updates.NewColumnUpdates(&target, schema.ColDefs[0], nil)
 		nodes[i] = node
 		for j := i * ecnt; j < i*ecnt+ecnt; j++ {
 			node.Update(uint32(j), int32(j))
@@ -353,13 +354,12 @@ func TestColumnNode(t *testing.T) {
 	}
 	t.Log(time.Since(start))
 	start = time.Now()
-	node := NewColumnUpdates(&target, schema.ColDefs[0], nil)
+	node := updates.NewColumnUpdates(&target, schema.ColDefs[0], nil)
 	for _, n := range nodes {
 		node.MergeLocked(n)
 	}
 	t.Log(time.Since(start))
-	assert.Equal(t, ncnt*ecnt, int(node.txnMask.GetCardinality()))
-	assert.Equal(t, ncnt*ecnt, len(node.txnVals))
+	assert.Equal(t, ncnt*ecnt, node.GetUpdateCntLocked())
 
 	var w bytes.Buffer
 	err := node.WriteTo(&w)
@@ -367,11 +367,10 @@ func TestColumnNode(t *testing.T) {
 
 	buf := w.Bytes()
 	r := bytes.NewBuffer(buf)
-	n2 := NewColumnUpdates(nil, nil, nil)
+	n2 := updates.NewColumnUpdates(nil, nil, nil)
 	err = n2.ReadFrom(r)
 	assert.Nil(t, err)
-	assert.Equal(t, node.txnMask.GetCardinality(), n2.txnMask.GetCardinality())
-	assert.Equal(t, node.txnVals, n2.txnVals)
+	assert.True(t, node.EqualLocked(n2))
 }
 
 func TestApplyUpdateNode(t *testing.T) {
@@ -379,7 +378,7 @@ func TestApplyUpdateNode(t *testing.T) {
 	deletes := &roaring.Bitmap{}
 	deletes.Add(1)
 	schema := catalog.MockSchema(2)
-	node := NewColumnUpdates(&target, schema.ColDefs[0], nil)
+	node := updates.NewColumnUpdates(&target, schema.ColDefs[0], nil)
 	node.Update(0, []byte("update"))
 	deletes.AddRange(3, 4)
 
@@ -416,7 +415,7 @@ func TestApplyUpdateNode2(t *testing.T) {
 	deletes := &roaring.Bitmap{}
 	deletes.Add(1)
 	schema := catalog.MockSchema(2)
-	node := NewColumnUpdates(&target, schema.ColDefs[0], nil)
+	node := updates.NewColumnUpdates(&target, schema.ColDefs[0], nil)
 	node.Update(0, int8(8))
 	deletes.AddRange(2, 4)
 

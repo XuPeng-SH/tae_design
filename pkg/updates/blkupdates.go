@@ -1,4 +1,4 @@
-package txnimpl
+package updates
 
 import (
 	"encoding/binary"
@@ -12,31 +12,31 @@ import (
 	"github.com/matrixorigin/matrixone/pkg/vm/engine/aoe/storage/common"
 )
 
-type blockUpdates struct {
+type BlockUpdates struct {
 	rwlocker     *sync.RWMutex
 	schema       *catalog.Schema
 	id           *common.ID
-	cols         map[uint16]*columnUpdates
+	cols         map[uint16]*ColumnUpdates
 	baseDeletes  *roaring.Bitmap
 	localDeletes *roaring.Bitmap
 }
 
-func NewBlockUpdates(id *common.ID, schema *catalog.Schema, rwlocker *sync.RWMutex, baseDeletes *roaring.Bitmap) *blockUpdates {
+func NewBlockUpdates(id *common.ID, schema *catalog.Schema, rwlocker *sync.RWMutex, baseDeletes *roaring.Bitmap) *BlockUpdates {
 	if rwlocker == nil {
 		rwlocker = new(sync.RWMutex)
 	}
-	return &blockUpdates{
+	return &BlockUpdates{
 		id:          id,
 		schema:      schema,
 		rwlocker:    rwlocker,
-		cols:        make(map[uint16]*columnUpdates),
+		cols:        make(map[uint16]*ColumnUpdates),
 		baseDeletes: baseDeletes,
 	}
 }
 
-func (n *blockUpdates) GetID() *common.ID { return n.id }
+func (n *BlockUpdates) GetID() *common.ID { return n.id }
 
-func (n *blockUpdates) DeleteLocked(start, end uint32) error {
+func (n *BlockUpdates) DeleteLocked(start, end uint32) error {
 	for i := start; i <= end; i++ {
 		if (n.baseDeletes != nil && n.baseDeletes.Contains(i)) || (n.localDeletes != nil && n.localDeletes.Contains(i)) {
 			return txnif.TxnWWConflictErr
@@ -49,7 +49,7 @@ func (n *blockUpdates) DeleteLocked(start, end uint32) error {
 	return nil
 }
 
-func (n *blockUpdates) UpdateLocked(row uint32, colIdx uint16, v interface{}) error {
+func (n *BlockUpdates) UpdateLocked(row uint32, colIdx uint16, v interface{}) error {
 	if (n.baseDeletes != nil && n.baseDeletes.Contains(row)) || n.localDeletes.Contains(row) {
 		return txnif.TxnWWConflictErr
 	}
@@ -61,12 +61,12 @@ func (n *blockUpdates) UpdateLocked(row uint32, colIdx uint16, v interface{}) er
 	return col.UpdateLocked(row, v)
 }
 
-func (n *blockUpdates) GetColumnUpdatesLocked(colIdx uint16) txnif.ColumnUpdates {
+func (n *BlockUpdates) GetColumnUpdatesLocked(colIdx uint16) txnif.ColumnUpdates {
 	return n.cols[colIdx]
 }
 
-func (n *blockUpdates) MergeColumnLocked(ob txnif.BlockUpdates, colIdx uint16) error {
-	o := ob.(*blockUpdates)
+func (n *BlockUpdates) MergeColumnLocked(ob txnif.BlockUpdates, colIdx uint16) error {
+	o := ob.(*BlockUpdates)
 	if o.localDeletes != nil {
 		if n.localDeletes == nil {
 			n.localDeletes = roaring.NewBitmap()
@@ -86,7 +86,7 @@ func (n *blockUpdates) MergeColumnLocked(ob txnif.BlockUpdates, colIdx uint16) e
 	return nil
 }
 
-func (n *blockUpdates) MergeLocked(o *blockUpdates) error {
+func (n *BlockUpdates) MergeLocked(o *BlockUpdates) error {
 	if o.localDeletes != nil {
 		if n.localDeletes == nil {
 			n.localDeletes = roaring.NewBitmap()
@@ -104,7 +104,7 @@ func (n *blockUpdates) MergeLocked(o *blockUpdates) error {
 	return nil
 }
 
-func (n *blockUpdates) ReadFrom(r io.Reader) error {
+func (n *BlockUpdates) ReadFrom(r io.Reader) error {
 	buf := make([]byte, txnbase.IDSize)
 	var err error
 	if _, err = r.Read(buf); err != nil {
@@ -138,7 +138,7 @@ func (n *blockUpdates) ReadFrom(r io.Reader) error {
 	return err
 }
 
-func (n *blockUpdates) WriteTo(w io.Writer) error {
+func (n *BlockUpdates) WriteTo(w io.Writer) error {
 	_, err := w.Write(txnbase.MarshalID(n.id))
 	if err != nil {
 		return err
@@ -173,7 +173,7 @@ func (n *blockUpdates) WriteTo(w io.Writer) error {
 	return err
 }
 
-func (n *blockUpdates) MakeCommand(id uint32, forceFlush bool) (cmd txnif.TxnCmd, entry txnbase.NodeEntry, err error) {
+func (n *BlockUpdates) MakeCommand(id uint32, forceFlush bool) (cmd txnif.TxnCmd, entry txnbase.NodeEntry, err error) {
 	cmd = NewUpdateCmd(id, n)
 	return
 }

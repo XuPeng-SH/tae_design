@@ -1,4 +1,4 @@
-package txnimpl
+package updates
 
 import (
 	"bytes"
@@ -14,7 +14,7 @@ import (
 )
 
 type testUpdateNode struct {
-	updates  *blockUpdates
+	updates  *BlockUpdates
 	startTs  uint64
 	commitTs uint64
 	next     *testUpdateNode

@@ -8,6 +8,7 @@ import (
 	"tae/pkg/iface/handle"
 	"tae/pkg/iface/txnif"
 	"tae/pkg/txn/txnbase"
+	"tae/pkg/updates"
 
 	"github.com/matrixorigin/matrixone/pkg/container/batch"
 	gbat "github.com/matrixorigin/matrixone/pkg/container/batch"
@@ -57,7 +58,7 @@ type txnTable struct {
 	dropEntry   txnif.TxnEntry
 	inodes      []InsertNode
 	appendable  base.INodeHandle
-	updates     map[common.ID]*blockUpdates
+	updates     map[common.ID]*updates.BlockUpdates
 	driver      txnbase.NodeDriver
 	entry       *catalog.TableEntry
 	handle      handle.Relation
@@ -81,7 +82,7 @@ func newTxnTable(txn txnif.AsyncTxn, handle handle.Relation, driver txnbase.Node
 		entry:      handle.GetMeta().(*catalog.TableEntry),
 		driver:     driver,
 		index:      NewSimpleTableIndex(),
-		updates:    make(map[common.ID]*blockUpdates),
+		updates:    make(map[common.ID]*updates.BlockUpdates),
 		csegs:      make([]*catalog.SegmentEntry, 0),
 		dsegs:      make([]*catalog.SegmentEntry, 0),
 	}
@@ -196,11 +197,11 @@ func (tbl *txnTable) registerInsertNode() error {
 
 func (tbl *txnTable) AddUpdateNode(node txnif.BlockUpdates) error {
 	id := *node.GetID()
-	updates := tbl.updates[id]
-	if updates != nil {
+	u := tbl.updates[id]
+	if u != nil {
 		return ErrDuplicateNode
 	}
-	tbl.updates[id] = node.(*blockUpdates)
+	tbl.updates[id] = node.(*updates.BlockUpdates)
 	return nil
 }
 

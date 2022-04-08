@@ -1,4 +1,4 @@
-package txnimpl
+package updates
 
 import (
 	"encoding/binary"
@@ -16,7 +16,7 @@ import (
 	"github.com/matrixorigin/matrixone/pkg/vm/engine/aoe/storage/common"
 )
 
-type columnUpdates struct {
+type ColumnUpdates struct {
 	rwlock  *sync.RWMutex
 	colDef  *catalog.ColDef
 	target  *common.ID
@@ -24,11 +24,11 @@ type columnUpdates struct {
 	txnVals map[uint32]interface{}
 }
 
-func NewColumnUpdates(target *common.ID, colDef *catalog.ColDef, rwlock *sync.RWMutex) *columnUpdates {
+func NewColumnUpdates(target *common.ID, colDef *catalog.ColDef, rwlock *sync.RWMutex) *ColumnUpdates {
 	if rwlock == nil {
 		rwlock = &sync.RWMutex{}
 	}
-	return &columnUpdates{
+	return &ColumnUpdates{
 		rwlock:  rwlock,
 		colDef:  colDef,
 		target:  target,
@@ -37,8 +37,24 @@ func NewColumnUpdates(target *common.ID, colDef *catalog.ColDef, rwlock *sync.RW
 	}
 }
 
+func (n *ColumnUpdates) EqualLocked(o *ColumnUpdates) bool {
+	if o == nil {
+		return n == nil
+	}
+	for k, v := range n.txnVals {
+		if v != o.txnVals[k] {
+			return false
+		}
+	}
+	return true
+}
+
+func (n *ColumnUpdates) GetUpdateCntLocked() int {
+	return int(n.txnMask.GetCardinality())
+}
+
 // TODO: rewrite
-func (n *columnUpdates) ReadFrom(r io.Reader) error {
+func (n *ColumnUpdates) ReadFrom(r io.Reader) error {
 	buf := make([]byte, txnbase.IDSize)
 	if _, err := r.Read(buf); err != nil {
 		return err
@@ -78,7 +94,7 @@ func (n *columnUpdates) ReadFrom(r io.Reader) error {
 }
 
 // TODO: rewrite later
-func (n *columnUpdates) WriteTo(w io.Writer) error {
+func (n *ColumnUpdates) WriteTo(w io.Writer) error {
 	_, err := w.Write(txnbase.MarshalID(n.target))
 	if err != nil {
 		return err
@@ -113,14 +129,14 @@ func (n *columnUpdates) WriteTo(w io.Writer) error {
 	return err
 }
 
-func (n *columnUpdates) Update(row uint32, v interface{}) error {
+func (n *ColumnUpdates) Update(row uint32, v interface{}) error {
 	n.rwlock.Lock()
 	err := n.UpdateLocked(row, v)
 	n.rwlock.Unlock()
 	return err
 }
 
-func (n *columnUpdates) UpdateLocked(row uint32, v interface{}) error {
+func (n *ColumnUpdates) UpdateLocked(row uint32, v interface{}) error {
 	if _, ok := n.txnVals[row]; ok {
 		return txnif.TxnWWConflictErr
 	}
@@ -129,15 +145,15 @@ func (n *columnUpdates) UpdateLocked(row uint32, v interface{}) error {
 	return nil
 }
 
-func (n *columnUpdates) MergeLocked(o txnif.ColumnUpdates) error {
-	for k, v := range o.(*columnUpdates).txnVals {
+func (n *ColumnUpdates) MergeLocked(o txnif.ColumnUpdates) error {
+	for k, v := range o.(*ColumnUpdates).txnVals {
 		n.txnMask.Add(k)
 		n.txnVals[k] = v
 	}
 	return nil
 }
 
-func (n *columnUpdates) ApplyToColumn(vec *gvec.Vector, deletes *roaring.Bitmap) *gvec.Vector {
+func (n *ColumnUpdates) ApplyToColumn(vec *gvec.Vector, deletes *roaring.Bitmap) *gvec.Vector {
 	txnMaskIterator := n.txnMask.Iterator()
 	col := vec.Col
 	if txnMaskIterator.HasNext() {

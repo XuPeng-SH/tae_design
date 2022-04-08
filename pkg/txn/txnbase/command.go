@@ -16,6 +16,9 @@ const (
 	CmdPointer int16 = iota
 	CmdDeleteBitmap
 	CmdBatch
+	CmdAppend
+	CmdUpdate
+	CmdDelete
 	CmdComposed
 	CmdCustomized
 )

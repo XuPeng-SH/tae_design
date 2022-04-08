@@ -1,4 +1,4 @@
-package txnimpl
+package updates
 
 import (
 	"bytes"
@@ -9,14 +9,14 @@ import (
 )
 
 func init() {
-	txnif.RegisterCmdFactory(CmdUpdate, func(int16) txnif.TxnCmd {
+	txnif.RegisterCmdFactory(txnbase.CmdUpdate, func(int16) txnif.TxnCmd {
 		return NewEmptyUpdateCmd()
 	})
 }
 
 type UpdateCmd struct {
 	*txnbase.BaseCustomizedCmd
-	updates *blockUpdates
+	updates *BlockUpdates
 }
 
 func NewEmptyUpdateCmd() *UpdateCmd {
@@ -24,7 +24,7 @@ func NewEmptyUpdateCmd() *UpdateCmd {
 	return NewUpdateCmd(0, updates)
 }
 
-func NewUpdateCmd(id uint32, updates *blockUpdates) *UpdateCmd {
+func NewUpdateCmd(id uint32, updates *BlockUpdates) *UpdateCmd {
 	impl := &UpdateCmd{
 		updates: updates,
 	}
@@ -37,7 +37,7 @@ func (c *UpdateCmd) String() string {
 	return ""
 }
 
-func (c *UpdateCmd) GetType() int16 { return CmdUpdate }
+func (c *UpdateCmd) GetType() int16 { return txnbase.CmdUpdate }
 
 func (c *UpdateCmd) WriteTo(w io.Writer) (err error) {
 	if err = binary.Write(w, binary.BigEndian, c.GetType()); err != nil {
