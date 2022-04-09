@@ -163,8 +163,10 @@ func (n *ColumnUpdates) ApplyToColumn(vec *gvec.Vector, deletes *roaring.Bitmap)
 			for txnMaskIterator.HasNext() {
 				row := txnMaskIterator.Next()
 				txnbase.SetFixSizeTypeValue(vec, row, n.txnVals[row])
-				if vec.Nsp.Np.Contains(uint64(row)) {
-					vec.Nsp.Np.Flip(uint64(row), uint64(row+1))
+				if vec.Nsp != nil && vec.Nsp.Np != nil {
+					if vec.Nsp.Np.Contains(uint64(row)) {
+						vec.Nsp.Np.Flip(uint64(row), uint64(row+1))
+					}
 				}
 			}
 		case types.T_char, types.T_varchar, types.T_json:
@@ -181,8 +183,10 @@ func (n *ColumnUpdates) ApplyToColumn(vec *gvec.Vector, deletes *roaring.Bitmap)
 				val = append(val, suffix...)
 				data.Data = append(data.Data[:data.Offsets[row]], val...)
 				pre = int(row)
-				if vec.Nsp.Np.Contains(uint64(row)) {
-					vec.Nsp.Np.Flip(uint64(row), uint64(row+1))
+				if vec.Nsp != nil && vec.Nsp.Np != nil {
+					if vec.Nsp.Np.Contains(uint64(row)) {
+						vec.Nsp.Np.Flip(uint64(row), uint64(row+1))
+					}
 				}
 			}
 			if pre != -1 {
@@ -190,11 +194,17 @@ func (n *ColumnUpdates) ApplyToColumn(vec *gvec.Vector, deletes *roaring.Bitmap)
 			}
 		}
 	}
+	if deletes == nil {
+		return vec
+	}
 	deletesIterator := deletes.Iterator()
 	if deletesIterator.HasNext() {
 		nsp := &nulls.Nulls{}
 		nsp.Np = &roaring64.Bitmap{}
-		nspIterator := vec.Nsp.Np.Iterator()
+		var nspIterator roaring64.IntPeekable64
+		if vec.Nsp != nil && vec.Nsp.Np != nil {
+			nspIterator = vec.Nsp.Np.Iterator()
+		}
 		deleted := 0
 		switch vec.Typ.Oid {
 		case types.T_int8, types.T_int16, types.T_int32, types.T_int64, types.T_uint8, types.T_uint16, types.T_uint32, types.T_uint64,
@@ -202,26 +212,30 @@ func (n *ColumnUpdates) ApplyToColumn(vec *gvec.Vector, deletes *roaring.Bitmap)
 			for deletesIterator.HasNext() {
 				row := deletesIterator.Next()
 				txnbase.DeleteFixSizeTypeValue(vec, row-uint32(deleted))
-				var n uint64
-				if nspIterator.HasNext() {
-					for nspIterator.HasNext() {
-						n = nspIterator.PeekNext()
-						if uint32(n) < row {
-							nspIterator.Next()
-						} else {
-							if uint32(n) == row {
+				if nspIterator != nil {
+					var n uint64
+					if nspIterator.HasNext() {
+						for nspIterator.HasNext() {
+							n = nspIterator.PeekNext()
+							if uint32(n) < row {
 								nspIterator.Next()
+							} else {
+								if uint32(n) == row {
+									nspIterator.Next()
+								}
+								break
 							}
-							break
+							nsp.Np.Add(n - uint64(deleted))
 						}
+					}
+					deleted++
+					for nspIterator.HasNext() {
+						n := nspIterator.Next()
 						nsp.Np.Add(n - uint64(deleted))
 					}
+				} else {
+					deleted++
 				}
-				deleted++
-			}
-			for nspIterator.HasNext() {
-				n := nspIterator.Next()
-				nsp.Np.Add(n - uint64(deleted))
 			}
 		case types.T_char, types.T_varchar, types.T_json:
 			data := col.(*types.Bytes)
@@ -245,27 +259,31 @@ func (n *ColumnUpdates) ApplyToColumn(vec *gvec.Vector, deletes *roaring.Bitmap)
 					data.Lengths = append(data.Lengths[:currRow], data.Lengths[currRow+1:]...)
 					data.Offsets = append(data.Offsets[:currRow], data.Offsets[currRow+1:]...)
 				}
-				var n uint64
-				if nspIterator.HasNext() {
-					for nspIterator.HasNext() {
-						n = nspIterator.PeekNext()
-						if uint32(n) < row {
-							nspIterator.Next()
-						} else {
-							if uint32(n) == row {
+				if nspIterator != nil {
+					var n uint64
+					if nspIterator.HasNext() {
+						for nspIterator.HasNext() {
+							n = nspIterator.PeekNext()
+							if uint32(n) < row {
 								nspIterator.Next()
+							} else {
+								if uint32(n) == row {
+									nspIterator.Next()
+								}
+								break
 							}
-							break
+							nsp.Np.Add(n - uint64(deleted))
 						}
+					}
+					deleted++
+					pre = int(currRow)
+					for nspIterator.HasNext() {
+						n := nspIterator.Next()
 						nsp.Np.Add(n - uint64(deleted))
 					}
+				} else {
+					deleted++
 				}
-				deleted++
-				pre = int(currRow)
-			}
-			for nspIterator.HasNext() {
-				n := nspIterator.Next()
-				nsp.Np.Add(n - uint64(deleted))
 			}
 			if pre != -1 {
 				txnbase.UpdateOffsets(data, pre-1, len(data.Lengths)-1)

@@ -373,7 +373,7 @@ func TestColumnNode(t *testing.T) {
 	assert.True(t, node.EqualLocked(n2))
 }
 
-func TestApplyUpdateNode(t *testing.T) {
+func TestApplyToColumn1(t *testing.T) {
 	target := common.ID{}
 	deletes := &roaring.Bitmap{}
 	deletes.Add(1)
@@ -410,7 +410,7 @@ func TestApplyUpdateNode(t *testing.T) {
 	fmt.Printf("%s\n%v\n", res.Col, res.Nsp.Np)
 }
 
-func TestApplyUpdateNode2(t *testing.T) {
+func TestApplyToColumn2(t *testing.T) {
 	target := common.ID{}
 	deletes := &roaring.Bitmap{}
 	deletes.Add(1)
@@ -433,6 +433,47 @@ func TestApplyUpdateNode2(t *testing.T) {
 	fmt.Printf("%v\n%v\n->\n", vec.Col, vec.Nsp.Np)
 	res := node.ApplyToColumn(vec, deletes)
 	fmt.Printf("%v\n%v\n", res.Col, res.Nsp.Np)
+}
+
+func TestApplyToColumn3(t *testing.T) {
+	target := common.ID{}
+	schema := catalog.MockSchema(2)
+	node := updates.NewColumnUpdates(&target, schema.ColDefs[0], nil)
+	node.Update(3, []byte("update"))
+
+	vec := &gvec.Vector{}
+	vec.Typ.Oid = types.T_varchar
+	col := &types.Bytes{
+		Data:    make([]byte, 0),
+		Offsets: make([]uint32, 0),
+		Lengths: make([]uint32, 0),
+	}
+	for i := 0; i < 5; i++ {
+		col.Offsets = append(col.Offsets, uint32(len(col.Data)))
+		data := "val" + strconv.Itoa(i)
+		col.Data = append(col.Data, []byte(data)...)
+		col.Lengths = append(col.Lengths, uint32(len(data)))
+	}
+	vec.Col = col
+
+	fmt.Printf("%s\n->\n", vec.Col)
+	res := node.ApplyToColumn(vec, nil)
+	fmt.Printf("%s\n", res.Col)
+}
+
+func TestApplyToColumn4(t *testing.T) {
+	target := common.ID{}
+	schema := catalog.MockSchema(2)
+	node := updates.NewColumnUpdates(&target, schema.ColDefs[0], nil)
+	node.Update(0, int8(8))
+
+	vec := &gvec.Vector{}
+	vec.Typ.Oid = types.T_int8
+	vec.Col = []int8{1, 2, 3, 4}
+
+	fmt.Printf("%v\n->\n", vec.Col)
+	res := node.ApplyToColumn(vec, nil)
+	fmt.Printf("%v\n", res.Col)
 }
 
 func TestTxnManager1(t *testing.T) {
