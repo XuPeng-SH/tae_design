@@ -14,7 +14,11 @@ import (
 	"time"
 
 	"github.com/RoaringBitmap/roaring"
+	gbat "github.com/matrixorigin/matrixone/pkg/container/batch"
+	gvec "github.com/matrixorigin/matrixone/pkg/container/vector"
 	"github.com/matrixorigin/matrixone/pkg/vm/engine/aoe/storage/common"
+	"github.com/matrixorigin/matrixone/pkg/vm/engine/aoe/storage/mock"
+	"github.com/panjf2000/ants/v2"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -443,7 +447,7 @@ func TestUpdates3(t *testing.T) {
 	db, _ := c.CreateDBEntry("db", nil)
 	table, _ := db.CreateTableEntry(schema, nil)
 	seg, _ := table.CreateSegment(nil, catalog.ES_Appendable)
-	blkCnt := 10
+	blkCnt := 200
 	blks := make([]*catalog.BlockEntry, 0, blkCnt)
 	links := make([]*com.Link, 0, blkCnt)
 	now := time.Now()
@@ -454,14 +458,14 @@ func TestUpdates3(t *testing.T) {
 		links = append(links, new(com.Link))
 	}
 	for i, blk := range blks {
-		nodeCnt := rand.Intn(10) + 1
+		nodeCnt := rand.Intn(4) + 1
 		for j := 0; j < nodeCnt; j++ {
 			txn := new(txnbase.Txn)
 			txn.TxnCtx = new(txnbase.TxnCtx)
 			txn.StartTS = common.NextGlobalSeqNum()
 			node := NewBlockUpdates(txn, blk, nil, nil)
 			node.DeleteLocked(uint32(j)*1, uint32(j+1)*(uint32(nodeCnt))-1)
-			node.UpdateLocked(uint32(j)+10000, 0, int32((j+1)*10000))
+			node.UpdateLocked(uint32(j)+1000, 0, int32((j+1)*1000))
 			node.commitTs = common.NextGlobalSeqNum()
 			links[i].Insert(node)
 		}
@@ -481,9 +485,30 @@ func TestUpdates3(t *testing.T) {
 		t.Log(m.localDeletes.String())
 	}
 	t.Log(time.Since(now))
-	// bat := mock.MockBatch(schema.Types(), 20000)
-	// now = time.Now()
-	// update := links[1].GetHead().GetPayload().(*BlockUpdates)
-	// update.ApplyChanges(bat, update.localDeletes)
-	// t.Log(time.Since(now))
+	rowCnt := uint64(10000)
+	bats := make([]*gbat.Batch, len(links))
+	for i := range bats {
+		bat := mock.MockBatch(schema.Types(), rowCnt)
+		bats[i] = bat
+	}
+
+	doApply := func(bat *gbat.Batch, link *com.Link) func() {
+		return func() {
+			update := link.GetHead().GetPayload().(*BlockUpdates)
+			update.ApplyChanges(bat, update.localDeletes)
+			// t.Logf("delete cnt: %d", update.localDeletes.GetCardinality())
+			// t.Logf("update cnt: %d", update.cols[0].txnMask.GetCardinality())
+			// t.Logf("Length post apply change: %d", gvec.Length(bat.Vecs[0]))
+			assert.Equal(t, rowCnt, update.localDeletes.GetCardinality()+uint64(gvec.Length(bat.Vecs[0])))
+		}
+	}
+
+	pool, _ := ants.NewPool(12)
+
+	now = time.Now()
+	for i, bat := range bats {
+		link := links[i]
+		pool.Submit(doApply(bat, link))
+	}
+	t.Log(time.Since(now))
 }
