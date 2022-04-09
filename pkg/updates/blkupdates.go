@@ -24,7 +24,7 @@ const (
 )
 
 type BlockUpdates struct {
-	rwlocker     *sync.RWMutex
+	*sync.RWMutex
 	id           *common.ID
 	meta         *catalog.BlockEntry
 	cols         map[uint16]*ColumnUpdates
@@ -47,7 +47,7 @@ func NewBlockUpdates(txn txnif.AsyncTxn, meta *catalog.BlockEntry, rwlocker *syn
 		rwlocker = new(sync.RWMutex)
 	}
 	updates := &BlockUpdates{
-		rwlocker:    rwlocker,
+		RWMutex:     rwlocker,
 		id:          meta.AsCommonID(),
 		meta:        meta,
 		cols:        make(map[uint16]*ColumnUpdates),
@@ -67,7 +67,7 @@ func NewMergeBlockUpdates(commitTs uint64, meta *catalog.BlockEntry, rwlocker *s
 		rwlocker = new(sync.RWMutex)
 	}
 	updates := &BlockUpdates{
-		rwlocker:    rwlocker,
+		RWMutex:     rwlocker,
 		id:          meta.AsCommonID(),
 		meta:        meta,
 		cols:        make(map[uint16]*ColumnUpdates),
@@ -80,8 +80,8 @@ func NewMergeBlockUpdates(commitTs uint64, meta *catalog.BlockEntry, rwlocker *s
 }
 
 func (n *BlockUpdates) String() string {
-	n.rwlocker.RLock()
-	defer n.rwlocker.RUnlock()
+	n.RLock()
+	defer n.RUnlock()
 	commitState := "C"
 	if n.commitTs == txnif.UncommitTS {
 		commitState = "UC"
@@ -94,6 +94,7 @@ func (n *BlockUpdates) String() string {
 	return s
 }
 
+func (n *BlockUpdates) IsMerge() bool     { return n.nodeType == NT_Merge }
 func (n *BlockUpdates) GetID() *common.ID { return n.id }
 
 func (n *BlockUpdates) DeleteLocked(start, end uint32) error {
@@ -115,7 +116,7 @@ func (n *BlockUpdates) UpdateLocked(row uint32, colIdx uint16, v interface{}) er
 	}
 	col, ok := n.cols[colIdx]
 	if !ok {
-		col = NewColumnUpdates(n.id, n.meta.GetSegment().GetTable().GetSchema().ColDefs[colIdx], n.rwlocker)
+		col = NewColumnUpdates(n.id, n.meta.GetSegment().GetTable().GetSchema().ColDefs[colIdx], n.RWMutex)
 		n.cols[colIdx] = col
 	}
 	return col.UpdateLocked(row, v)
@@ -124,6 +125,9 @@ func (n *BlockUpdates) UpdateLocked(row uint32, colIdx uint16, v interface{}) er
 func (n *BlockUpdates) GetColumnUpdatesLocked(colIdx uint16) txnif.ColumnUpdates {
 	return n.cols[colIdx]
 }
+
+func (n *BlockUpdates) GetCommitTSLocked() uint64 { return n.commitTs }
+func (n *BlockUpdates) GetStartTS() uint64        { return n.startTs }
 
 func (n *BlockUpdates) MergeColumnLocked(ob txnif.BlockUpdates, colIdx uint16) error {
 	o := ob.(*BlockUpdates)
@@ -139,7 +143,7 @@ func (n *BlockUpdates) MergeColumnLocked(ob txnif.BlockUpdates, colIdx uint16) e
 	}
 	currCol := n.cols[colIdx]
 	if currCol == nil {
-		currCol = NewColumnUpdates(n.id, n.meta.GetSegment().GetTable().GetSchema().ColDefs[colIdx], n.rwlocker)
+		currCol = NewColumnUpdates(n.id, n.meta.GetSegment().GetTable().GetSchema().ColDefs[colIdx], n.RWMutex)
 		n.cols[colIdx] = currCol
 	}
 	currCol.MergeLocked(col)
@@ -156,7 +160,7 @@ func (n *BlockUpdates) MergeLocked(o *BlockUpdates) error {
 	for colIdx, col := range o.cols {
 		currCol := n.cols[colIdx]
 		if currCol == nil {
-			currCol = NewColumnUpdates(n.id, n.meta.GetSegment().GetTable().GetSchema().ColDefs[colIdx], n.rwlocker)
+			currCol = NewColumnUpdates(n.id, n.meta.GetSegment().GetTable().GetSchema().ColDefs[colIdx], n.RWMutex)
 			n.cols[colIdx] = currCol
 		}
 		currCol.MergeLocked(col)
@@ -190,7 +194,7 @@ func (n *BlockUpdates) ReadFrom(r io.Reader) error {
 		if err = binary.Read(r, binary.BigEndian, &colIdx); err != nil {
 			return err
 		}
-		col := NewColumnUpdates(nil, nil, n.rwlocker)
+		col := NewColumnUpdates(nil, nil, n.RWMutex)
 		if err = col.ReadFrom(r); err != nil {
 			return err
 		}
@@ -240,10 +244,10 @@ func (n *BlockUpdates) MakeCommand(id uint32, forceFlush bool) (cmd txnif.TxnCmd
 
 func (n *BlockUpdates) Compare(o com.NodePayload) int {
 	op := o.(*BlockUpdates)
-	n.rwlocker.RLock()
-	defer n.rwlocker.RUnlock()
-	op.rwlocker.RLock()
-	defer op.rwlocker.RUnlock()
+	n.RLock()
+	defer n.RUnlock()
+	op.RLock()
+	defer op.RUnlock()
 	if n.commitTs < op.commitTs {
 		return -1
 	}
@@ -266,8 +270,8 @@ func (n *BlockUpdates) Compare(o com.NodePayload) int {
 }
 
 func (n *BlockUpdates) PrepareCommit() error {
-	n.rwlocker.Lock()
-	defer n.rwlocker.Unlock()
+	n.Lock()
+	defer n.Unlock()
 	if n.commitTs != txnif.UncommitTS {
 		panic("not expected")
 	}
@@ -276,8 +280,8 @@ func (n *BlockUpdates) PrepareCommit() error {
 }
 
 func (n *BlockUpdates) ApplyCommit() (err error) {
-	n.rwlocker.Lock()
-	defer n.rwlocker.Unlock()
+	n.Lock()
+	defer n.Unlock()
 	if n.txn == nil {
 		panic("not expected")
 	}
