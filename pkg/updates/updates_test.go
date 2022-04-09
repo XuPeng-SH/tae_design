@@ -3,6 +3,7 @@ package updates
 import (
 	"bytes"
 	"fmt"
+	"math/rand"
 	"os"
 	"path/filepath"
 	"tae/pkg/catalog"
@@ -155,6 +156,25 @@ func initTestPath(t *testing.T) string {
 	dir := filepath.Join("/tmp", t.Name())
 	os.RemoveAll(dir)
 	return dir
+}
+
+func makeMerge(l *com.Link) *BlockUpdates {
+	var merge *BlockUpdates
+	l.Loop(func(node *com.DLNode) bool {
+		update := node.GetPayload().(*BlockUpdates)
+		if update.commitTs == txnif.UncommitTS {
+			return true
+		}
+		if merge == nil {
+			merge = NewMergeBlockUpdates(update.commitTs, update.meta, nil, nil)
+		}
+		merge.MergeLocked(update)
+		if update.nodeType == NT_Merge {
+			return false
+		}
+		return true
+	}, false)
+	return merge
 }
 
 func TestUpdatesMerge(t *testing.T) {
@@ -362,25 +382,7 @@ func TestUpdates2(t *testing.T) {
 	}, true)
 	assert.Equal(t, cnt2+cnt1, totalCnt)
 
-	makeMerge := func() *BlockUpdates {
-		var merge *BlockUpdates
-		link.Loop(func(node *com.DLNode) bool {
-			update := node.GetPayload().(*BlockUpdates)
-			if update.commitTs == txnif.UncommitTS {
-				return true
-			}
-			if merge == nil {
-				merge = NewMergeBlockUpdates(update.commitTs, update.meta, nil, nil)
-			}
-			merge.MergeLocked(update)
-			if update.nodeType == NT_Merge {
-				return false
-			}
-			return true
-		}, false)
-		return merge
-	}
-	m := makeMerge()
+	m := makeMerge(link)
 	t.Log(m.String())
 	t.Log(m.localDeletes.String())
 
@@ -421,7 +423,7 @@ func TestUpdates2(t *testing.T) {
 		return true
 	}, false)
 
-	m = makeMerge()
+	m = makeMerge(link)
 	link.Insert(m)
 
 	link.Loop(func(node *com.DLNode) bool {
@@ -431,4 +433,57 @@ func TestUpdates2(t *testing.T) {
 	}, false)
 
 	t.Log(m.localDeletes.String())
+}
+
+func TestUpdates3(t *testing.T) {
+	schema := catalog.MockSchema(1)
+	c := catalog.MockCatalog(initTestPath(t), "mock", nil)
+	defer c.Close()
+
+	db, _ := c.CreateDBEntry("db", nil)
+	table, _ := db.CreateTableEntry(schema, nil)
+	seg, _ := table.CreateSegment(nil, catalog.ES_Appendable)
+	blkCnt := 10
+	blks := make([]*catalog.BlockEntry, 0, blkCnt)
+	links := make([]*com.Link, 0, blkCnt)
+	now := time.Now()
+	for i := 0; i < blkCnt; i++ {
+		blk, _ := seg.CreateBlock(nil, catalog.ES_Appendable)
+		blk.CreateAt = common.NextGlobalSeqNum()
+		blks = append(blks, blk)
+		links = append(links, new(com.Link))
+	}
+	for i, blk := range blks {
+		nodeCnt := rand.Intn(10) + 1
+		for j := 0; j < nodeCnt; j++ {
+			txn := new(txnbase.Txn)
+			txn.TxnCtx = new(txnbase.TxnCtx)
+			txn.StartTS = common.NextGlobalSeqNum()
+			node := NewBlockUpdates(txn, blk, nil, nil)
+			node.DeleteLocked(uint32(j)*1, uint32(j+1)*(uint32(nodeCnt))-1)
+			node.UpdateLocked(uint32(j)+10000, 0, int32((j+1)*10000))
+			node.commitTs = common.NextGlobalSeqNum()
+			links[i].Insert(node)
+		}
+	}
+	t.Log(time.Since(now))
+
+	now = time.Now()
+	for _, link := range links {
+		m := makeMerge(link)
+		link.Insert(m)
+	}
+	t.Log(time.Since(now))
+
+	now = time.Now()
+	for _, link := range links {
+		m := makeMerge(link)
+		t.Log(m.localDeletes.String())
+	}
+	t.Log(time.Since(now))
+	// bat := mock.MockBatch(schema.Types(), 20000)
+	// now = time.Now()
+	// update := links[1].GetHead().GetPayload().(*BlockUpdates)
+	// update.ApplyChanges(bat, update.localDeletes)
+	// t.Log(time.Since(now))
 }

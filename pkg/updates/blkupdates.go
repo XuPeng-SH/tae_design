@@ -11,7 +11,9 @@ import (
 	"tae/pkg/txn/txnbase"
 
 	"github.com/RoaringBitmap/roaring"
+	gbat "github.com/matrixorigin/matrixone/pkg/container/batch"
 	"github.com/matrixorigin/matrixone/pkg/vm/engine/aoe/storage/common"
+	"github.com/matrixorigin/matrixone/pkg/vm/engine/aoe/storage/container/batch"
 )
 
 type NodeType int8
@@ -317,4 +319,9 @@ func (n *BlockUpdates) TxnCanRead(txn txnif.AsyncTxn, rwlocker *sync.RWMutex) bo
 		rwlocker.RLock()
 	}
 	return state != txnif.TxnStateRollbacked
+}
+
+func (n *BlockUpdates) ApplyChanges(bat *gbat.Batch, deletes *roaring.Bitmap) *batch.Batch {
+	n.cols[0].ApplyToColumn(bat.Vecs[0], deletes)
+	return nil
 }
