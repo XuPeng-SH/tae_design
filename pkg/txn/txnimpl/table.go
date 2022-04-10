@@ -58,7 +58,7 @@ type txnTable struct {
 	dropEntry   txnif.TxnEntry
 	inodes      []InsertNode
 	appendable  base.INodeHandle
-	updates     map[common.ID]*updates.BlockUpdates
+	updateNodes map[common.ID]*updates.BlockUpdates
 	driver      txnbase.NodeDriver
 	entry       *catalog.TableEntry
 	handle      handle.Relation
@@ -74,17 +74,17 @@ type txnTable struct {
 
 func newTxnTable(txn txnif.AsyncTxn, handle handle.Relation, driver txnbase.NodeDriver, mgr base.INodeManager, checker *warChecker) *txnTable {
 	tbl := &txnTable{
-		warChecker: checker,
-		txn:        txn,
-		inodes:     make([]InsertNode, 0),
-		nodesMgr:   mgr,
-		handle:     handle,
-		entry:      handle.GetMeta().(*catalog.TableEntry),
-		driver:     driver,
-		index:      NewSimpleTableIndex(),
-		updates:    make(map[common.ID]*updates.BlockUpdates),
-		csegs:      make([]*catalog.SegmentEntry, 0),
-		dsegs:      make([]*catalog.SegmentEntry, 0),
+		warChecker:  checker,
+		txn:         txn,
+		inodes:      make([]InsertNode, 0),
+		nodesMgr:    mgr,
+		handle:      handle,
+		entry:       handle.GetMeta().(*catalog.TableEntry),
+		driver:      driver,
+		index:       NewSimpleTableIndex(),
+		updateNodes: make(map[common.ID]*updates.BlockUpdates),
+		csegs:       make([]*catalog.SegmentEntry, 0),
+		dsegs:       make([]*catalog.SegmentEntry, 0),
 	}
 	return tbl
 }
@@ -197,11 +197,11 @@ func (tbl *txnTable) registerInsertNode() error {
 
 func (tbl *txnTable) AddUpdateNode(node txnif.BlockUpdates) error {
 	id := *node.GetID()
-	u := tbl.updates[id]
+	u := tbl.updateNodes[id]
 	if u != nil {
 		return ErrDuplicateNode
 	}
-	tbl.updates[id] = node.(*updates.BlockUpdates)
+	tbl.updateNodes[id] = node.(*updates.BlockUpdates)
 	return nil
 }
 
@@ -469,8 +469,8 @@ func (tbl *txnTable) buildCommitCmd(cmdSeq *uint32) (cmd txnif.TxnCmd, entries [
 		composedCmd.AddCmd(cmd)
 		h.Close()
 	}
-	for _, updates := range tbl.updates {
-		updateCmd, _, err := updates.MakeCommand(*cmdSeq, false)
+	for _, node := range tbl.updateNodes {
+		updateCmd, _, err := node.MakeCommand(*cmdSeq, false)
 		if err != nil {
 			return cmd, entries, err
 		}
