@@ -479,7 +479,7 @@ func TestApplyToColumn4(t *testing.T) {
 }
 
 func TestTxnManager1(t *testing.T) {
-	mgr := txnbase.NewTxnManager(TxnStoreFactory(nil, nil, nil), TxnFactory(nil))
+	mgr := txnbase.NewTxnManager(TxnStoreFactory(nil, nil, nil, nil), TxnFactory(nil))
 	mgr.Start()
 	txn := mgr.StartTxn(nil)
 
@@ -530,7 +530,7 @@ func TestTxnManager1(t *testing.T) {
 func initTestContext(t *testing.T, dir string) (*catalog.Catalog, *txnbase.TxnManager, txnbase.NodeDriver) {
 	c := catalog.MockCatalog(dir, "mock", nil)
 	driver := txnbase.NewNodeDriver(dir, "store", nil)
-	mgr := txnbase.NewTxnManager(TxnStoreFactory(c, driver, nil), TxnFactory(c))
+	mgr := txnbase.NewTxnManager(TxnStoreFactory(c, driver, nil, nil), TxnFactory(c))
 	mgr.Start()
 	return c, mgr, driver
 }

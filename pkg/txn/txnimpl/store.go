@@ -32,13 +32,13 @@ type txnStore struct {
 	dataFactory *tables.DataFactory
 }
 
-var TxnStoreFactory = func(catalog *catalog.Catalog, driver txnbase.NodeDriver, dataFactory *tables.DataFactory) txnbase.TxnStoreFactory {
+var TxnStoreFactory = func(catalog *catalog.Catalog, driver txnbase.NodeDriver, txnBufMgr base.INodeManager, dataFactory *tables.DataFactory) txnbase.TxnStoreFactory {
 	return func() txnif.TxnStore {
-		return newStore(catalog, driver, dataFactory)
+		return newStore(catalog, driver, txnBufMgr, dataFactory)
 	}
 }
 
-func newStore(catalog *catalog.Catalog, driver txnbase.NodeDriver, dataFactory *tables.DataFactory) *txnStore {
+func newStore(catalog *catalog.Catalog, driver txnbase.NodeDriver, txnBufMgr base.INodeManager, dataFactory *tables.DataFactory) *txnStore {
 	return &txnStore{
 		tables:      make(map[uint64]Table),
 		catalog:     catalog,
@@ -46,6 +46,7 @@ func newStore(catalog *catalog.Catalog, driver txnbase.NodeDriver, dataFactory *
 		driver:      driver,
 		logs:        make([]entry.Entry, 0),
 		dataFactory: dataFactory,
+		nodesMgr:    txnBufMgr,
 	}
 }
 

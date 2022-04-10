@@ -23,18 +23,20 @@ func initTestPath(t *testing.T) string {
 	return dir
 }
 
-func initTestContext(t *testing.T, dir string, bufSize uint64) (*catalog.Catalog, *txnbase.TxnManager, txnbase.NodeDriver, base.INodeManager) {
+func initTestContext(t *testing.T, dir string, txnBufSize, mutBufSize uint64) (*catalog.Catalog, *txnbase.TxnManager, txnbase.NodeDriver, base.INodeManager, base.INodeManager) {
 	c := catalog.MockCatalog(dir, "mock", nil)
 	driver := txnbase.NewNodeDriver(dir, "store", nil)
-	mgr := txnbase.NewTxnManager(txnimpl.TxnStoreFactory(c, driver, nil), txnimpl.TxnFactory(c))
+	txnBufMgr := buffer.NewNodeManager(txnBufSize, nil)
+	mutBufMgr := buffer.NewNodeManager(mutBufSize, nil)
+	factory := tables.NewDataFactory(dataio.SegmentFileMockFactory, mutBufMgr)
+	mgr := txnbase.NewTxnManager(txnimpl.TxnStoreFactory(c, driver, txnBufMgr, factory), txnimpl.TxnFactory(c))
 	mgr.Start()
-	bufMgr := buffer.NewNodeManager(bufSize, nil)
-	return c, mgr, driver, bufMgr
+	return c, mgr, driver, txnBufMgr, mutBufMgr
 }
 
 func TestTables1(t *testing.T) {
 	dir := initTestPath(t)
-	c, mgr, driver, bufMgr := initTestContext(t, dir, 100000)
+	c, mgr, driver, txnBufMgr, mutBufMgr := initTestContext(t, dir, 100000, 1000000)
 	defer driver.Close()
 	defer c.Close()
 	defer mgr.Stop()
@@ -46,7 +48,7 @@ func TestTables1(t *testing.T) {
 	rel, _ := db.CreateRelation(schema)
 	tableMeta := rel.GetMeta().(*catalog.TableEntry)
 
-	dataFactory := tables.NewDataFactory(dataio.SegmentFileMockFactory, bufMgr)
+	dataFactory := tables.NewDataFactory(dataio.SegmentFileMockFactory, txnBufMgr)
 	tableFactory := dataFactory.MakeTableFactory()
 	table := tableFactory(tableMeta)
 	_, _, err := table.GetAppender()
@@ -57,7 +59,7 @@ func TestTables1(t *testing.T) {
 	appender, err := table.SetAppender(id)
 	assert.Nil(t, err)
 	assert.NotNil(t, appender)
-	t.Log(bufMgr.String())
+	t.Log(txnBufMgr.String())
 
 	blkCnt := 3
 	rows := schema.BlockMaxRows * uint32(blkCnt)
@@ -97,6 +99,7 @@ func TestTables1(t *testing.T) {
 	assert.Nil(t, appender.ApplyAppend(nil, toAppend*2, toAppend, nil))
 	assert.True(t, table.HasAppendableSegment())
 
-	t.Log(bufMgr.String())
+	t.Log(txnBufMgr.String())
+	t.Log(mutBufMgr.String())
 	t.Log(c.SimplePPString(com.PPL1))
 }
