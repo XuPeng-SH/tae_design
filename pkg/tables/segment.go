@@ -83,7 +83,7 @@ func (segment *dataSegment) SetAppender(blkId uint64) (appender data.BlockAppend
 	// TODO: Push to flush queue
 	if segment.aBlk != nil {
 	}
-	segment.aBlk = newBlock(blk, segment.file, segment.bufMgr)
+	segment.aBlk = blk.GetBlockData()
 	appender, err = segment.aBlk.MakeAppender()
 	return
 }

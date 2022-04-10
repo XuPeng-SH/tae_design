@@ -37,7 +37,9 @@ func (h *txnRelation) Size(attr string) int64              { return 0 }
 func (h *txnRelation) GetCardinality(attr string) int64    { return 0 }
 func (h *txnRelation) MakeReader() handle.Reader           { return nil }
 func (h *txnRelation) BatchDedup(col *vector.Vector) error { return nil }
-func (h *txnRelation) Append(data *batch.Batch) error      { return nil }
+func (h *txnRelation) Append(data *batch.Batch) error {
+	return h.Txn.GetStore().Append(h.entry.GetID(), data)
+}
 
 func (h *txnRelation) CreateSegment() (seg handle.Segment, err error) {
 	return h.Txn.GetStore().CreateSegment(h.entry.GetID())

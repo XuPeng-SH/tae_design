@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"tae/pkg/catalog"
+	"tae/pkg/iface/data"
 	"tae/pkg/iface/handle"
 	"tae/pkg/iface/txnif"
 	"tae/pkg/tables"
@@ -39,6 +40,7 @@ type Table interface {
 	BatchDedupLocalByCol(col *gvec.Vector) error
 	AddUpdateNode(txnif.BlockUpdates) error
 	IsDeleted() bool
+	PreCommit() error
 	PrepareCommit() error
 	PrepareRollback() error
 	ApplyCommit() error
@@ -368,6 +370,41 @@ func (tbl *txnTable) PrepareRollback() (err error) {
 	return
 }
 
+func (tbl *txnTable) PreCommit() (err error) {
+	tableData := tbl.entry.GetTableData()
+	for _, node := range tbl.inodes {
+		id, appender, err := tableData.GetAppender()
+		if err == data.ErrAppendableSegmentNotFound {
+			seg, err := tbl.CreateSegment()
+			if err != nil {
+				panic(err)
+			}
+			blk, err := seg.CreateBlock()
+			if err != nil {
+				panic(err)
+			}
+			if appender, err = tableData.SetAppender(blk.Fingerprint()); err != nil {
+				panic(err)
+			}
+		} else if err == data.ErrAppendableBlockNotFound {
+			blk, err := tbl.CreateBlock(id.SegmentID)
+			if err != nil {
+				panic(err)
+			}
+			if appender, err = tableData.SetAppender(blk.Fingerprint()); err != nil {
+				panic(err)
+			}
+		}
+		toAppend, err := appender.PrepareAppend(node.Rows())
+		bat, err := node.Window(0, toAppend-1)
+		if err = appender.ApplyAppend(bat, 0, toAppend, nil); err != nil {
+			panic(err)
+		}
+		appender.Close()
+	}
+	return
+}
+
 func (tbl *txnTable) PrepareCommit() (err error) {
 	// TODO: consider committing delete scenario later. Important!!!
 	tbl.entry.RLock()
@@ -388,11 +425,13 @@ func (tbl *txnTable) PrepareCommit() (err error) {
 	}
 
 	for _, seg := range tbl.csegs {
+		logrus.Infof("PrepareCommit: %s", seg.String())
 		if err = seg.PrepareCommit(); err != nil {
 			return
 		}
 	}
 	for _, blk := range tbl.cblks {
+		logrus.Infof("PrepareCommit: %s", blk.String())
 		if err = blk.PrepareCommit(); err != nil {
 			return
 		}

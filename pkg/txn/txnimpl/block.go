@@ -7,6 +7,8 @@ import (
 	"tae/pkg/iface/handle"
 	"tae/pkg/iface/txnif"
 	"tae/pkg/txn/txnbase"
+
+	"github.com/matrixorigin/matrixone/pkg/vm/engine/aoe/storage/common"
 )
 
 type txnBlock struct {
@@ -71,6 +73,7 @@ func newBlock(txn txnif.AsyncTxn, meta *catalog.BlockEntry) *txnBlock {
 	return blk
 }
 
-func (blk *txnBlock) GetMeta() interface{} { return blk.entry }
-func (blk *txnBlock) String() string       { return blk.entry.String() }
-func (blk *txnBlock) ID() uint64           { return blk.entry.GetID() }
+func (blk *txnBlock) GetMeta() interface{}    { return blk.entry }
+func (blk *txnBlock) String() string          { return blk.entry.String() }
+func (blk *txnBlock) ID() uint64              { return blk.entry.GetID() }
+func (blk *txnBlock) Fingerprint() *common.ID { return blk.entry.AsCommonID() }

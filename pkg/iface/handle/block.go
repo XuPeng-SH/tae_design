@@ -5,6 +5,7 @@ import (
 
 	"github.com/matrixorigin/matrixone/pkg/container/batch"
 	"github.com/matrixorigin/matrixone/pkg/container/vector"
+	"github.com/matrixorigin/matrixone/pkg/vm/engine/aoe/storage/common"
 )
 
 type BlockIt interface {
@@ -31,6 +32,7 @@ type BlockReader interface {
 	GetByFilter(filter Filter, offsetOnly bool) (*batch.Batch, error)
 	GetBatch(ctx interface{}) (*batch.Batch, error)
 	GetMeta() interface{}
+	Fingerprint() *common.ID
 }
 
 type BlockWriter interface {

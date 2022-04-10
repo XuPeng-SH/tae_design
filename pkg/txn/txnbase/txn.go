@@ -146,6 +146,10 @@ func (txn *Txn) ApplyRollback() error {
 	return txn.Store.ApplyRollback()
 }
 
+func (txn *Txn) PreCommit() error {
+	return txn.Store.PreCommit()
+}
+
 func (txn *Txn) PrepareRollback() error {
 	logrus.Debugf("Prepare Rollbacking %d", txn.ID)
 	return txn.Store.PrepareRollback()

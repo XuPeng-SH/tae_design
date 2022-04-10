@@ -6,6 +6,7 @@ import (
 
 	"github.com/matrixorigin/matrixone/pkg/container/batch"
 	"github.com/matrixorigin/matrixone/pkg/container/vector"
+	"github.com/matrixorigin/matrixone/pkg/vm/engine/aoe/storage/common"
 )
 
 type TxnDatabase struct {
@@ -72,6 +73,7 @@ func (seg *TxnSegment) PushDeleteOp(handle.Filter) (err error)                  
 func (seg *TxnSegment) PushUpdateOp(handle.Filter, string, interface{}) (err error) { return }
 func (seg *TxnSegment) CreateBlock() (blk handle.Block, err error)                  { return }
 
+func (blk *TxnBlock) Fingerprint() *common.ID                                       { return &common.ID{} }
 func (blk *TxnBlock) ID() uint64                                                    { return 0 }
 func (blk *TxnBlock) String() string                                                { return "" }
 func (blk *TxnBlock) Close() error                                                  { return nil }

@@ -12,6 +12,7 @@ import (
 	"tae/pkg/txn/txnimpl"
 	"testing"
 
+	"github.com/matrixorigin/matrixone/pkg/vm/engine/aoe/storage/mock"
 	"github.com/matrixorigin/matrixone/pkg/vm/engine/aoe/storage/mutation/buffer"
 	"github.com/matrixorigin/matrixone/pkg/vm/engine/aoe/storage/mutation/buffer/base"
 	"github.com/stretchr/testify/assert"
@@ -102,4 +103,29 @@ func TestTables1(t *testing.T) {
 	t.Log(txnBufMgr.String())
 	t.Log(mutBufMgr.String())
 	t.Log(c.SimplePPString(com.PPL1))
+}
+
+func TestTxn1(t *testing.T) {
+	dir := initTestPath(t)
+	c, mgr, driver, txnBufMgr, mutBufMgr := initTestContext(t, dir, 100000, 100000)
+	defer driver.Close()
+	defer c.Close()
+	defer mgr.Stop()
+
+	schema := catalog.MockSchema(1)
+	schema.BlockMaxRows = 100000
+	schema.SegmentMaxBlocks = 100
+	txn := mgr.StartTxn(nil)
+	db, _ := txn.CreateDatabase("db")
+	rel, _ := db.CreateRelation(schema)
+	bat := mock.MockBatch(schema.Types(), 1000)
+	err := rel.Append(bat)
+	assert.Nil(t, err)
+
+	t.Log(txnBufMgr.String())
+	t.Log(mutBufMgr.String())
+	err = txn.Commit()
+	assert.Nil(t, err)
+	t.Log(txnBufMgr.String())
+	t.Log(mutBufMgr.String())
 }

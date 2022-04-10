@@ -43,7 +43,7 @@ func (table *dataTable) setAppendableSegment(id uint64) {
 	if seg, err := table.meta.GetSegmentByID(id); err != nil {
 		panic(err)
 	} else {
-		table.aSeg = newSegment(seg, table.fileFactory, table.bufMgr)
+		table.aSeg = seg.GetSegmentData()
 	}
 }
 

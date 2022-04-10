@@ -68,6 +68,10 @@ func (mgr *TxnManager) OnOpTxn(op *OpTxn) {
 	mgr.EnqueueRecevied(op)
 }
 
+func (mgr *TxnManager) onPreCommit(txn txnif.AsyncTxn) {
+	txn.SetError(txn.PreCommit())
+}
+
 func (mgr *TxnManager) onPreparCommit(txn txnif.AsyncTxn) {
 	txn.SetError(txn.PrepareCommit())
 }
@@ -80,6 +84,9 @@ func (mgr *TxnManager) onPreparRollback(txn txnif.AsyncTxn) {
 func (mgr *TxnManager) onPreparing(items ...interface{}) {
 	for _, item := range items {
 		op := item.(*OpTxn)
+		if op.Op == OpCommit {
+			mgr.onPreCommit(op.Txn)
+		}
 		mgr.Lock()
 		ts := mgr.TsAlloc.Alloc()
 		op.Txn.Lock()

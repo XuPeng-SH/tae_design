@@ -259,6 +259,15 @@ func (store *txnStore) ApplyCommit() (err error) {
 	return
 }
 
+func (store *txnStore) PreCommit() (err error) {
+	for _, table := range store.tables {
+		if err = table.PreCommit(); err != nil {
+			panic(err)
+		}
+	}
+	return
+}
+
 func (store *txnStore) PrepareCommit() (err error) {
 	now := time.Now()
 	if store.warChecker != nil {

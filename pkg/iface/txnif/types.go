@@ -16,6 +16,7 @@ import (
 // }
 
 type Txn2PC interface {
+	PreCommit() error
 	PrepareRollback() error
 	PrepareCommit() error
 	ApplyRollback() error
