@@ -51,7 +51,7 @@ type Schema struct {
 	NameIndex        map[string]int `json:"nindex"`
 	BlockMaxRows     uint32         `json:"blkrows"`
 	PrimaryKey       int32          `json:"primarykey"`
-	SegmentMaxBlocks uint64         `json:"segblocks"`
+	SegmentMaxBlocks uint16         `json:"segblocks"`
 }
 
 func NewEmptySchema(name string) *Schema {

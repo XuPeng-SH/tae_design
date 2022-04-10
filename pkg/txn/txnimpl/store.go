@@ -65,7 +65,10 @@ func (store *txnStore) BindTxn(txn txnif.AsyncTxn) {
 }
 
 func (store *txnStore) Append(id uint64, data *batch.Batch) error {
-	table := store.tables[id]
+	table, err := store.getOrSetTable(id)
+	if err != nil {
+		return err
+	}
 	if table.IsDeleted() {
 		return txnbase.ErrNotFound
 	}

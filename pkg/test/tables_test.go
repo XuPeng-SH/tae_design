@@ -3,6 +3,7 @@ package tables
 import (
 	"os"
 	"path/filepath"
+	"sync"
 	"tae/pkg/catalog"
 	"tae/pkg/common"
 	com "tae/pkg/common"
@@ -17,6 +18,7 @@ import (
 	"github.com/matrixorigin/matrixone/pkg/vm/engine/aoe/storage/mock"
 	"github.com/matrixorigin/matrixone/pkg/vm/engine/aoe/storage/mutation/buffer"
 	"github.com/matrixorigin/matrixone/pkg/vm/engine/aoe/storage/mutation/buffer/base"
+	"github.com/panjf2000/ants/v2"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -109,7 +111,7 @@ func TestTables1(t *testing.T) {
 
 func TestTxn1(t *testing.T) {
 	dir := initTestPath(t)
-	c, mgr, driver, txnBufMgr, mutBufMgr := initTestContext(t, dir, common.K*80, common.G)
+	c, mgr, driver, txnBufMgr, mutBufMgr := initTestContext(t, dir, common.M*1, common.G)
 	defer driver.Close()
 	defer c.Close()
 	defer mgr.Stop()
@@ -117,21 +119,74 @@ func TestTxn1(t *testing.T) {
 	schema := catalog.MockSchema(1)
 	schema.BlockMaxRows = 10000
 	schema.SegmentMaxBlocks = 4
-	txn := mgr.StartTxn(nil)
-	db, _ := txn.CreateDatabase("db")
-	rel, _ := db.CreateRelation(schema)
-	bat := mock.MockBatch(schema.Types(), 4000)
-	for i := 0; i < 20; i++ {
-		err := rel.Append(bat)
+	batchRows := uint64(schema.BlockMaxRows) * 2 / 5
+	batchCnt := 2
+	bat := mock.MockBatch(schema.Types(), batchRows)
+	{
+		txn := mgr.StartTxn(nil)
+		db, _ := txn.CreateDatabase("db")
+		db.CreateRelation(schema)
+		err := txn.Commit()
 		assert.Nil(t, err)
 	}
-
-	t.Log(txnBufMgr.String())
-	t.Log(mutBufMgr.String())
+	var wg sync.WaitGroup
 	now := time.Now()
-	err := txn.Commit()
-	assert.Nil(t, err)
-	t.Logf("Commit takes: %s", time.Since(now))
+	doAppend := func() {
+		defer wg.Done()
+		txn := mgr.StartTxn(nil)
+		db, _ := txn.GetDatabase("db")
+		rel, err := db.GetRelationByName(schema.Name)
+		assert.Nil(t, err)
+		for i := 0; i < batchCnt; i++ {
+			err := rel.Append(bat)
+			assert.Nil(t, err)
+		}
+		err = txn.Commit()
+		assert.Nil(t, err)
+	}
+	p, _ := ants.NewPool(4)
+	loopCnt := 20
+	for i := 0; i < loopCnt; i++ {
+		wg.Add(1)
+		p.Submit(doAppend)
+	}
+
+	wg.Wait()
+
+	t.Logf("Append takes: %s", time.Since(now))
+	expectBlkCnt := (uint32(batchRows)*uint32(batchCnt)*uint32(loopCnt)-1)/schema.BlockMaxRows + 1
+	expectSegCnt := (expectBlkCnt-1)/uint32(schema.SegmentMaxBlocks) + 1
+	t.Log(expectBlkCnt)
+	t.Log(expectSegCnt)
 	t.Log(txnBufMgr.String())
 	t.Log(mutBufMgr.String())
+	{
+		txn := mgr.StartTxn(nil)
+		db, _ := txn.GetDatabase("db")
+		rel, _ := db.GetRelationByName(schema.Name)
+		seg, err := rel.CreateSegment()
+		assert.Nil(t, err)
+		_, err = seg.CreateBlock()
+		assert.Nil(t, err)
+	}
+	{
+		txn := mgr.StartTxn(nil)
+		db, _ := txn.GetDatabase("db")
+		rel, _ := db.GetRelationByName(schema.Name)
+		segIt := rel.MakeSegmentIt()
+		segCnt := uint32(0)
+		blkCnt := uint32(0)
+		for segIt.Valid() {
+			segCnt++
+			blkIt := segIt.GetSegment().MakeBlockIt()
+			for blkIt.Valid() {
+				blkCnt++
+				blkIt.Next()
+			}
+			segIt.Next()
+		}
+		assert.Equal(t, expectSegCnt, segCnt)
+		assert.Equal(t, expectBlkCnt, blkCnt)
+	}
+	t.Log(c.SimplePPString(com.PPL1))
 }

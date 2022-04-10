@@ -202,6 +202,7 @@ func (tbl *txnTable) registerInsertNode() error {
 	id := common.ID{
 		TableID:   tbl.entry.GetID(),
 		SegmentID: uint64(len(tbl.inodes)),
+		BlockID:   tbl.txn.GetID(),
 	}
 	n := NewInsertNode(tbl, tbl.nodesMgr, id, tbl.driver)
 	tbl.appendable = tbl.nodesMgr.Pin(n)

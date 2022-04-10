@@ -65,7 +65,8 @@ func makeTable(t *testing.T, dir string, colCnt int, bufSize uint64) *txnTable {
 	id := common.NextGlobalSeqNum()
 	schema := catalog.MockSchemaAll(colCnt)
 	rel := mockTestRelation(id, schema)
-	return newTxnTable(nil, rel, driver, mgr, nil, nil)
+	txn := txnbase.NewTxn(nil, nil, common.NextGlobalSeqNum(), common.NextGlobalSeqNum(), nil)
+	return newTxnTable(txn, rel, driver, mgr, nil, nil)
 }
 
 func TestInsertNode(t *testing.T) {
