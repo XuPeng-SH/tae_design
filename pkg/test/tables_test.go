@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"tae/pkg/catalog"
+	"tae/pkg/common"
 	com "tae/pkg/common"
 	"tae/pkg/dataio"
 	"tae/pkg/iface/data"
@@ -11,6 +12,7 @@ import (
 	"tae/pkg/txn/txnbase"
 	"tae/pkg/txn/txnimpl"
 	"testing"
+	"time"
 
 	"github.com/matrixorigin/matrixone/pkg/vm/engine/aoe/storage/mock"
 	"github.com/matrixorigin/matrixone/pkg/vm/engine/aoe/storage/mutation/buffer"
@@ -107,25 +109,29 @@ func TestTables1(t *testing.T) {
 
 func TestTxn1(t *testing.T) {
 	dir := initTestPath(t)
-	c, mgr, driver, txnBufMgr, mutBufMgr := initTestContext(t, dir, 100000, 100000)
+	c, mgr, driver, txnBufMgr, mutBufMgr := initTestContext(t, dir, common.K*80, common.G)
 	defer driver.Close()
 	defer c.Close()
 	defer mgr.Stop()
 
 	schema := catalog.MockSchema(1)
-	schema.BlockMaxRows = 100000
-	schema.SegmentMaxBlocks = 100
+	schema.BlockMaxRows = 10000
+	schema.SegmentMaxBlocks = 4
 	txn := mgr.StartTxn(nil)
 	db, _ := txn.CreateDatabase("db")
 	rel, _ := db.CreateRelation(schema)
-	bat := mock.MockBatch(schema.Types(), 1000)
-	err := rel.Append(bat)
-	assert.Nil(t, err)
+	bat := mock.MockBatch(schema.Types(), 4000)
+	for i := 0; i < 20; i++ {
+		err := rel.Append(bat)
+		assert.Nil(t, err)
+	}
 
 	t.Log(txnBufMgr.String())
 	t.Log(mutBufMgr.String())
-	err = txn.Commit()
+	now := time.Now()
+	err := txn.Commit()
 	assert.Nil(t, err)
+	t.Logf("Commit takes: %s", time.Since(now))
 	t.Log(txnBufMgr.String())
 	t.Log(mutBufMgr.String())
 }

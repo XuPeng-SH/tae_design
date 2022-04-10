@@ -3,6 +3,7 @@ package txnbase
 import (
 	"sync"
 	"tae/pkg/iface/txnif"
+	"time"
 
 	"github.com/matrixorigin/matrixone/pkg/vm/engine/aoe/storage/common"
 	"github.com/matrixorigin/matrixone/pkg/vm/engine/aoe/storage/logstore/sm"
@@ -69,7 +70,9 @@ func (mgr *TxnManager) OnOpTxn(op *OpTxn) {
 }
 
 func (mgr *TxnManager) onPreCommit(txn txnif.AsyncTxn) {
+	now := time.Now()
 	txn.SetError(txn.PreCommit())
+	logrus.Debugf("%s PreCommit Takes: %s", txn.String(), time.Since(now))
 }
 
 func (mgr *TxnManager) onPreparCommit(txn txnif.AsyncTxn) {

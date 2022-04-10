@@ -370,9 +370,10 @@ func (tbl *txnTable) PrepareRollback() (err error) {
 	return
 }
 
-func (tbl *txnTable) PreCommit() (err error) {
+func (tbl *txnTable) applyAppendInode(node InsertNode) (err error) {
 	tableData := tbl.entry.GetTableData()
-	for _, node := range tbl.inodes {
+	appended := uint32(0)
+	for appended < node.Rows() {
 		id, appender, err := tableData.GetAppender()
 		if err == data.ErrAppendableSegmentNotFound {
 			seg, err := tbl.CreateSegment()
@@ -395,12 +396,25 @@ func (tbl *txnTable) PreCommit() (err error) {
 				panic(err)
 			}
 		}
-		toAppend, err := appender.PrepareAppend(node.Rows())
+		toAppend, err := appender.PrepareAppend(node.Rows() - appended)
 		bat, err := node.Window(0, toAppend-1)
 		if err = appender.ApplyAppend(bat, 0, toAppend, nil); err != nil {
 			panic(err)
 		}
 		appender.Close()
+		appended += toAppend
+		if appended == node.Rows() {
+			break
+		}
+	}
+	return
+}
+
+func (tbl *txnTable) PreCommit() (err error) {
+	for _, node := range tbl.inodes {
+		if err = tbl.applyAppendInode(node); err != nil {
+			break
+		}
 	}
 	return
 }
