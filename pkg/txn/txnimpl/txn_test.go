@@ -379,7 +379,7 @@ func TestApplyToColumn1(t *testing.T) {
 	deletes.Add(1)
 	schema := catalog.MockSchema(2)
 	node := updates.NewColumnUpdates(&target, schema.ColDefs[0], nil)
-	node.Update(0, []byte("update"))
+	node.Update(3, []byte("update"))
 	deletes.AddRange(3, 4)
 
 	vec := &gvec.Vector{}
@@ -416,12 +416,12 @@ func TestApplyToColumn2(t *testing.T) {
 	deletes.Add(1)
 	schema := catalog.MockSchema(2)
 	node := updates.NewColumnUpdates(&target, schema.ColDefs[0], nil)
-	node.Update(0, int8(8))
+	node.Update(0, int32(8))
 	deletes.AddRange(2, 4)
 
 	vec := &gvec.Vector{}
-	vec.Typ.Oid = types.T_int8
-	vec.Col = []int8{1, 2, 3, 4}
+	vec.Typ.Oid = types.T_int32
+	vec.Col = []int32{1, 2, 3, 4}
 
 	vec.Nsp = &nulls.Nulls{}
 	vec.Nsp.Np = &roaring64.Bitmap{}
@@ -456,8 +456,10 @@ func TestApplyToColumn3(t *testing.T) {
 	}
 	vec.Col = col
 
+	deletes := &roaring.Bitmap{}
+	deletes.Add(1)
 	fmt.Printf("%s\n->\n", vec.Col)
-	res := node.ApplyToColumn(vec, nil)
+	res := node.ApplyToColumn(vec, deletes)
 	fmt.Printf("%s\n", res.Col)
 }
 
@@ -465,11 +467,11 @@ func TestApplyToColumn4(t *testing.T) {
 	target := common.ID{}
 	schema := catalog.MockSchema(2)
 	node := updates.NewColumnUpdates(&target, schema.ColDefs[0], nil)
-	node.Update(0, int8(8))
+	node.Update(3, int32(8))
 
 	vec := &gvec.Vector{}
-	vec.Typ.Oid = types.T_int8
-	vec.Col = []int8{1, 2, 3, 4}
+	vec.Typ.Oid = types.T_int32
+	vec.Col = []int32{1, 2, 3, 4}
 
 	fmt.Printf("%v\n->\n", vec.Col)
 	res := node.ApplyToColumn(vec, nil)
