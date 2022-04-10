@@ -34,6 +34,6 @@ func (n *BlockUpdateNode) PrepareCommit() (err error) {
 	if err = n.BlockUpdates.PrepareCommit(); err != nil {
 		return err
 	}
-	n.chain.Update(n.DLNode)
+	n.chain.UpdateLocked(n)
 	return
 }

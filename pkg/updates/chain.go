@@ -10,8 +10,10 @@ import (
 type BlockUpdateChain struct {
 	*com.Link
 	*sync.RWMutex
-	rwlocker *sync.RWMutex
-	meta     *catalog.BlockEntry
+	rwlocker     *sync.RWMutex
+	meta         *catalog.BlockEntry
+	latestMerge  *BlockUpdateNode
+	latestCommit *BlockUpdateNode
 }
 
 func NewUpdateChain(rwlocker *sync.RWMutex, meta *catalog.BlockEntry) *BlockUpdateChain {
@@ -22,6 +24,13 @@ func NewUpdateChain(rwlocker *sync.RWMutex, meta *catalog.BlockEntry) *BlockUpda
 		Link:    new(com.Link),
 		RWMutex: rwlocker,
 		meta:    meta,
+	}
+}
+
+func (chain *BlockUpdateChain) UpdateLocked(node *BlockUpdateNode) {
+	chain.Update(node.DLNode)
+	if node.GetCommitTSLocked() != txnif.UncommitTS {
+		chain.latestCommit = node
 	}
 }
 
@@ -37,8 +46,8 @@ func (chain *BlockUpdateChain) AddNode(txn txnif.AsyncTxn) *BlockUpdateNode {
 }
 
 func (chain *BlockUpdateChain) AddMergeNode() *BlockUpdateNode {
-	chain.RLock()
-	defer chain.RUnlock()
+	chain.Lock()
+	defer chain.Unlock()
 	var merge *BlockUpdates
 	chain.LoopChainLocked(func(updates *BlockUpdateNode) bool {
 		updates.RLock()
@@ -61,6 +70,7 @@ func (chain *BlockUpdateChain) AddMergeNode() *BlockUpdateNode {
 		return nil
 	}
 	node := NewBlockUpdateNode(chain, merge)
+	chain.latestMerge = node
 	return node
 }
 
@@ -70,6 +80,30 @@ func (chain *BlockUpdateChain) LoopChainLocked(fn func(updateNode *BlockUpdateNo
 		return fn(updates)
 	}
 	chain.Loop(wrapped, reverse)
+}
+
+func (chain *BlockUpdateChain) FirstNodeLocked() (node *BlockUpdateNode) {
+	return chain.GetHead().GetPayload().(*BlockUpdateNode)
+}
+
+func (chain *BlockUpdateChain) LatestMergeLocked() (node *BlockUpdateNode) {
+	return chain.latestMerge
+}
+
+func (chain *BlockUpdateChain) LatestCommitLocked() (node *BlockUpdateNode) {
+	return chain.latestCommit
+}
+
+func (chain *BlockUpdateChain) LatestMerge() (node *BlockUpdateNode) {
+	chain.RLock()
+	defer chain.RUnlock()
+	return chain.latestMerge
+}
+
+func (chain *BlockUpdateChain) LatestCommit() (node *BlockUpdateNode) {
+	chain.RLock()
+	defer chain.RUnlock()
+	return chain.latestCommit
 }
 
 func (chain *BlockUpdateChain) FirstNode() (node *BlockUpdateNode) {
