@@ -19,7 +19,7 @@ type TableEntry struct {
 	tableData data.Table
 }
 
-func NewTableEntry(db *DBEntry, schema *Schema, txnCtx txnif.AsyncTxn) *TableEntry {
+func NewTableEntry(db *DBEntry, schema *Schema, txnCtx txnif.AsyncTxn, dataFactory TableDataFactory) *TableEntry {
 	id := db.catalog.NextTable()
 	e := &TableEntry{
 		BaseEntry: &BaseEntry{
@@ -35,8 +35,8 @@ func NewTableEntry(db *DBEntry, schema *Schema, txnCtx txnif.AsyncTxn) *TableEnt
 		link:    new(common.Link),
 		entries: make(map[uint64]*common.DLNode),
 	}
-	if dataFactory := db.GetCatalog().GetDataFactory(); dataFactory != nil {
-		e.tableData = dataFactory.Table(e)
+	if dataFactory != nil {
+		e.tableData = dataFactory(e)
 	}
 	return e
 }
@@ -65,10 +65,10 @@ func (entry *TableEntry) MakeSegmentIt(reverse bool) *common.LinkIt {
 	return common.NewLinkIt(entry.RWMutex, entry.link, reverse)
 }
 
-func (entry *TableEntry) CreateSegment(txn txnif.AsyncTxn, state EntryState) (created *SegmentEntry, err error) {
+func (entry *TableEntry) CreateSegment(txn txnif.AsyncTxn, state EntryState, dataFactory SegmentDataFactory) (created *SegmentEntry, err error) {
 	entry.Lock()
 	defer entry.Unlock()
-	created = NewSegmentEntry(entry, txn, state)
+	created = NewSegmentEntry(entry, txn, state, dataFactory)
 	entry.addEntryLocked(created)
 	return
 }
@@ -139,3 +139,5 @@ func (entry *TableEntry) String() string {
 }
 
 func (entry *TableEntry) GetCatalog() *Catalog { return entry.db.catalog }
+
+func (entry *TableEntry) GetTableData() data.Table { return entry.tableData }

@@ -24,7 +24,7 @@ func initTestPath(t *testing.T) string {
 
 func TestCreateDB1(t *testing.T) {
 	dir := initTestPath(t)
-	catalog := MockCatalog(dir, "mock", nil, nil)
+	catalog := MockCatalog(dir, "mock", nil)
 	defer catalog.Close()
 
 	txnMgr := txnbase.NewTxnManager(MockTxnStoreFactory(catalog), MockTxnFactory(catalog))
@@ -108,7 +108,7 @@ func TestCreateDB1(t *testing.T) {
 //  [TXN1]: CREATE DB1 [OK] | GET DB [OK]
 func TestTableEntry1(t *testing.T) {
 	dir := initTestPath(t)
-	catalog := MockCatalog(dir, "mock", nil, nil)
+	catalog := MockCatalog(dir, "mock", nil)
 	defer catalog.Close()
 
 	txnMgr := txnbase.NewTxnManager(MockTxnStoreFactory(catalog), MockTxnFactory(catalog))
@@ -183,7 +183,7 @@ func TestTableEntry1(t *testing.T) {
 
 func TestTableEntry2(t *testing.T) {
 	dir := initTestPath(t)
-	catalog := MockCatalog(dir, "mock", nil, nil)
+	catalog := MockCatalog(dir, "mock", nil)
 	defer catalog.Close()
 
 	txnMgr := txnbase.NewTxnManager(MockTxnStoreFactory(catalog), MockTxnFactory(catalog))
@@ -249,7 +249,7 @@ func TestTableEntry2(t *testing.T) {
 
 func TestDB1(t *testing.T) {
 	dir := initTestPath(t)
-	catalog := MockCatalog(dir, "mock", nil, nil)
+	catalog := MockCatalog(dir, "mock", nil)
 	defer catalog.Close()
 
 	txnMgr := txnbase.NewTxnManager(MockTxnStoreFactory(catalog), MockTxnFactory(catalog))
@@ -285,7 +285,7 @@ func TestDB1(t *testing.T) {
 
 func TestTable1(t *testing.T) {
 	dir := initTestPath(t)
-	catalog := MockCatalog(dir, "mock", nil, nil)
+	catalog := MockCatalog(dir, "mock", nil)
 	defer catalog.Close()
 
 	txnMgr := txnbase.NewTxnManager(MockTxnStoreFactory(catalog), MockTxnFactory(catalog))
@@ -332,7 +332,7 @@ func TestTable1(t *testing.T) {
 
 func TestCommand(t *testing.T) {
 	dir := initTestPath(t)
-	catalog := MockCatalog(dir, "mock", nil, nil)
+	catalog := MockCatalog(dir, "mock", nil)
 	defer catalog.Close()
 	name := "db"
 
@@ -380,7 +380,7 @@ func TestCommand(t *testing.T) {
 	assert.Equal(t, db.ID, eCmd.entry.ID)
 
 	schema := MockSchemaAll(13)
-	tb := NewTableEntry(db, schema, nil)
+	tb := NewTableEntry(db, schema, nil, nil)
 	tb.CreateAt = common.NextGlobalSeqNum()
 	tb.ID = common.NextGlobalSeqNum()
 
@@ -432,7 +432,7 @@ func TestCommand(t *testing.T) {
 // 5. Start Txn4, scan "tb" and both "seg1" and "seg2" found
 func TestSegment1(t *testing.T) {
 	dir := initTestPath(t)
-	catalog := MockCatalog(dir, "mock", nil, nil)
+	catalog := MockCatalog(dir, "mock", nil)
 	defer catalog.Close()
 	txnMgr := txnbase.NewTxnManager(MockTxnStoreFactory(catalog), MockTxnFactory(catalog))
 	txnMgr.Start()
@@ -444,9 +444,9 @@ func TestSegment1(t *testing.T) {
 	assert.Nil(t, err)
 	schema := MockSchema(1)
 	schema.Name = tbName
-	tb, err := db.CreateTableEntry(schema, txn1)
+	tb, err := db.CreateTableEntry(schema, txn1, nil)
 	assert.Nil(t, err)
-	seg1, err := tb.CreateSegment(txn1, ES_Appendable)
+	seg1, err := tb.CreateSegment(txn1, ES_Appendable, nil)
 	assert.Nil(t, err)
 	err = txn1.Commit()
 	assert.Nil(t, err)

@@ -7,6 +7,7 @@ import (
 	"tae/pkg/catalog"
 	"tae/pkg/iface/handle"
 	"tae/pkg/iface/txnif"
+	"tae/pkg/tables"
 	"tae/pkg/txn/txnbase"
 	"tae/pkg/updates"
 
@@ -70,9 +71,10 @@ type txnTable struct {
 	cblks       []*catalog.BlockEntry
 	dblks       []*catalog.BlockEntry
 	warChecker  *warChecker
+	dataFactory *tables.DataFactory
 }
 
-func newTxnTable(txn txnif.AsyncTxn, handle handle.Relation, driver txnbase.NodeDriver, mgr base.INodeManager, checker *warChecker) *txnTable {
+func newTxnTable(txn txnif.AsyncTxn, handle handle.Relation, driver txnbase.NodeDriver, mgr base.INodeManager, checker *warChecker, dataFactory *tables.DataFactory) *txnTable {
 	tbl := &txnTable{
 		warChecker:  checker,
 		txn:         txn,
@@ -85,6 +87,7 @@ func newTxnTable(txn txnif.AsyncTxn, handle handle.Relation, driver txnbase.Node
 		updateNodes: make(map[common.ID]*updates.BlockUpdates),
 		csegs:       make([]*catalog.SegmentEntry, 0),
 		dsegs:       make([]*catalog.SegmentEntry, 0),
+		dataFactory: dataFactory,
 	}
 	return tbl
 }
@@ -111,7 +114,11 @@ func (tbl *txnTable) CollectCmd(cmdMgr *commandManager) error {
 
 func (tbl *txnTable) CreateSegment() (seg handle.Segment, err error) {
 	var meta *catalog.SegmentEntry
-	if meta, err = tbl.entry.CreateSegment(tbl.txn, catalog.ES_Appendable); err != nil {
+	var factory catalog.SegmentDataFactory
+	if tbl.dataFactory != nil {
+		factory = tbl.dataFactory.MakeSegmentFactory()
+	}
+	if meta, err = tbl.entry.CreateSegment(tbl.txn, catalog.ES_Appendable, factory); err != nil {
 		return
 	}
 	seg = newSegment(tbl.txn, meta)
@@ -125,7 +132,12 @@ func (tbl *txnTable) CreateBlock(sid uint64) (blk handle.Block, err error) {
 	if seg, err = tbl.entry.GetSegmentByID(sid); err != nil {
 		return
 	}
-	meta, err := seg.CreateBlock(tbl.txn, catalog.ES_Appendable)
+	var factory catalog.BlockDataFactory
+	if tbl.dataFactory != nil {
+		segData := seg.GetSegmentData()
+		factory = tbl.dataFactory.MakeBlockFactory(segData.GetSegmentFile())
+	}
+	meta, err := seg.CreateBlock(tbl.txn, catalog.ES_Appendable, factory)
 	if err != nil {
 		return
 	}

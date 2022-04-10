@@ -21,7 +21,7 @@ type SegmentEntry struct {
 	segData data.Segment
 }
 
-func NewSegmentEntry(table *TableEntry, txn txnif.AsyncTxn, state EntryState) *SegmentEntry {
+func NewSegmentEntry(table *TableEntry, txn txnif.AsyncTxn, state EntryState, dataFactory SegmentDataFactory) *SegmentEntry {
 	id := table.GetDB().catalog.NextSegment()
 	e := &SegmentEntry{
 		BaseEntry: &BaseEntry{
@@ -37,8 +37,8 @@ func NewSegmentEntry(table *TableEntry, txn txnif.AsyncTxn, state EntryState) *S
 		entries: make(map[uint64]*com.DLNode),
 		state:   state,
 	}
-	if dataFactory := table.GetCatalog().GetDataFactory(); dataFactory != nil {
-		e.segData = dataFactory.Segment(e)
+	if dataFactory != nil {
+		e.segData = dataFactory(e)
 	}
 	return e
 }
@@ -134,10 +134,10 @@ func (entry *SegmentEntry) LastAppendableBlock() (blk *BlockEntry) {
 	return blk
 }
 
-func (entry *SegmentEntry) CreateBlock(txn txnif.AsyncTxn, state EntryState) (created *BlockEntry, err error) {
+func (entry *SegmentEntry) CreateBlock(txn txnif.AsyncTxn, state EntryState, dataFactory BlockDataFactory) (created *BlockEntry, err error) {
 	entry.Lock()
 	defer entry.Unlock()
-	created = NewBlockEntry(entry, txn, state)
+	created = NewBlockEntry(entry, txn, state, dataFactory)
 	entry.addEntryLocked(created)
 	return
 }
@@ -159,3 +159,5 @@ func (entry *SegmentEntry) AsCommonID() *common.ID {
 }
 
 func (entry *SegmentEntry) GetCatalog() *Catalog { return entry.table.db.catalog }
+
+func (entry *SegmentEntry) GetSegmentData() data.Segment { return entry.segData }

@@ -94,7 +94,7 @@ func newMockTableHandle(catalog *Catalog, txn txnif.AsyncTxn, entry *TableEntry)
 
 func (h *mockDBHandle) CreateRelation(def interface{}) (rel handle.Relation, err error) {
 	schema := def.(*Schema)
-	tbl, err := h.entry.CreateTableEntry(schema, h.Txn)
+	tbl, err := h.entry.CreateTableEntry(schema, h.Txn, nil)
 	if err != nil {
 		return nil, err
 	}

@@ -19,7 +19,7 @@ type BlockEntry struct {
 	blkData data.Block
 }
 
-func NewBlockEntry(segment *SegmentEntry, txn txnif.AsyncTxn, state EntryState) *BlockEntry {
+func NewBlockEntry(segment *SegmentEntry, txn txnif.AsyncTxn, state EntryState, dataFactory BlockDataFactory) *BlockEntry {
 	id := segment.GetTable().GetDB().catalog.NextBlock()
 	e := &BlockEntry{
 		BaseEntry: &BaseEntry{
@@ -33,8 +33,8 @@ func NewBlockEntry(segment *SegmentEntry, txn txnif.AsyncTxn, state EntryState) 
 		segment: segment,
 		state:   state,
 	}
-	if dataFactory := segment.GetCatalog().GetDataFactory(); dataFactory != nil {
-		e.blkData = dataFactory.Block(e)
+	if dataFactory != nil {
+		e.blkData = dataFactory(e)
 	}
 	return e
 }
@@ -86,3 +86,5 @@ func (entry *BlockEntry) AsCommonID() *common.ID {
 		BlockID:   entry.GetID(),
 	}
 }
+
+func (entry *BlockEntry) GetBlockData() data.Block { return entry.blkData }

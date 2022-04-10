@@ -128,9 +128,9 @@ func (e *DBEntry) DropTableEntry(name string, txnCtx txnif.AsyncTxn) (deleted *T
 	return
 }
 
-func (e *DBEntry) CreateTableEntry(schema *Schema, txnCtx txnif.AsyncTxn) (created *TableEntry, err error) {
+func (e *DBEntry) CreateTableEntry(schema *Schema, txnCtx txnif.AsyncTxn, dataFactory TableDataFactory) (created *TableEntry, err error) {
 	e.Lock()
-	created = NewTableEntry(e, schema, txnCtx)
+	created = NewTableEntry(e, schema, txnCtx, dataFactory)
 	err = e.addEntryLocked(created)
 	e.Unlock()
 

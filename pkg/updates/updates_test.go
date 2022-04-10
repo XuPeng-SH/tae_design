@@ -187,13 +187,13 @@ func TestUpdatesMerge(t *testing.T) {
 	cnt2 := 10
 	nodes := make([]*testUpdateNode, 0)
 	schema := catalog.MockSchema(1)
-	c := catalog.MockCatalog(initTestPath(t), "mock", nil, nil)
+	c := catalog.MockCatalog(initTestPath(t), "mock", nil)
 	defer c.Close()
 
 	db, _ := c.CreateDBEntry("db", nil)
-	table, _ := db.CreateTableEntry(schema, nil)
-	seg, _ := table.CreateSegment(nil, catalog.ES_Appendable)
-	blk, _ := seg.CreateBlock(nil, catalog.ES_Appendable)
+	table, _ := db.CreateTableEntry(schema, nil, nil)
+	seg, _ := table.CreateSegment(nil, catalog.ES_Appendable, nil)
+	blk, _ := seg.CreateBlock(nil, catalog.ES_Appendable, nil)
 
 	for i := 0; i < cnt1+cnt2; i++ {
 		start := uint64(i) * 2
@@ -272,13 +272,13 @@ func TestUpdates(t *testing.T) {
 	committed := 10
 	nodes := make([]*testUpdateNode, 0)
 	schema := catalog.MockSchema(1)
-	c := catalog.MockCatalog(initTestPath(t), "mock", nil, nil)
+	c := catalog.MockCatalog(initTestPath(t), "mock", nil)
 	defer c.Close()
 
 	db, _ := c.CreateDBEntry("db", nil)
-	table, _ := db.CreateTableEntry(schema, nil)
-	seg, _ := table.CreateSegment(nil, catalog.ES_Appendable)
-	blk, _ := seg.CreateBlock(nil, catalog.ES_Appendable)
+	table, _ := db.CreateTableEntry(schema, nil, nil)
+	seg, _ := table.CreateSegment(nil, catalog.ES_Appendable, nil)
+	blk, _ := seg.CreateBlock(nil, catalog.ES_Appendable, nil)
 
 	var head *testUpdateNode
 	for i := 0; i < committed; i++ {
@@ -342,13 +342,13 @@ func TestUpdates(t *testing.T) {
 
 func TestUpdates2(t *testing.T) {
 	schema := catalog.MockSchema(1)
-	c := catalog.MockCatalog(initTestPath(t), "mock", nil, nil)
+	c := catalog.MockCatalog(initTestPath(t), "mock", nil)
 	defer c.Close()
 
 	db, _ := c.CreateDBEntry("db", nil)
-	table, _ := db.CreateTableEntry(schema, nil)
-	seg, _ := table.CreateSegment(nil, catalog.ES_Appendable)
-	blk, _ := seg.CreateBlock(nil, catalog.ES_Appendable)
+	table, _ := db.CreateTableEntry(schema, nil, nil)
+	seg, _ := table.CreateSegment(nil, catalog.ES_Appendable, nil)
+	blk, _ := seg.CreateBlock(nil, catalog.ES_Appendable, nil)
 
 	uncommitted := new(com.Link)
 
@@ -439,17 +439,17 @@ func TestUpdates2(t *testing.T) {
 
 func TestUpdates3(t *testing.T) {
 	schema := catalog.MockSchema(1)
-	c := catalog.MockCatalog(initTestPath(t), "mock", nil, nil)
+	c := catalog.MockCatalog(initTestPath(t), "mock", nil)
 	defer c.Close()
 
 	db, _ := c.CreateDBEntry("db", nil)
-	table, _ := db.CreateTableEntry(schema, nil)
-	seg, _ := table.CreateSegment(nil, catalog.ES_Appendable)
+	table, _ := db.CreateTableEntry(schema, nil, nil)
+	seg, _ := table.CreateSegment(nil, catalog.ES_Appendable, nil)
 	blkCnt := 200
 	chains := make([]*BlockUpdateChain, 0, blkCnt)
 	now := time.Now()
 	for i := 0; i < blkCnt; i++ {
-		blk, _ := seg.CreateBlock(nil, catalog.ES_Appendable)
+		blk, _ := seg.CreateBlock(nil, catalog.ES_Appendable, nil)
 		blk.CreateAt = common.NextGlobalSeqNum()
 		chain := NewUpdateChain(nil, blk)
 		chains = append(chains, chain)

@@ -4,6 +4,7 @@ import (
 	"tae/pkg/catalog"
 	"tae/pkg/iface/handle"
 	"tae/pkg/iface/txnif"
+	"tae/pkg/tables"
 	"tae/pkg/txn/txnbase"
 	"time"
 
@@ -28,21 +29,23 @@ type txnStore struct {
 	cmdMgr      *commandManager
 	logs        []entry.Entry
 	warChecker  *warChecker
+	dataFactory *tables.DataFactory
 }
 
-var TxnStoreFactory = func(catalog *catalog.Catalog, driver txnbase.NodeDriver) txnbase.TxnStoreFactory {
+var TxnStoreFactory = func(catalog *catalog.Catalog, driver txnbase.NodeDriver, dataFactory *tables.DataFactory) txnbase.TxnStoreFactory {
 	return func() txnif.TxnStore {
-		return newStore(catalog, driver)
+		return newStore(catalog, driver, dataFactory)
 	}
 }
 
-func newStore(catalog *catalog.Catalog, driver txnbase.NodeDriver) *txnStore {
+func newStore(catalog *catalog.Catalog, driver txnbase.NodeDriver, dataFactory *tables.DataFactory) *txnStore {
 	return &txnStore{
-		tables:  make(map[uint64]Table),
-		catalog: catalog,
-		cmdMgr:  newCommandManager(driver),
-		driver:  driver,
-		logs:    make([]entry.Entry, 0),
+		tables:      make(map[uint64]Table),
+		catalog:     catalog,
+		cmdMgr:      newCommandManager(driver),
+		driver:      driver,
+		logs:        make([]entry.Entry, 0),
+		dataFactory: dataFactory,
 	}
 }
 
@@ -142,7 +145,11 @@ func (store *txnStore) DropDatabase(name string) (db handle.Database, err error)
 func (store *txnStore) CreateRelation(def interface{}) (relation handle.Relation, err error) {
 	schema := def.(*catalog.Schema)
 	db := store.database.GetMeta().(*catalog.DBEntry)
-	meta, err := db.CreateTableEntry(schema, store.txn)
+	var factory catalog.TableDataFactory
+	if store.dataFactory != nil {
+		factory = store.dataFactory.MakeTableFactory()
+	}
+	meta, err := db.CreateTableEntry(schema, store.txn, factory)
 	if err != nil {
 		return
 	}
@@ -199,7 +206,7 @@ func (store *txnStore) getOrSetTable(id uint64) (table Table, err error) {
 		if store.warChecker == nil {
 			store.warChecker = newWarChecker(store.txn, entry.GetDB())
 		}
-		table = newTxnTable(store.txn, relation, store.driver, store.nodesMgr, store.warChecker)
+		table = newTxnTable(store.txn, relation, store.driver, store.nodesMgr, store.warChecker, store.dataFactory)
 		store.tables[id] = table
 	}
 	return

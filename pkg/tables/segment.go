@@ -9,10 +9,6 @@ import (
 	"github.com/matrixorigin/matrixone/pkg/vm/engine/aoe/storage/mutation/buffer/base"
 )
 
-func OpenSegmenFile(dir string, id common.ID) (file dataio.SegmentFile, err error) {
-	return
-}
-
 type dataSegment struct {
 	meta   *catalog.SegmentEntry
 	file   dataio.SegmentFile
@@ -34,6 +30,10 @@ func newSegment(meta *catalog.SegmentEntry, factory dataio.SegmentFileFactory, b
 		aBlk:   blk,
 	}
 	return seg
+}
+
+func (segment *dataSegment) GetSegmentFile() dataio.SegmentFile {
+	return segment.file
 }
 
 func (segment *dataSegment) IsAppendable() bool {
