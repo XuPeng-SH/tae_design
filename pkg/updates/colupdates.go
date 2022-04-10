@@ -5,6 +5,8 @@ import (
 	"io"
 	"sync"
 	"tae/pkg/catalog"
+
+	taeCommon "tae/pkg/common"
 	"tae/pkg/iface/txnif"
 	"tae/pkg/txn/txnbase"
 
@@ -209,9 +211,16 @@ func (n *ColumnUpdates) ApplyToColumn(vec *gvec.Vector, deletes *roaring.Bitmap)
 		switch vec.Typ.Oid {
 		case types.T_int8, types.T_int16, types.T_int32, types.T_int64, types.T_uint8, types.T_uint16, types.T_uint32, types.T_uint64,
 			types.T_decimal, types.T_float32, types.T_float64, types.T_date, types.T_datetime:
+			useInplace := deletes.GetCardinality() > 20
+			if useInplace {
+				vec.Col = taeCommon.InplaceDeleteRows(vec.Col, deletesIterator)
+			}
+			deletesIterator = deletes.Iterator()
 			for deletesIterator.HasNext() {
 				row := deletesIterator.Next()
-				txnbase.DeleteFixSizeTypeValue(vec, row-uint32(deleted))
+				if !useInplace {
+					txnbase.DeleteFixSizeTypeValue(vec, row-uint32(deleted))
+				}
 				if nspIterator != nil {
 					var n uint64
 					if nspIterator.HasNext() {
@@ -228,13 +237,13 @@ func (n *ColumnUpdates) ApplyToColumn(vec *gvec.Vector, deletes *roaring.Bitmap)
 							nsp.Np.Add(n - uint64(deleted))
 						}
 					}
-					deleted++
-					for nspIterator.HasNext() {
-						n := nspIterator.Next()
-						nsp.Np.Add(n - uint64(deleted))
-					}
-				} else {
-					deleted++
+				}
+				deleted++
+			}
+			if nspIterator != nil {
+				for nspIterator.HasNext() {
+					n := nspIterator.Next()
+					nsp.Np.Add(n - uint64(deleted))
 				}
 			}
 		case types.T_char, types.T_varchar, types.T_json:
@@ -275,14 +284,14 @@ func (n *ColumnUpdates) ApplyToColumn(vec *gvec.Vector, deletes *roaring.Bitmap)
 							nsp.Np.Add(n - uint64(deleted))
 						}
 					}
-					deleted++
-					pre = int(currRow)
-					for nspIterator.HasNext() {
-						n := nspIterator.Next()
-						nsp.Np.Add(n - uint64(deleted))
-					}
-				} else {
-					deleted++
+				}
+				deleted++
+				pre = int(currRow)
+			}
+			if nspIterator != nil {
+				for nspIterator.HasNext() {
+					n := nspIterator.Next()
+					nsp.Np.Add(n - uint64(deleted))
 				}
 			}
 			if pre != -1 {
