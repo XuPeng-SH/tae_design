@@ -15,6 +15,13 @@ import (
 // +--------+---------+----------+----------+------------+
 // |(uint64)|(varchar)| (uint64) | (uint64) |  (varchar) |
 // +--------+---------+----------+----------+------------+
+
+type DataFactory struct {
+	Table   TableDataFactory
+	Segment SegmentDataFactory
+	Block   BlockDataFactory
+}
+
 type Catalog struct {
 	*IDAlloctor
 	// sm.ClosedState
@@ -28,9 +35,11 @@ type Catalog struct {
 
 	nodesMu  sync.RWMutex
 	commitMu sync.RWMutex
+
+	dataFactory *DataFactory
 }
 
-func MockCatalog(dir, name string, cfg *store.StoreCfg) *Catalog {
+func MockCatalog(dir, name string, dataFactory *DataFactory, cfg *store.StoreCfg) *Catalog {
 	var driver store.Store
 	var err error
 	driver, err = store.NewBaseStore(dir, name, cfg)
@@ -38,15 +47,20 @@ func MockCatalog(dir, name string, cfg *store.StoreCfg) *Catalog {
 		panic(err)
 	}
 	catalog := &Catalog{
-		RWMutex:    new(sync.RWMutex),
-		IDAlloctor: NewIDAllocator(),
-		store:      driver,
-		entries:    make(map[uint64]*common.DLNode),
-		nameNodes:  make(map[string]*nodeList),
-		link:       new(common.Link),
+		RWMutex:     new(sync.RWMutex),
+		IDAlloctor:  NewIDAllocator(),
+		store:       driver,
+		entries:     make(map[uint64]*common.DLNode),
+		nameNodes:   make(map[string]*nodeList),
+		link:        new(common.Link),
+		dataFactory: dataFactory,
 	}
 	// catalog.StateMachine.Start()
 	return catalog
+}
+
+func (catalog *Catalog) GetDataFactory() *DataFactory {
+	return catalog.dataFactory
 }
 
 func (catalog *Catalog) Close() error {

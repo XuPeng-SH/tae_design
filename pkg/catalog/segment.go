@@ -4,10 +4,13 @@ import (
 	"fmt"
 	"sync"
 	com "tae/pkg/common"
+	"tae/pkg/iface/data"
 	"tae/pkg/iface/txnif"
 
 	"github.com/matrixorigin/matrixone/pkg/vm/engine/aoe/storage/common"
 )
+
+type SegmentDataFactory = func(meta *SegmentEntry) data.Segment
 
 type SegmentEntry struct {
 	*BaseEntry
@@ -15,6 +18,7 @@ type SegmentEntry struct {
 	entries map[uint64]*com.DLNode
 	link    *com.Link
 	state   EntryState
+	segData data.Segment
 }
 
 func NewSegmentEntry(table *TableEntry, txn txnif.AsyncTxn, state EntryState) *SegmentEntry {
@@ -32,6 +36,9 @@ func NewSegmentEntry(table *TableEntry, txn txnif.AsyncTxn, state EntryState) *S
 		link:    new(com.Link),
 		entries: make(map[uint64]*com.DLNode),
 		state:   state,
+	}
+	if dataFactory := table.GetCatalog().GetDataFactory(); dataFactory != nil {
+		e.segData = dataFactory.Segment(e)
 	}
 	return e
 }
@@ -150,3 +157,5 @@ func (entry *SegmentEntry) AsCommonID() *common.ID {
 		SegmentID: entry.GetID(),
 	}
 }
+
+func (entry *SegmentEntry) GetCatalog() *Catalog { return entry.table.db.catalog }

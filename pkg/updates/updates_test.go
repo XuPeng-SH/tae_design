@@ -187,7 +187,7 @@ func TestUpdatesMerge(t *testing.T) {
 	cnt2 := 10
 	nodes := make([]*testUpdateNode, 0)
 	schema := catalog.MockSchema(1)
-	c := catalog.MockCatalog(initTestPath(t), "mock", nil)
+	c := catalog.MockCatalog(initTestPath(t), "mock", nil, nil)
 	defer c.Close()
 
 	db, _ := c.CreateDBEntry("db", nil)
@@ -272,7 +272,7 @@ func TestUpdates(t *testing.T) {
 	committed := 10
 	nodes := make([]*testUpdateNode, 0)
 	schema := catalog.MockSchema(1)
-	c := catalog.MockCatalog(initTestPath(t), "mock", nil)
+	c := catalog.MockCatalog(initTestPath(t), "mock", nil, nil)
 	defer c.Close()
 
 	db, _ := c.CreateDBEntry("db", nil)
@@ -342,7 +342,7 @@ func TestUpdates(t *testing.T) {
 
 func TestUpdates2(t *testing.T) {
 	schema := catalog.MockSchema(1)
-	c := catalog.MockCatalog(initTestPath(t), "mock", nil)
+	c := catalog.MockCatalog(initTestPath(t), "mock", nil, nil)
 	defer c.Close()
 
 	db, _ := c.CreateDBEntry("db", nil)
@@ -439,7 +439,7 @@ func TestUpdates2(t *testing.T) {
 
 func TestUpdates3(t *testing.T) {
 	schema := catalog.MockSchema(1)
-	c := catalog.MockCatalog(initTestPath(t), "mock", nil)
+	c := catalog.MockCatalog(initTestPath(t), "mock", nil, nil)
 	defer c.Close()
 
 	db, _ := c.CreateDBEntry("db", nil)

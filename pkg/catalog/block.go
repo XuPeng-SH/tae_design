@@ -4,15 +4,19 @@ import (
 	"fmt"
 	"sync"
 	com "tae/pkg/common"
+	"tae/pkg/iface/data"
 	"tae/pkg/iface/txnif"
 
 	"github.com/matrixorigin/matrixone/pkg/vm/engine/aoe/storage/common"
 )
 
+type BlockDataFactory = func(meta *BlockEntry) data.Block
+
 type BlockEntry struct {
 	*BaseEntry
 	segment *SegmentEntry
 	state   EntryState
+	blkData data.Block
 }
 
 func NewBlockEntry(segment *SegmentEntry, txn txnif.AsyncTxn, state EntryState) *BlockEntry {
@@ -29,8 +33,13 @@ func NewBlockEntry(segment *SegmentEntry, txn txnif.AsyncTxn, state EntryState) 
 		segment: segment,
 		state:   state,
 	}
+	if dataFactory := segment.GetCatalog().GetDataFactory(); dataFactory != nil {
+		e.blkData = dataFactory.Block(e)
+	}
 	return e
 }
+
+func (entry *BlockEntry) GetCatalog() *Catalog { return entry.segment.table.db.catalog }
 
 func (entry *BlockEntry) IsAppendable() bool {
 	return entry.state == ES_Appendable

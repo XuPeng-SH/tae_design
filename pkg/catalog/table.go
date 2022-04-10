@@ -4,15 +4,19 @@ import (
 	"fmt"
 	"sync"
 	"tae/pkg/common"
+	"tae/pkg/iface/data"
 	"tae/pkg/iface/txnif"
 )
 
+type TableDataFactory = func(meta *TableEntry) data.Table
+
 type TableEntry struct {
 	*BaseEntry
-	db      *DBEntry
-	schema  *Schema
-	entries map[uint64]*common.DLNode
-	link    *common.Link
+	db        *DBEntry
+	schema    *Schema
+	entries   map[uint64]*common.DLNode
+	link      *common.Link
+	tableData data.Table
 }
 
 func NewTableEntry(db *DBEntry, schema *Schema, txnCtx txnif.AsyncTxn) *TableEntry {
@@ -30,6 +34,9 @@ func NewTableEntry(db *DBEntry, schema *Schema, txnCtx txnif.AsyncTxn) *TableEnt
 		schema:  schema,
 		link:    new(common.Link),
 		entries: make(map[uint64]*common.DLNode),
+	}
+	if dataFactory := db.GetCatalog().GetDataFactory(); dataFactory != nil {
+		e.tableData = dataFactory.Table(e)
 	}
 	return e
 }
@@ -130,3 +137,5 @@ func (entry *TableEntry) String() string {
 	defer entry.RUnlock()
 	return fmt.Sprintf("TABLE%s[name=%s]", entry.BaseEntry.String(), entry.schema.Name)
 }
+
+func (entry *TableEntry) GetCatalog() *Catalog { return entry.db.catalog }

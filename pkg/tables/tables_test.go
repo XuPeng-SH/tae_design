@@ -26,7 +26,7 @@ func initTestPath(t *testing.T) string {
 }
 
 func initTestContext(t *testing.T, dir string, bufSize uint64) (*catalog.Catalog, *txnbase.TxnManager, txnbase.NodeDriver, base.INodeManager) {
-	c := catalog.MockCatalog(dir, "mock", nil)
+	c := catalog.MockCatalog(dir, "mock", nil, nil)
 	driver := txnbase.NewNodeDriver(dir, "store", nil)
 	mgr := txnbase.NewTxnManager(txnimpl.TxnStoreFactory(c, driver), txnimpl.TxnFactory(c))
 	mgr.Start()
