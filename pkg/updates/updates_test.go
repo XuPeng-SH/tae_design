@@ -354,23 +354,23 @@ func TestUpdates2(t *testing.T) {
 
 	cnt1 := 11
 	cnt2 := 10
-	link := new(com.Link)
+	chain := NewUpdateChain(nil, blk)
 
 	for i := 0; i < cnt1+cnt2; i++ {
 		txn := new(txnbase.Txn)
 		txn.TxnCtx = new(txnbase.TxnCtx)
 		txn.StartTS = uint64(i) * 2
-		node := NewBlockUpdates(txn, blk, nil, nil)
-		node.DeleteLocked(uint32(i)*10, uint32(i+1)*10-1)
-		err := node.UpdateLocked(uint32(i+1)*10000, 0, (i+1)*10000)
+		node := chain.AddNode(txn)
+		updates := node.GetUpdates()
+		updates.DeleteLocked(uint32(i)*10, uint32(i+1)*10-1)
+		err := updates.UpdateLocked(uint32(i+1)*10000, 0, (i+1)*10000)
 		if i < cnt1 {
-			node.commitTs = txn.StartTS + 1
-			node.txn = nil
+			updates.commitTs = txn.StartTS + 1
+			updates.txn = nil
 		} else {
-			uncommitted.Insert(node)
+			uncommitted.Insert(updates)
 		}
 		assert.Nil(t, err)
-		link.Insert(node)
 	}
 	uncommittedCnt := 0
 	uncommitted.Loop(func(node *com.DLNode) bool {
@@ -380,63 +380,58 @@ func TestUpdates2(t *testing.T) {
 	assert.Equal(t, cnt2, uncommittedCnt)
 
 	totalCnt := 0
-	link.Loop(func(node *com.DLNode) bool {
+	chain.LoopChainLocked(func(node *BlockUpdates) bool {
 		totalCnt++
 		return true
 	}, true)
 	assert.Equal(t, cnt2+cnt1, totalCnt)
 
-	m := makeMerge(link)
-	t.Log(m.String())
-	t.Log(m.localDeletes.String())
+	m := chain.AddMergeNode()
+	t.Log(m.GetUpdates().String())
+	t.Log(m.GetUpdates().localDeletes.String())
 
-	assert.Equal(t, cnt1*10, int(m.localDeletes.GetCardinality()))
-	assert.Equal(t, cnt1, int(m.cols[0].txnMask.GetCardinality()))
-	link.Insert(m)
+	assert.Equal(t, cnt1*10, int(m.GetUpdates().localDeletes.GetCardinality()))
+	assert.Equal(t, cnt1, int(m.GetUpdates().cols[0].txnMask.GetCardinality()))
 
 	totalCnt = 0
-	link.Loop(func(node *com.DLNode) bool {
+	chain.LoopChainLocked(func(node *BlockUpdates) bool {
 		totalCnt++
-		update := node.GetPayload().(*BlockUpdates)
 		if totalCnt == uncommittedCnt+1 {
-			assert.Equal(t, NT_Merge, update.nodeType)
+			assert.True(t, node.IsMerge())
 		}
-		t.Log(update.String())
+		t.Log(node.String())
 		return true
 	}, false)
 	assert.Equal(t, cnt2+cnt1+1, totalCnt)
 	// t.Log(link.GetHead().GetPayload().(*BlockUpdates).String())
 
-	commitTs := link.GetHead().GetPayload().(*BlockUpdates).startTs + uint64(100)
+	commitTs := chain.GetHead().GetPayload().(*BlockUpdates).startTs + uint64(100)
 	for {
-		node := link.GetHead()
+		node := chain.GetHead()
 		update := node.GetPayload().(*BlockUpdates)
 		if update.commitTs != txnif.UncommitTS {
 			break
 		}
 		update.commitTs = commitTs
 		commitTs++
-		link.Update(node)
+		chain.Update(node)
 	}
 
 	prev := txnif.UncommitTS
-	link.Loop(func(node *com.DLNode) bool {
-		update := node.GetPayload().(*BlockUpdates)
-		assert.True(t, update.commitTs <= prev)
-		prev = update.commitTs
+	chain.LoopChainLocked(func(node *BlockUpdates) bool {
+		assert.True(t, node.GetCommitTSLocked() <= prev)
+		prev = node.GetCommitTSLocked()
 		return true
 	}, false)
 
-	m = makeMerge(link)
-	link.Insert(m)
+	m = chain.AddMergeNode()
 
-	link.Loop(func(node *com.DLNode) bool {
-		update := node.GetPayload().(*BlockUpdates)
-		t.Log(update.String())
+	chain.LoopChainLocked(func(node *BlockUpdates) bool {
+		t.Log(node.String())
 		return true
 	}, false)
 
-	t.Log(m.localDeletes.String())
+	t.Log(m.GetUpdates().localDeletes.String())
 }
 
 func TestUpdates3(t *testing.T) {
@@ -448,53 +443,51 @@ func TestUpdates3(t *testing.T) {
 	table, _ := db.CreateTableEntry(schema, nil)
 	seg, _ := table.CreateSegment(nil, catalog.ES_Appendable)
 	blkCnt := 200
-	blks := make([]*catalog.BlockEntry, 0, blkCnt)
-	links := make([]*com.Link, 0, blkCnt)
+	chains := make([]*BlockUpdateChain, 0, blkCnt)
 	now := time.Now()
 	for i := 0; i < blkCnt; i++ {
 		blk, _ := seg.CreateBlock(nil, catalog.ES_Appendable)
 		blk.CreateAt = common.NextGlobalSeqNum()
-		blks = append(blks, blk)
-		links = append(links, new(com.Link))
+		chain := NewUpdateChain(nil, blk)
+		chains = append(chains, chain)
 	}
-	for i, blk := range blks {
+	for _, chain := range chains {
 		nodeCnt := rand.Intn(4) + 1
 		for j := 0; j < nodeCnt; j++ {
 			txn := new(txnbase.Txn)
 			txn.TxnCtx = new(txnbase.TxnCtx)
 			txn.StartTS = common.NextGlobalSeqNum()
-			node := NewBlockUpdates(txn, blk, nil, nil)
-			node.DeleteLocked(uint32(j)*1, uint32(j+1)*(uint32(nodeCnt))-1)
-			node.UpdateLocked(uint32(j)+1000, 0, int32((j+1)*1000))
-			node.commitTs = common.NextGlobalSeqNum()
-			links[i].Insert(node)
+			node := chain.AddNode(txn)
+			updates := node.GetUpdates()
+			updates.DeleteLocked(uint32(j)*1, uint32(j+1)*(uint32(nodeCnt))-1)
+			updates.UpdateLocked(uint32(j)+1000, 0, int32((j+1)*1000))
+			updates.commitTs = common.NextGlobalSeqNum()
 		}
 	}
 	t.Log(time.Since(now))
 
 	now = time.Now()
-	for _, link := range links {
-		m := makeMerge(link)
-		link.Insert(m)
+	for _, chain := range chains {
+		chain.AddMergeNode()
 	}
 	t.Log(time.Since(now))
 
 	now = time.Now()
-	for _, link := range links {
-		m := makeMerge(link)
-		t.Log(m.localDeletes.String())
+	for _, chain := range chains {
+		m := chain.AddMergeNode()
+		t.Log(m.GetUpdates().localDeletes.String())
 	}
 	t.Log(time.Since(now))
 	rowCnt := uint64(10000)
-	bats := make([]*gbat.Batch, len(links))
+	bats := make([]*gbat.Batch, len(chains))
 	for i := range bats {
 		bat := mock.MockBatch(schema.Types(), rowCnt)
 		bats[i] = bat
 	}
 
-	doApply := func(bat *gbat.Batch, link *com.Link) func() {
+	doApply := func(bat *gbat.Batch, chain *BlockUpdateChain) func() {
 		return func() {
-			update := link.GetHead().GetPayload().(*BlockUpdates)
+			update := chain.GetHead().GetPayload().(*BlockUpdates)
 			update.ApplyChanges(bat, update.localDeletes)
 			// t.Logf("delete cnt: %d", update.localDeletes.GetCardinality())
 			// t.Logf("update cnt: %d", update.cols[0].txnMask.GetCardinality())
@@ -507,8 +500,8 @@ func TestUpdates3(t *testing.T) {
 
 	now = time.Now()
 	for i, bat := range bats {
-		link := links[i]
-		pool.Submit(doApply(bat, link))
+		chain := chains[i]
+		pool.Submit(doApply(bat, chain))
 	}
 	t.Log(time.Since(now))
 }

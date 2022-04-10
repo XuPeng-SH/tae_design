@@ -30,6 +30,8 @@ func (chain *BlockUpdateChain) GetMeta() *catalog.BlockEntry { return chain.meta
 func (chain *BlockUpdateChain) AddNode(txn txnif.AsyncTxn) *BlockUpdateNode {
 	// TODO: scan chain and fill base deletes and updates
 	updates := NewBlockUpdates(txn, chain.meta, nil, nil)
+	chain.Lock()
+	defer chain.Unlock()
 	node := NewBlockUpdateNode(chain, updates)
 	return node
 }

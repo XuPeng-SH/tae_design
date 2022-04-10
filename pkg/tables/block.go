@@ -1,19 +1,23 @@
 package tables
 
 import (
+	"sync"
 	"tae/pkg/catalog"
 	"tae/pkg/dataio"
 	"tae/pkg/iface/data"
 	"tae/pkg/iface/txnif"
+	"tae/pkg/updates"
 
 	"github.com/matrixorigin/matrixone/pkg/vm/engine/aoe/storage/mutation/buffer/base"
 )
 
 type dataBlock struct {
+	*sync.RWMutex
 	meta   *catalog.BlockEntry
 	node   *appendableNode
 	file   dataio.BlockFile
 	bufMgr base.INodeManager
+	chain  updates.BlockUpdateChain
 }
 
 func newBlock(meta *catalog.BlockEntry, segFile dataio.SegmentFile, bufMgr base.INodeManager) *dataBlock {
@@ -23,9 +27,10 @@ func newBlock(meta *catalog.BlockEntry, segFile dataio.SegmentFile, bufMgr base.
 		node = newNode(bufMgr, meta, file)
 	}
 	return &dataBlock{
-		meta: meta,
-		file: file,
-		node: node,
+		RWMutex: new(sync.RWMutex),
+		meta:    meta,
+		file:    file,
+		node:    node,
 	}
 }
 

@@ -12,9 +12,7 @@ type BlockUpdateNode struct {
 }
 
 func NewBlockUpdateNode(chain *BlockUpdateChain, blkupdates *BlockUpdates) *BlockUpdateNode {
-	chain.Lock()
 	dlNode := chain.Insert(blkupdates)
-	chain.Unlock()
 	return &BlockUpdateNode{
 		DLNode:     dlNode,
 		chain:      chain,
