@@ -455,7 +455,7 @@ func TestUpdates3(t *testing.T) {
 		chains = append(chains, chain)
 	}
 	for _, chain := range chains {
-		nodeCnt := rand.Intn(4) + 1
+		nodeCnt := rand.Intn(4) + 40
 		for j := 0; j < nodeCnt; j++ {
 			txn := new(txnbase.Txn)
 			txn.TxnCtx = new(txnbase.TxnCtx)
@@ -489,7 +489,7 @@ func TestUpdates3(t *testing.T) {
 
 	doApply := func(bat *gbat.Batch, chain *BlockUpdateChain) func() {
 		return func() {
-			update := chain.GetHead().GetPayload().(*BlockUpdates)
+			update := chain.FirstNode()
 			update.ApplyChanges(bat, update.localDeletes)
 			// t.Logf("delete cnt: %d", update.localDeletes.GetCardinality())
 			// t.Logf("update cnt: %d", update.cols[0].txnMask.GetCardinality())
