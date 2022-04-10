@@ -94,3 +94,6 @@ func (ctx *TxnCtx) ToRollbackedLocked() error {
 	ctx.State = txnif.TxnStateRollbacked
 	return nil
 }
+
+// For testing
+func (ctx *TxnCtx) MockSetCommitTSLocked(ts uint64) { ctx.CommitTS = ts }

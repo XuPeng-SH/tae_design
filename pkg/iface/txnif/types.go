@@ -71,7 +71,12 @@ type TxnAsyncer interface {
 	WaitDone() error
 }
 
+type TxnTest interface {
+	MockSetCommitTSLocked(ts uint64)
+}
+
 type AsyncTxn interface {
+	TxnTest
 	Txn2PC
 	TxnHandle
 	TxnAsyncer

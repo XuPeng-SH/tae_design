@@ -40,7 +40,7 @@ func (chain *BlockUpdateChain) AddMergeNode() *BlockUpdateNode {
 	chain.RLock()
 	defer chain.RUnlock()
 	var merge *BlockUpdates
-	chain.LoopChainLocked(func(updates *BlockUpdates) bool {
+	chain.LoopChainLocked(func(updates *BlockUpdateNode) bool {
 		updates.RLock()
 		if updates.GetCommitTSLocked() == txnif.UncommitTS {
 			updates.RUnlock()
@@ -49,7 +49,7 @@ func (chain *BlockUpdateChain) AddMergeNode() *BlockUpdateNode {
 		if merge == nil {
 			merge = NewMergeBlockUpdates(updates.GetCommitTSLocked(), chain.meta, nil, nil)
 		}
-		merge.MergeLocked(updates)
+		merge.MergeLocked(updates.BlockUpdates)
 		ret := true
 		if updates.IsMerge() {
 			ret = false
@@ -64,10 +64,27 @@ func (chain *BlockUpdateChain) AddMergeNode() *BlockUpdateNode {
 	return node
 }
 
-func (chain *BlockUpdateChain) LoopChainLocked(fn func(updates *BlockUpdates) bool, reverse bool) {
+func (chain *BlockUpdateChain) LoopChainLocked(fn func(updateNode *BlockUpdateNode) bool, reverse bool) {
 	wrapped := func(node *com.DLNode) bool {
-		updates := node.GetPayload().(*BlockUpdates)
+		updates := node.GetPayload().(*BlockUpdateNode)
 		return fn(updates)
 	}
 	chain.Loop(wrapped, reverse)
 }
+
+func (chain *BlockUpdateChain) FirstNode() (node *BlockUpdateNode) {
+	chain.RLock()
+	defer chain.RUnlock()
+	return chain.GetHead().GetPayload().(*BlockUpdateNode)
+}
+
+// Read Related
+
+// func (chain *BlockUpdateChain) CollectUpdates(txn txnif.AsyncTxn) *BlockUpdates {
+// 	if chain == nil {
+// 		return nil
+// 	}
+// 	if txn == nil {
+// 		return nil
+// 	}
+// }

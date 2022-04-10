@@ -358,17 +358,19 @@ func TestUpdates2(t *testing.T) {
 
 	for i := 0; i < cnt1+cnt2; i++ {
 		txn := new(txnbase.Txn)
-		txn.TxnCtx = new(txnbase.TxnCtx)
-		txn.StartTS = uint64(i) * 2
+		txn.TxnCtx = txnbase.NewTxnCtx(nil, common.NextGlobalSeqNum(), uint64(i)*2, nil)
 		node := chain.AddNode(txn)
-		updates := node.GetUpdates()
-		updates.DeleteLocked(uint32(i)*10, uint32(i+1)*10-1)
-		err := updates.UpdateLocked(uint32(i+1)*10000, 0, (i+1)*10000)
+		// updates := node.GetUpdates()
+		node.DeleteLocked(uint32(i)*10, uint32(i+1)*10-1)
+		err := node.UpdateLocked(uint32(i+1)*10000, 0, (i+1)*10000)
 		if i < cnt1 {
-			updates.commitTs = txn.StartTS + 1
-			updates.txn = nil
+			txn.CommitTS = txn.StartTS + 1
+			err := node.PrepareCommit()
+			assert.Nil(t, err)
+			// node.commitTs = txn.StartTS + 1
+			// node.txn = nil
 		} else {
-			uncommitted.Insert(updates)
+			uncommitted.Insert(node)
 		}
 		assert.Nil(t, err)
 	}
@@ -380,58 +382,59 @@ func TestUpdates2(t *testing.T) {
 	assert.Equal(t, cnt2, uncommittedCnt)
 
 	totalCnt := 0
-	chain.LoopChainLocked(func(node *BlockUpdates) bool {
+	chain.LoopChainLocked(func(node *BlockUpdateNode) bool {
 		totalCnt++
 		return true
 	}, true)
 	assert.Equal(t, cnt2+cnt1, totalCnt)
 
 	m := chain.AddMergeNode()
-	t.Log(m.GetUpdates().String())
-	t.Log(m.GetUpdates().localDeletes.String())
+	t.Log(m.String())
+	t.Log(m.localDeletes.String())
 
-	assert.Equal(t, cnt1*10, int(m.GetUpdates().localDeletes.GetCardinality()))
-	assert.Equal(t, cnt1, int(m.GetUpdates().cols[0].txnMask.GetCardinality()))
+	assert.Equal(t, cnt1*10, int(m.localDeletes.GetCardinality()))
+	assert.Equal(t, cnt1, int(m.cols[0].txnMask.GetCardinality()))
 
 	totalCnt = 0
-	chain.LoopChainLocked(func(node *BlockUpdates) bool {
+	chain.LoopChainLocked(func(node *BlockUpdateNode) bool {
 		totalCnt++
 		if totalCnt == uncommittedCnt+1 {
 			assert.True(t, node.IsMerge())
 		}
-		t.Log(node.String())
+		t.Logf("Loop1: %s", node.String())
 		return true
 	}, false)
 	assert.Equal(t, cnt2+cnt1+1, totalCnt)
 	// t.Log(link.GetHead().GetPayload().(*BlockUpdates).String())
 
-	commitTs := chain.GetHead().GetPayload().(*BlockUpdates).startTs + uint64(100)
+	commitTs := chain.FirstNode().GetStartTS() + uint64(100)
 	for {
-		node := chain.GetHead()
-		update := node.GetPayload().(*BlockUpdates)
-		if update.commitTs != txnif.UncommitTS {
+		node := chain.FirstNode()
+		if node.GetCommitTSLocked() != txnif.UncommitTS {
 			break
 		}
-		update.commitTs = commitTs
+		node.txn.MockSetCommitTSLocked(commitTs)
+		err := node.PrepareCommit()
+		assert.Nil(t, err)
 		commitTs++
-		chain.Update(node)
 	}
 
 	prev := txnif.UncommitTS
-	chain.LoopChainLocked(func(node *BlockUpdates) bool {
+	chain.LoopChainLocked(func(node *BlockUpdateNode) bool {
 		assert.True(t, node.GetCommitTSLocked() <= prev)
 		prev = node.GetCommitTSLocked()
+		t.Logf("Loop2: %s", node.String())
 		return true
 	}, false)
 
 	m = chain.AddMergeNode()
 
-	chain.LoopChainLocked(func(node *BlockUpdates) bool {
+	chain.LoopChainLocked(func(node *BlockUpdateNode) bool {
 		t.Log(node.String())
 		return true
 	}, false)
 
-	t.Log(m.GetUpdates().localDeletes.String())
+	t.Log(m.localDeletes.String())
 }
 
 func TestUpdates3(t *testing.T) {
@@ -458,10 +461,9 @@ func TestUpdates3(t *testing.T) {
 			txn.TxnCtx = new(txnbase.TxnCtx)
 			txn.StartTS = common.NextGlobalSeqNum()
 			node := chain.AddNode(txn)
-			updates := node.GetUpdates()
-			updates.DeleteLocked(uint32(j)*1, uint32(j+1)*(uint32(nodeCnt))-1)
-			updates.UpdateLocked(uint32(j)+1000, 0, int32((j+1)*1000))
-			updates.commitTs = common.NextGlobalSeqNum()
+			node.DeleteLocked(uint32(j)*1, uint32(j+1)*(uint32(nodeCnt))-1)
+			node.UpdateLocked(uint32(j)+1000, 0, int32((j+1)*1000))
+			node.commitTs = common.NextGlobalSeqNum()
 		}
 	}
 	t.Log(time.Since(now))
@@ -475,7 +477,7 @@ func TestUpdates3(t *testing.T) {
 	now = time.Now()
 	for _, chain := range chains {
 		m := chain.AddMergeNode()
-		t.Log(m.GetUpdates().localDeletes.String())
+		t.Log(m.localDeletes.String())
 	}
 	t.Log(time.Since(now))
 	rowCnt := uint64(10000)
