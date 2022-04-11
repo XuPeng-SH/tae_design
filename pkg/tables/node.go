@@ -85,7 +85,8 @@ func (node *appendableNode) PrepareAppend(rows uint32) (n uint32, err error) {
 	// )
 }
 
-func (node *appendableNode) ApplyAppend(bat *gbat.Batch, offset, length uint32, ctx interface{}) (err error) {
+func (node *appendableNode) ApplyAppend(bat *gbat.Batch, offset, length uint32, ctx interface{}) (from uint32, err error) {
+	from = node.rows
 	node.rows += length
 	return
 }

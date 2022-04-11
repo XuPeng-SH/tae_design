@@ -44,6 +44,20 @@ type InsertNode interface {
 	GetValue(col int, row uint32) (interface{}, error)
 	MakeCommand(uint32, bool) (txnif.TxnCmd, txnbase.NodeEntry, error)
 	ToTransient()
+	AddApplyInfo(srcOff, srcLen, destOff, destLen uint32, dest *common.ID) *appendInfo
+}
+
+type appendInfo struct {
+	seq              uint32
+	srcOff, srcLen   uint32
+	dest             *common.ID
+	destOff, destLen uint32
+}
+
+func (info *appendInfo) String() string {
+	s := fmt.Sprintf("[%d]: Append from [%d:%d] to blk %s[%d:%d]",
+		info.seq, info.srcOff, info.srcLen+info.srcOff, info.dest.ToBlockFileName(), info.destOff, info.destLen+info.destOff)
+	return s
 }
 
 type insertNode struct {
@@ -55,6 +69,7 @@ type insertNode struct {
 	deletes *roaring.Bitmap
 	rows    uint32
 	table   Table
+	appends []*appendInfo
 }
 
 func NewInsertNode(tbl Table, mgr base.INodeManager, id common.ID, driver txnbase.NodeDriver) *insertNode {
@@ -66,8 +81,23 @@ func NewInsertNode(tbl Table, mgr base.INodeManager, id common.ID, driver txnbas
 	impl.DestroyFunc = impl.OnDestory
 	impl.LoadFunc = impl.OnLoad
 	impl.table = tbl
+	impl.appends = make([]*appendInfo, 0)
 	mgr.RegisterNode(impl)
 	return impl
+}
+
+func (n *insertNode) AddApplyInfo(srcOff, srcLen, destOff, destLen uint32, dest *common.ID) *appendInfo {
+	seq := len(n.appends)
+	info := &appendInfo{
+		dest:    dest,
+		destOff: destOff,
+		destLen: destLen,
+		srcOff:  srcOff,
+		srcLen:  srcLen,
+		seq:     uint32(seq),
+	}
+	n.appends = append(n.appends, info)
+	return info
 }
 
 func (n *insertNode) MakeCommand(id uint32, forceFlush bool) (cmd txnif.TxnCmd, entry txnbase.NodeEntry, err error) {

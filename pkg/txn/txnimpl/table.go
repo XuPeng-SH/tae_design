@@ -235,7 +235,7 @@ func (tbl *txnTable) Append(data *batch.Batch) error {
 		n := h.GetNode().(*insertNode)
 		toAppend := n.PrepareAppend(data, offset)
 		size := txnbase.EstimateSize(data, offset, toAppend)
-		logrus.Infof("Offset=%d, ToAppend=%d, EstimateSize=%d", offset, toAppend, size)
+		logrus.Debugf("Offset=%d, ToAppend=%d, EstimateSize=%d", offset, toAppend, size)
 		err := n.Expand(size, func() error {
 			appended, err = n.Append(data, offset)
 			return err
@@ -246,7 +246,7 @@ func (tbl *txnTable) Append(data *batch.Batch) error {
 			break
 		}
 		space := n.GetSpace()
-		logrus.Infof("Appended: %d, Space:%d", appended, space)
+		logrus.Debugf("Appended: %d, Space:%d", appended, space)
 		start := tbl.rows
 		if err = tbl.index.BatchInsert(data.Vecs[tbl.GetSchema().PrimaryKey], int(offset), int(appended), start, false); err != nil {
 			break
@@ -399,10 +399,13 @@ func (tbl *txnTable) applyAppendInode(node InsertNode) (err error) {
 		}
 		toAppend, err := appender.PrepareAppend(node.Rows() - appended)
 		bat, err := node.Window(0, toAppend-1)
-		if err = appender.ApplyAppend(bat, 0, toAppend, nil); err != nil {
+		var destOff uint32
+		if destOff, err = appender.ApplyAppend(bat, 0, toAppend, nil); err != nil {
 			panic(err)
 		}
 		appender.Close()
+		info := node.AddApplyInfo(appended, toAppend, destOff, toAppend, appender.GetID())
+		logrus.Info(info.String())
 		appended += toAppend
 		if appended == node.Rows() {
 			break
