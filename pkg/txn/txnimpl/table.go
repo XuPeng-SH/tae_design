@@ -122,16 +122,25 @@ func (tbl *txnTable) CollectCmd(cmdMgr *commandManager) error {
 		}
 		cmdMgr.AddCmd(cmd)
 	}
-	for _, node := range tbl.inodes {
+	for i, node := range tbl.inodes {
+		h := tbl.nodesMgr.Pin(node)
+		if h == nil {
+			panic("not expected")
+		}
+		forceFlush := i < len(tbl.inodes)-1
 		csn := cmdMgr.GetCSN()
-		cmd, entry, err := node.MakeCommand(uint32(csn), true)
+		cmd, entry, err := node.MakeCommand(uint32(csn), forceFlush)
 		if err != nil {
-			return err
+			panic(err)
 		}
 		if entry != nil {
 			tbl.logs = append(tbl.logs, entry)
 		}
-		cmdMgr.AddCmd(cmd)
+		node.ToTransient()
+		h.Close()
+		if cmd != nil {
+			cmdMgr.AddCmd(cmd)
+		}
 	}
 	return nil
 }
