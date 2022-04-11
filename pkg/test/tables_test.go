@@ -193,3 +193,28 @@ func TestTxn1(t *testing.T) {
 	}
 	t.Log(c.SimplePPString(com.PPL1))
 }
+
+func TestTxn2(t *testing.T) {
+	dir := initTestPath(t)
+	c, mgr, driver, _, _ := initTestContext(t, dir, common.G, common.G)
+	defer driver.Close()
+	defer c.Close()
+	defer mgr.Stop()
+
+	var wg sync.WaitGroup
+	run := func() {
+		defer wg.Done()
+		txn := mgr.StartTxn(nil)
+		if _, err := txn.CreateDatabase("db"); err != nil {
+			assert.Nil(t, txn.Rollback())
+		} else {
+			assert.Nil(t, txn.Commit())
+		}
+		t.Log(txn.String())
+	}
+	wg.Add(2)
+	go run()
+	go run()
+	wg.Wait()
+	t.Log(c.SimplePPString(com.PPL1))
+}

@@ -105,6 +105,7 @@ func (mgr *TxnManager) onPreparing(items ...interface{}) {
 			mgr.onPreparCommit(op.Txn)
 			if op.Txn.GetError() != nil {
 				op.Op = OpRollback
+				op.Txn.SetError(txnif.TxnRollbacked)
 				op.Txn.Lock()
 				op.Txn.ToRollbackingLocked(ts)
 				op.Txn.Unlock()

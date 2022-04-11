@@ -139,11 +139,17 @@ func (txn *Txn) PrepareCommit() error {
 }
 
 func (txn *Txn) ApplyCommit() error {
-	return txn.Store.ApplyCommit()
+	if err := txn.Store.ApplyCommit(); err != nil && err != txnif.TxnRollbacked {
+		panic(err)
+	}
+	return txn.Store.Close()
 }
 
 func (txn *Txn) ApplyRollback() error {
-	return txn.Store.ApplyRollback()
+	if err := txn.Store.ApplyRollback(); err != nil {
+		panic(err)
+	}
+	return txn.Store.Close()
 }
 
 func (txn *Txn) PreCommit() error {
