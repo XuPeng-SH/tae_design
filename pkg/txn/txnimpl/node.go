@@ -165,7 +165,7 @@ func (n *insertNode) OnLoad() {
 	if err != nil {
 		panic(err)
 	}
-	logrus.Infof("GetPayloadSize=%d", e.GetPayloadSize())
+	logrus.Debugf("GetPayloadSize=%d", e.GetPayloadSize())
 	buf := e.GetPayload()
 	r := bytes.NewBuffer(buf)
 	cmd, err := txnbase.BuildCommandFrom(r)
@@ -205,7 +205,7 @@ func (n *insertNode) execUnload() (entry txnbase.NodeEntry) {
 	} else {
 		atomic.StoreUint64(&n.lsn, seq)
 		id := n.GetID()
-		logrus.Infof("Unloading lsn=%d id=%s", seq, id.SegmentString())
+		logrus.Debugf("Unloading lsn=%d id=%s", seq, id.SegmentString())
 	}
 	// e.WaitDone()
 	// e.Free()

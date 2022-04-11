@@ -248,6 +248,9 @@ func (store *txnStore) ApplyCommit() (err error) {
 		e.WaitDone()
 		e.Free()
 	}
+	for _, table := range store.tables {
+		table.WaitSynced()
+	}
 	if store.createEntry != nil {
 		if err = store.createEntry.ApplyCommit(); err != nil {
 			return

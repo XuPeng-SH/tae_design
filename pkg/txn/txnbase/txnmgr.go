@@ -85,6 +85,7 @@ func (mgr *TxnManager) onPreparRollback(txn txnif.AsyncTxn) {
 
 // TODO
 func (mgr *TxnManager) onPreparing(items ...interface{}) {
+	now := time.Now()
 	for _, item := range items {
 		op := item.(*OpTxn)
 		if op.Op == OpCommit {
@@ -114,10 +115,12 @@ func (mgr *TxnManager) onPreparing(items ...interface{}) {
 		}
 		mgr.EnqueueCheckpoint(op)
 	}
+	logrus.Infof("PrepareCommit %d Txns Takes: %s", len(items), time.Since(now))
 }
 
 // TODO
 func (mgr *TxnManager) onCommit(items ...interface{}) {
+	now := time.Now()
 	for _, item := range items {
 		op := item.(*OpTxn)
 		switch op.Op {
@@ -133,4 +136,5 @@ func (mgr *TxnManager) onCommit(items ...interface{}) {
 		op.Txn.WaitDone()
 		logrus.Debugf("%s Done", op.Repr())
 	}
+	logrus.Infof("Commit %d Txns Takes: %s", len(items), time.Since(now))
 }

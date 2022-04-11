@@ -46,6 +46,8 @@ type Table interface {
 	ApplyCommit() error
 	ApplyRollback() error
 
+	WaitSynced()
+
 	SetCreateEntry(txnif.TxnEntry)
 	SetDropEntry(txnif.TxnEntry)
 	GetMeta() *catalog.TableEntry
@@ -74,6 +76,7 @@ type txnTable struct {
 	dblks       []*catalog.BlockEntry
 	warChecker  *warChecker
 	dataFactory *tables.DataFactory
+	logs        []txnbase.NodeEntry
 }
 
 func newTxnTable(txn txnif.AsyncTxn, handle handle.Relation, driver txnbase.NodeDriver, mgr base.INodeManager, checker *warChecker, dataFactory *tables.DataFactory) *txnTable {
@@ -90,8 +93,16 @@ func newTxnTable(txn txnif.AsyncTxn, handle handle.Relation, driver txnbase.Node
 		csegs:       make([]*catalog.SegmentEntry, 0),
 		dsegs:       make([]*catalog.SegmentEntry, 0),
 		dataFactory: dataFactory,
+		logs:        make([]txnbase.NodeEntry, 0),
 	}
 	return tbl
+}
+
+func (tbl *txnTable) WaitSynced() {
+	for _, e := range tbl.logs {
+		e.WaitDone()
+		e.Free()
+	}
 }
 
 func (tbl *txnTable) CollectCmd(cmdMgr *commandManager) error {
@@ -108,6 +119,17 @@ func (tbl *txnTable) CollectCmd(cmdMgr *commandManager) error {
 		cmd, err := blk.MakeCommand(uint32(csn))
 		if err != nil {
 			return err
+		}
+		cmdMgr.AddCmd(cmd)
+	}
+	for _, node := range tbl.inodes {
+		csn := cmdMgr.GetCSN()
+		cmd, entry, err := node.MakeCommand(uint32(csn), true)
+		if err != nil {
+			return err
+		}
+		if entry != nil {
+			tbl.logs = append(tbl.logs, entry)
 		}
 		cmdMgr.AddCmd(cmd)
 	}
@@ -405,7 +427,7 @@ func (tbl *txnTable) applyAppendInode(node InsertNode) (err error) {
 		}
 		appender.Close()
 		info := node.AddApplyInfo(appended, toAppend, destOff, toAppend, appender.GetID())
-		logrus.Info(info.String())
+		logrus.Debug(info.String())
 		appended += toAppend
 		if appended == node.Rows() {
 			break
@@ -443,13 +465,13 @@ func (tbl *txnTable) PrepareCommit() (err error) {
 	}
 
 	for _, seg := range tbl.csegs {
-		logrus.Infof("PrepareCommit: %s", seg.String())
+		logrus.Debugf("PrepareCommit: %s", seg.String())
 		if err = seg.PrepareCommit(); err != nil {
 			return
 		}
 	}
 	for _, blk := range tbl.cblks {
-		logrus.Infof("PrepareCommit: %s", blk.String())
+		logrus.Debugf("PrepareCommit: %s", blk.String())
 		if err = blk.PrepareCommit(); err != nil {
 			return
 		}
