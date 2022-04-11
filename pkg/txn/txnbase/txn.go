@@ -66,6 +66,7 @@ func (txn *Txn) Commit() error {
 		Op:  OpCommit,
 	})
 	txn.Wait()
+	txn.Mgr.DeleteTxn(txn.GetID())
 	return txn.Err
 }
 
@@ -80,6 +81,7 @@ func (txn *Txn) Rollback() error {
 		Op:  OpRollback,
 	})
 	txn.Wait()
+	txn.Mgr.DeleteTxn(txn.GetID())
 	return txn.Err
 }
 

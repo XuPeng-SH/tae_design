@@ -59,6 +59,12 @@ func (mgr *TxnManager) StartTxn(info []byte) txnif.AsyncTxn {
 	return txn
 }
 
+func (mgr *TxnManager) DeleteTxn(id uint64) {
+	mgr.Lock()
+	defer mgr.Unlock()
+	delete(mgr.Active, id)
+}
+
 func (mgr *TxnManager) GetTxn(id uint64) txnif.AsyncTxn {
 	mgr.RLock()
 	defer mgr.RUnlock()

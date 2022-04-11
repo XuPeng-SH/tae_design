@@ -223,6 +223,17 @@ func (tbl *txnTable) Close() error {
 			return err
 		}
 	}
+	tbl.index.Close()
+	tbl.index = nil
+	tbl.appendable = nil
+	tbl.inodes = nil
+	tbl.updateNodes = nil
+	tbl.csegs = nil
+	tbl.dsegs = nil
+	tbl.cblks = nil
+	tbl.dblks = nil
+	tbl.warChecker = nil
+	tbl.logs = nil
 	return nil
 }
 

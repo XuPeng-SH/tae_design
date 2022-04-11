@@ -57,6 +57,15 @@ func (store *txnStore) Close() error {
 			break
 		}
 	}
+	store.tables = nil
+	store.dbIndex = nil
+	store.tableIndex = nil
+	store.createEntry = nil
+	store.database = nil
+	store.dropEntry = nil
+	store.cmdMgr = nil
+	store.logs = nil
+	store.warChecker = nil
 	return err
 }
 

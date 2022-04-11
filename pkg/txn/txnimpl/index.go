@@ -1,6 +1,7 @@
 package txnimpl
 
 import (
+	"io"
 	"sync"
 	"tae/pkg/txn/txnbase"
 
@@ -10,6 +11,7 @@ import (
 )
 
 type TableIndex interface {
+	io.Closer
 	BatchDedup(*gvec.Vector) error
 	BatchInsert(*gvec.Vector, int, int, uint32, bool) error
 	Insert(interface{}, uint32) error
@@ -33,6 +35,10 @@ func NewSimpleTableIndex() *simpleTableIndex {
 	}
 }
 
+func (idx *simpleTableIndex) Close() error {
+	idx.tree = nil
+	return nil
+}
 func (idx *simpleTableIndex) Name() string { return "SimpleIndex" }
 func (idx *simpleTableIndex) Count() int {
 	idx.RLock()
