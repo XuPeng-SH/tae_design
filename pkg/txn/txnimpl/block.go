@@ -1,6 +1,7 @@
 package txnimpl
 
 import (
+	"bytes"
 	"sync"
 	"tae/pkg/catalog"
 	com "tae/pkg/common"
@@ -8,6 +9,7 @@ import (
 	"tae/pkg/iface/txnif"
 	"tae/pkg/txn/txnbase"
 
+	"github.com/matrixorigin/matrixone/pkg/container/vector"
 	"github.com/matrixorigin/matrixone/pkg/vm/engine/aoe/storage/common"
 )
 
@@ -77,3 +79,10 @@ func (blk *txnBlock) GetMeta() interface{}    { return blk.entry }
 func (blk *txnBlock) String() string          { return blk.entry.String() }
 func (blk *txnBlock) ID() uint64              { return blk.entry.GetID() }
 func (blk *txnBlock) Fingerprint() *common.ID { return blk.entry.AsCommonID() }
+
+// TODO: temp use coarse rows
+func (blk *txnBlock) Rows() int { return blk.entry.GetBlockData().Rows(blk.Txn, true) }
+
+func (blk *txnBlock) GetVectorCopy(attr string, compressed, decompressed *bytes.Buffer) (vec *vector.Vector, err error) {
+	return blk.entry.GetBlockData().GetVectorCopy(blk.Txn, attr, compressed, decompressed)
+}

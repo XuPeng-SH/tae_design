@@ -1,6 +1,7 @@
 package txnbase
 
 import (
+	"bytes"
 	"tae/pkg/iface/handle"
 	"tae/pkg/iface/txnif"
 
@@ -74,12 +75,17 @@ func (seg *TxnSegment) PushUpdateOp(handle.Filter, string, interface{}) (err err
 func (seg *TxnSegment) CreateBlock() (blk handle.Block, err error)                  { return }
 
 func (blk *TxnBlock) Fingerprint() *common.ID                                       { return &common.ID{} }
+func (blk *TxnBlock) Rows() int                                                     { return 0 }
 func (blk *TxnBlock) ID() uint64                                                    { return 0 }
 func (blk *TxnBlock) String() string                                                { return "" }
 func (blk *TxnBlock) Close() error                                                  { return nil }
 func (blk *TxnBlock) GetMeta() interface{}                                          { return nil }
 func (blk *TxnBlock) GetByFilter(handle.Filter, bool) (bat *batch.Batch, err error) { return }
-func (blk *TxnBlock) GetBatch(ctx interface{}) (bat *batch.Batch, err error)        { return }
+
+// func (blk *TxnBlock) GetBatch(ctx interface{}) (bat *batch.Batch, err error)        { return }
+func (blk *TxnBlock) GetVectorCopy(compressed, decompressed *bytes.Buffer) (vec *vector.Vector, err error) {
+	return
+}
 
 func (blk *TxnBlock) Append(*batch.Batch, uint32) (n uint32, err error)           { return }
 func (blk *TxnBlock) Update(uint32, uint16, interface{}) (err error)              { return }

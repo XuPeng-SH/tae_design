@@ -1,6 +1,7 @@
 package handle
 
 import (
+	"bytes"
 	"io"
 
 	"github.com/matrixorigin/matrixone/pkg/container/batch"
@@ -30,9 +31,10 @@ type BlockReader interface {
 	ID() uint64
 	String() string
 	GetByFilter(filter Filter, offsetOnly bool) (*batch.Batch, error)
-	GetBatch(ctx interface{}) (*batch.Batch, error)
+	GetVectorCopy(string, *bytes.Buffer, *bytes.Buffer) (*vector.Vector, error)
 	GetMeta() interface{}
 	Fingerprint() *common.ID
+	Rows() int
 }
 
 type BlockWriter interface {

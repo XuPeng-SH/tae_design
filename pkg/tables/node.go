@@ -1,11 +1,13 @@
 package tables
 
 import (
+	"bytes"
 	"tae/pkg/catalog"
 	"tae/pkg/dataio"
 	"tae/pkg/iface/txnif"
 
 	gbat "github.com/matrixorigin/matrixone/pkg/container/batch"
+	gvec "github.com/matrixorigin/matrixone/pkg/container/vector"
 	"github.com/matrixorigin/matrixone/pkg/vm/engine/aoe/storage/container/batch"
 	"github.com/matrixorigin/matrixone/pkg/vm/engine/aoe/storage/container/vector"
 	"github.com/matrixorigin/matrixone/pkg/vm/engine/aoe/storage/mutation/buffer"
@@ -50,6 +52,17 @@ func (node *appendableNode) OnDestory() {
 	if err := node.file.Destory(); err != nil {
 		panic(err)
 	}
+}
+
+// TODO: Apply updates and txn sels
+func (node *appendableNode) GetVectorCopy(txn txnif.AsyncTxn, attr string, compressed, decompressed *bytes.Buffer) (vec *gvec.Vector, err error) {
+	colIdx := node.meta.GetSegment().GetTable().GetSchema().GetColIdx(attr)
+	ivec, err := node.data.GetVectorByAttr(colIdx)
+	if err != nil {
+		return nil, err
+	}
+	ro := ivec.GetLatestView()
+	return ro.CopyToVectorWithBuffer(compressed, decompressed)
 }
 
 func (node *appendableNode) OnLoad() {

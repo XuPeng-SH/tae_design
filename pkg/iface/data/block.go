@@ -1,9 +1,12 @@
 package data
 
 import (
+	"bytes"
 	"io"
+	"tae/pkg/iface/txnif"
 
 	"github.com/matrixorigin/matrixone/pkg/container/batch"
+	"github.com/matrixorigin/matrixone/pkg/container/vector"
 	"github.com/matrixorigin/matrixone/pkg/vm/engine/aoe/storage/common"
 )
 
@@ -17,5 +20,7 @@ type BlockAppender interface {
 type Block interface {
 	MakeAppender() (BlockAppender, error)
 	IsAppendable() bool
+	Rows(txn txnif.AsyncTxn, coarse bool) int
+	GetVectorCopy(txn txnif.AsyncTxn, attr string, compressed, decompressed *bytes.Buffer) (*vector.Vector, error)
 	// CopyBatch(cs []uint64, attrs []string, compressed []*bytes.Buffer, deCompressed []*bytes.Buffer) (*batch.Batch, error)
 }

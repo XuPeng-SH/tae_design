@@ -1,6 +1,7 @@
 package tables
 
 import (
+	"bytes"
 	"sync"
 	"tae/pkg/catalog"
 	"tae/pkg/dataio"
@@ -8,6 +9,7 @@ import (
 	"tae/pkg/iface/txnif"
 	"tae/pkg/updates"
 
+	gvec "github.com/matrixorigin/matrixone/pkg/container/vector"
 	"github.com/matrixorigin/matrixone/pkg/vm/engine/aoe/storage/mutation/buffer/base"
 )
 
@@ -44,11 +46,12 @@ func (blk *dataBlock) IsAppendable() bool {
 	return true
 }
 
-func (blk *dataBlock) Rows(txn txnif.AsyncTxn, coarse bool) uint32 {
-	if blk.IsAppendable() {
-		return blk.node.Rows(txn, coarse)
+func (blk *dataBlock) Rows(txn txnif.AsyncTxn, coarse bool) int {
+	if blk.meta.IsAppendable() {
+		rows := int(blk.node.Rows(txn, coarse))
+		return rows
 	}
-	return blk.file.Rows()
+	return int(blk.file.Rows())
 }
 
 func (blk *dataBlock) MakeAppender() (appender data.BlockAppender, err error) {
@@ -58,4 +61,15 @@ func (blk *dataBlock) MakeAppender() (appender data.BlockAppender, err error) {
 	}
 	appender = newAppender(blk.node)
 	return
+}
+
+func (blk *dataBlock) GetVectorCopy(txn txnif.AsyncTxn, attr string, compressed, decompressed *bytes.Buffer) (vec *gvec.Vector, err error) {
+	h := blk.node.mgr.Pin(blk.node)
+	if h == nil {
+		panic("not expected")
+	}
+	defer h.Close()
+	blk.RLock()
+	defer blk.RUnlock()
+	return blk.node.GetVectorCopy(txn, attr, compressed, decompressed)
 }
