@@ -72,7 +72,8 @@ func TestTables1(t *testing.T) {
 	assert.Equal(t, schema.BlockMaxRows, toAppend)
 	assert.Nil(t, err)
 	t.Log(toAppend)
-	_, err = appender.ApplyAppend(nil, 0, toAppend, nil)
+	bat := mock.MockBatch(schema.Types(), uint64(rows))
+	_, err = appender.ApplyAppend(bat, 0, toAppend, nil)
 	assert.Nil(t, err)
 	assert.True(t, table.HasAppendableSegment())
 
@@ -89,7 +90,7 @@ func TestTables1(t *testing.T) {
 
 	toAppend, err = appender.PrepareAppend(rows - toAppend)
 	assert.Equal(t, schema.BlockMaxRows, toAppend)
-	_, err = appender.ApplyAppend(nil, toAppend, toAppend, nil)
+	_, err = appender.ApplyAppend(bat, toAppend, toAppend, nil)
 	assert.Nil(t, err)
 	assert.False(t, table.HasAppendableSegment())
 
@@ -103,7 +104,7 @@ func TestTables1(t *testing.T) {
 	assert.Nil(t, err)
 	toAppend, err = appender.PrepareAppend(rows - toAppend*2)
 	assert.Equal(t, schema.BlockMaxRows, toAppend)
-	_, err = appender.ApplyAppend(nil, toAppend*2, toAppend, nil)
+	_, err = appender.ApplyAppend(bat, toAppend*2, toAppend, nil)
 	assert.Nil(t, err)
 	assert.True(t, table.HasAppendableSegment())
 

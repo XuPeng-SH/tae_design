@@ -36,7 +36,7 @@ func (appender *blockAppender) PrepareAppend(rows uint32) (n uint32, err error) 
 
 func (appender *blockAppender) ApplyAppend(bat *gbat.Batch, offset, length uint32, ctx interface{}) (from uint32, err error) {
 
-	err = appender.node.Expand(uint64(length*20), func() error {
+	err = appender.node.Expand(0, func() error {
 		var err error
 		from, err = appender.node.ApplyAppend(bat, offset, length, ctx)
 		return err

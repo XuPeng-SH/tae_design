@@ -54,7 +54,7 @@ func initContext() (*catalog.Catalog, *txnbase.TxnManager, txnbase.NodeDriver, b
 }
 
 func main() {
-	c, mgr, driver, txnBufMgr, _ := initContext()
+	c, mgr, driver, txnBufMgr, mutBufMgr := initContext()
 	defer driver.Close()
 	defer c.Close()
 	defer mgr.Stop()
@@ -104,4 +104,5 @@ func main() {
 	logrus.Infof("Append takes: %s", time.Since(now))
 	// time.Sleep(time.Second * 100)
 	logrus.Info(txnBufMgr.String())
+	logrus.Info(mutBufMgr.String())
 }
