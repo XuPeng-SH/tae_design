@@ -71,16 +71,20 @@ A Txn object contains a **TxnStore** and each **TxnStore** contains a dedicated 
 
 ### TxnSession
 
-A Txn session can only contains one active transaction handle at a time.
+A `Txn` session can only contains one active transaction handle at a time.
 
 ### TxnClient
 
-Distributed transaction client. Each CN node has a TxnClient singleton
+Distributed transaction client. Each `CN` node has a `TxnClient` singleton
 
 ### TxnOperator
 
-One-to-one relationship with Txn, created by TxnClient. Responsible for distributing transaction requests on **CN** to each associated **DN**.
+One-to-one relationship with `Txn`, created by `TxnClient`. Responsible for distributing transaction requests on `CN` to each associated `DN`.
 
 ### TxnEngine | TxnDatabase | TxnRelation | TxnReader
 
-**TxnEngine** is a singleton on **CN**, and **Txn** is created by `TxnEngine::StartTxn()`. All read and write requests converted from DML|DDL at the computing layer will fall on the instance of **TxnDatabase** | **TxnRelation** | **TxnReader**.
+`TxnEngine` is a singleton on `CN` and `Txn` is created by `TxnEngine::StartTxn()`. All read and write requests converted from DML|DDL at the computing layer will fall on the instance of `TxnDatabase` | `TxnRelation` | `TxnReader`.
+
+## Sequence Diagram
+
+<img src="https://user-images.githubusercontent.com/39627130/177819500-95ac95ac-9541-4f7c-8648-d8deab1836e4.png" height="90%" width="90%" />
