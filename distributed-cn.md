@@ -35,7 +35,3 @@
   <summary><b><font size=4>Data Loading Pipeline | Prefetcher</b></font></summary>
           The data for the next batches can be load to staging storage while processing the current batch.
 </details>
-<details>
-  <summary><b><font size=4>Data Loading Pipeline | Prefetcher</b></font></summary>
-          The data for the next batches can be load to staging storage while processing the current batch.
-</details>
