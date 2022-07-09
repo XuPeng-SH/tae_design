@@ -24,7 +24,7 @@
           Distributed transactions implementing snapshot isolation isolation level.
 </details>
 <details>
-  <summary><b><font size=4>Transactional Bulk Load</b></font></summary>
+  <summary><b><font size=4>Transactional Load</b></font></summary>
           Support transactional data load.
 </details>
 <details>
@@ -170,6 +170,61 @@ One-to-one relationship with `Txn`, created by `TxnClient`. Responsible for dist
 
 <img src="https://user-images.githubusercontent.com/39627130/177819500-95ac95ac-9541-4f7c-8648-d8deab1836e4.png" height="90%" width="90%" />
 
-## Transactional Bulk Load
+## Transactional Load
 
-### Collaboration Diagram
+- A data formatter will be used for loading
+    - Customized uploader and policy
+    - Customized data preprocessor: shard aware, nullable or other constraints check
+- Do dedup in `CN` on the latest snapshot in `CN`.
+- Send all write set to `DN` for log tail dedup.
+
+### Flowchart
+
+<img src="https://user-images.githubusercontent.com/39627130/178091112-9b5c30d6-32d1-4649-8dd5-d1b4945ef145.png" height="70%" width="70%" />
+
+## Transactional Compaction
+
+### Task Table
+
+A dedicated table `TaskTable` used as a task queue. Any `CN` and `DN` can be a task producer and consumer.
+
+```go
+type TaskType int16
+type TaskState int8
+
+type TaskTable struct {
+    id uint64
+    // Specify task type: MergeBlocks, CompactBlock, Split etc.
+    taskT TaskType
+    // Task specification
+    spec []byte
+    // Task scope
+    scope []byte
+    // Task state: Pendding, Running, Done
+    state TaskState
+    // Task created time
+    cTime int64
+    // Task modification time
+    mTime int64
+    // Task Priority
+    priority int8
+    // If task state is running or done, it specify the executor id
+    executorId uint64
+}
+```
+- Triggered by regular timely background monitor
+- Triggered by external command: admin command
+- Triggered by events: slow query
+- Producer
+    1. Start a transaction
+    2. Check scope confliction
+    3. Insert task into table if no confliction
+    4. Commit
+- Consumer
+    1. Start a transaction
+    2. Get highest priority pending task
+    3. Change the task state to `Running` and update the executorId as its node id
+    4. Commit
+    5. Execute task
+    6. Start a transaction and update the task state to `Done`
+- A monitor timely check the task table stats.
