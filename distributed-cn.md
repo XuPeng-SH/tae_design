@@ -5,6 +5,10 @@
 - Implementation PR:
 - Issue for this RFC:
 
+# Summary
+
+Here we will only discuss some design|concept changes compared to the stand-alone `TAE`, and only for `CN` nodes.
+
 # Key Requirements
 
 <details>
@@ -228,3 +232,74 @@ type TaskTable struct {
     5. Execute task
     6. Start a transaction and update the task state to `Done`
 - A monitor timely check the task table stats.
+
+## Metadata Management
+
+Metadata is logically a tree structure, similar to a directory tree. If we organize our database data into a file system, then the first-level directory is database, the second-level directory is table, the third-level directory is segment, and the fourth-level directory is block, which is also the lowest directory. A block corresponds to multiple columns, and some columns have indexes, and these resources correspond to multiple files in the block directory.
+
+```
+|-- [0]dentry:[name="/"]
+|   |-- [1]dentry:[name="db1"]
+|   |    |-- [2]dentry:[name="tb1"]
+|   |    |    |-- [3]dentry:[name="seg1"]
+|   |    |    |     |-- [4]dentry:[name="blk1"]
+|   |    |    |     |    |-- col1 [5]
+|   |    |    |     |    |-- col2 [6]
+|   |    |    |     |    |-- idx1 [7]
+|   |    |    |     |    |-- idx2 [8]
+|   |    |    |     |
+|   |    |    |     |-- [9]dentry:[name="blk2"]
+|   |    |    |     |    |-- col1 [10]
+|   |    |    |     |    |-- col2 [11]
+|   |    |    |     |    |-- idx1 [12]
+|   |    |    |     |    |-- idx2 [13]
+```
+
+Compared with the file system, we need to control the visibility of all inodes, and can see different tree structures according to different points in time. So we will record the inode creation time and deletion time in each inode. `DN` is the only data producer for metadata changes. The `CN` will continuously synchronize these changing information from the `DN` on demand.
+
+In `TAE`, we separate the metadata of the directory and the metadata of the file. That is, metadata is organized into a two-tier structure.
+
+Here's how we logically encode the above directory tree.
+
+```
+/                  [key=0, value="name='/';parent=0;children=[1];createAt=1;deleteAt=0;..."]
+/1                 [key=1, value="name='db1';parent=0;children=[2];createAt=2;deleteAt=0;..."]
+/1/2               [key=2, value="name='tb1';parent=1;children=[3];createAt=2;deleteAt=0;..."]
+/1/2/3             [key=3, value="name='seg1';parent=2;children=[4,5];createAt=7;deleteAt=0;..."]
+/1/2/3/4           [key=4, value="name='blk1';parent=3;children=[];createAt=12;deleteAt=22;..."]
+/1/2/3/5           [key=5, value="name='blk2';parent=3;children=[];createAt=22;deleteAt=0;..."]
+
+********* /db1/tb1/seg1/blk1 was deleted and `/db1/tb1/seg1/blk2` was created in a transaction *********
+```
+
+Here's how we logically encode the second tier. The amount of data in the second layer will be much larger than the first layer.
+
+```
+/                  [key=0, value="name='/';parent=0;children=[1];..."]
+/1                 [key=1, value="name='seg1';parent=0;children=[2,7];..."]
+/1/2               [key=2, value="name='blk1';parent=1;children=[3,4,5,6];..."]
+/1/2/3             [key=3, value="name='col1';parent=2;children=[];block="id=1;off=100;len=10000";..."]
+/1/2/4             [key=4, value="name='col2';parent=2;children=[];block="id=1;off=10100;len=10000";..."]
+/1/2/5             [key=5, value="name='idx1';parent=2;children=[];block="id=1;off=20100;len=10000";..."]
+/1/2/6             [key=6, value="name='idx2';parent=2;children=[];block="id=1;off=30100;len=10000";..."]
+/1/7               [key=7, value="name='blk2';parent=1;children=[8,9,10,11];..."]
+/1/7/8             [key=8, value="name='col1';parent=7;children=[];block="id=5;off=300;len=10000";..."]
+/1/7/9             [key=9, value="name='col2';parent=7;children=[];block="id=5;off=10300;len=10000";..."]
+/1/7/10            [key=10, value="name='idx1';parent=7;children=[];block="id=5;off=20300;len=10000";..."]
+/1/7/11            [key=11, value="name='idx2';parent=7;children=[];block="id=5;off=30300;len=10000";..."]
+```
+
+### Bootstrap Metadata
+
+**TODO**
+
+### Sub-tasks
+
+Compared with a stand-alone `TAE`, we need to do at least the followings:
+
+1. Store|Load metadata on remote object storage -- [New Feature]
+2. Filesystem-like metadata management -- [Refactor]
+3. Metadata behaves inconsistently based on different types of nodes -- [Refactor]
+4. Metadata synchronization -- [New Feature] [Performance]
+5. Cache management -- [New Feature] [Performance]
+6. Metadata boostrap -- [New Feature]
