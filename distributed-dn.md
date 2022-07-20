@@ -59,6 +59,14 @@ Refer [Checkpoint](https://github.com/matrixorigin/matrixone/blob/main/docs/rfcs
 
 The change of checkpoint comes from the change of data persistence strategy. The data will be cached to the local disk first, and then persisted to the remote object storage in batches. Only when the data is successfully persisted and the corresponding metadata is persisted will it be considered checkpointed.
 
+### Stand-alone
+
+<img src="https://user-images.githubusercontent.com/39627130/179390091-fc751754-35df-49da-81d0-3ea04607cfcf.png" height="60%" width="60%" />
+
+### Distributed
+
+<img src="https://user-images.githubusercontent.com/39627130/179390266-4d050f62-ce71-4d0c-9900-38342b579992.png" height="60%" width="60%" />
+
 ## Metadata Management
 
 **TODO**
