@@ -34,6 +34,67 @@ Here we will only discuss some design|concept changes compared to the stand-alon
 
 # Guide-level Design
 
+## Transaction
+
+The engine on `DN` is not responsible for generating new transactions, nor does it control the state of transactions, but only accepts relevant commands and executes them. Transactions are always created by transaction clients and can be on `CN` or `DN`.
+
+<img src="https://user-images.githubusercontent.com/39627130/179884663-aa8bf01c-1f1b-41bf-a168-d366b01f9b48.png" height="45%" width="45%" />
+
+### Workspace
+
+We divide the commands into two categories, one is read-only and one is writable. The reason for distinguishing between these two categories is to reduce the interaction between the client and `DN` at the end of the read-only transaction.
+
+A read-only transaction workspace is temporary, does not require much management, and is destroyed immediately when used up.
+A writable transaction workspace is managed, and external commands are required to actively commit or abort, or to actively exit after timeout.
+
+### Exception Handling
+
+- Workspace timeout
+- Network connection timeout
+
+## Commands
+
+> Snapshot context
+
+```go
+type SnapshotCtx struct {
+    From []byte
+    To []byte
+}
+```
+
+> Request context
+
+```go
+type BaseRequestCtx struct {
+    SyncMeta bool
+    SyncTail bool
+}
+```
+
+### Writable
+
+- CreateDatabase
+- DropDatabase
+- CreateRelation
+- DropRelation
+- Trancate
+- Append
+- Delete
+- Update
+- TODOs
+
+### Read-only
+
+- GetDatabase
+- Databases
+- GetRelation
+- Relations
+- RelationCnt
+- RelationRows
+- Dedup
+- TODOs
+
 ## New Driver for LogStore
 
 Integrate log service as one of the underlying driver for LogStore. In the current implementation, the driver layer has not been abstracted, and the original internal logic of the driver is coupled with a lot of unrelated business logic.
