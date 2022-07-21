@@ -130,7 +130,87 @@ The change of checkpoint comes from the change of data persistence strategy. The
 
 ## Metadata Management
 
-**TODO**
+```go
+const (
+    // First level directory
+    CatalogPrefix = "1"
+    FirstTierPrefix = "2"
+    SecondTierPrefix = "3"
+
+    // Second level directory
+    RedoPrefix="1"
+    SnapshotPrefix="2"
+)
+```
+
+### Redo Entries Object Key
+
+#### Catalog
+```go
+// {CatalogPrefix}/{RedoPrefix}/{from}_{to}_{shard}
+func EncodeMetadataRedoRecordsKey(from, to, shard []byte) []byte {
+    var w bytes.Byte
+    _,_ = w.WriteString(CatalogPrefix)
+    _ = w.WriteByte('/')
+    _ = w.WriteString(RedoPrefix)
+    _ = w.WriteByte('/')
+    _ = w.Write(from)
+    _ = w.WriteByte('_')
+    _ = w.Write(to)
+    _ = w.WriteByte('_')
+    _ = w.Write(shard)
+    return w.Bytes()
+}
+```
+
+#### First-Tier
+```
+Key = {FirstTierPrefix}/{RedoPrefix}/{dbID}/{from}_{to}_{shard}
+```
+
+#### Second-Tier
+```
+Key = {SecondTierPrefix}/{RedoPrefix}/{dbID}/{from}_{to}_{shard}
+```
+
+### Snapshot Entries Object Key
+
+```go
+// {CatalogPrefix}/{SnapshotPrefix}/{ts}_{shard}
+func EncodeMetadataSnapshotKey(ts, shard []byte) []byte {
+    var w bytes.Byte
+    _,_ = w.WriteString(CatalogPrefix)
+    _ = w.WriteByte('/')
+    _ = w.WriteString(SnapshotPrefix)
+    _ = w.WriteByte('/')
+    _ = w.Write(ts)
+    _ = w.WriteByte('_')
+    _ = w.Write(shard)
+    return w.Bytes()
+}
+```
+
+#### First-Tier
+```
+Key = {FirstTierPrefix}/{SnapshotPrefix}/{dbID}/{from}_{to}_{shard}
+```
+
+#### Second-Tier
+```
+Key = {SecondTierPrefix}/{SnapshotPrefix}/{dbID}/{from}_{to}_{shard}
+```
+
+### Sync Metadata
+
+> CN
+1. Start transaction @ts10
+2. Get local catalog cache max version @ts5, tier-1 @ts6 and tier-2 @ts4
+3. SyncCatalogReq(from=ts5,to=ts10),SyncTier1Req(from=ts6,to=ts10,shard=1),SyncTier2Req(from=ts4,to=ts10,shard=1) --> `DN`
+> DN-1
+4. Collect SyncCatalogResp(from=ts5,to=ts10),SyncTableMetaResp(from=ts5,to=ts10,shard=1) --> `CN`
+> CN
+5. Apply SyncCatalogResp.Commands and SyncTableMetaResp.Commands
+
 
 ## Integrate With Distributed TxnCoordinator
 
