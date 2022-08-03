@@ -123,7 +123,7 @@ Database name is "DBA", Table name is "TBLA". Snapshot is of PK="1".
    - Scan and find physical address of PK="1"
    - Delete by physical address
 2. Insert a tuple with PK="1"
-3. Scan
+3. Scan one column
 4. Commit
 
 #### Steps In Workspace
@@ -154,6 +154,7 @@ Database name is "DBA", Table name is "TBLA". Snapshot is of PK="1".
 ```
 2. Get the metadata snapshot and log tail of `TBLA` from `DN`. Store them in the transaction workspace
 3. Scan on the metadata snapshot
+
    Refer [metadata]() for details.
    Snapshot
    ```
@@ -207,6 +208,7 @@ Database name is "DBA", Table name is "TBLA". Snapshot is of PK="1".
    ```
    **TODO**: Build ART tree for unsorted block in `CN`?
 4. Delete by physical address
+
    For example, delete row 10 on block 2
    ```
    +-------------+
@@ -281,3 +283,13 @@ Database name is "DBA", Table name is "TBLA". Snapshot is of PK="1".
                               | Min | Max |
                               +-----+-----+
    ```
+7. Scan one column. Same as step 3.
+8. Commit
+   - PreCommit
+     - Collect delete nodes and transient blocks as commands
+     - Send collected commands to the relevant `DN`
+   - DoCommit
+
+### S-B
+
+#### Description
