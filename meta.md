@@ -196,3 +196,56 @@ It mainly consists of two parts:
 1. A global metadata is maintained in `DN`
 2. It retains various checkpoints info in memory and provides query services to `CN`
 3. `DN` should retains latest metadata commands in memory at least from the last checkpoint. How?- **TODO**
+
+### Query API
+
+- GetTableMetaSnapshot
+```go
+// IOEntry location
+type Location struct {
+    // Shared if this IOEntry is a metadata composition
+    Shared bool
+    // IOEntry object key
+    Key string
+    // IOEntry offset in the object
+    Off uint32
+    // IOEntry size in the object. Compressed
+    Size uint32
+    // IOEntrt original size. Decompressed
+    OSize uint32
+}
+
+// Table meta snapshot
+type TableMetaSS struct {
+    // Table id
+    TableId uint64
+    // Snapshot timestamp
+    ss []byte
+    // Checkpoint data location
+    CheckpointLoc *Location
+    // Redo data location
+    RedoLoc *Location
+
+    // Deserialized checkpoint data
+    Checkpoint *TableEntry
+    // Redo from the checkpoint timestamp to the snapshot timestamp
+    Redo *TableEntry
+}
+func GetTableMetaSnapshot(dbName, tblName string, ss []byte) (*TableMetaSS, error)
+```
+- CollectTableMetaChangesInRange(dbName, tblName from, to []byte)
+```go
+func CollectTableMetaChangesInRange(dbName, tblName string, from, to []byte)
+
+type TableMetaChanges struct {
+    // Table id
+    TableId uint64
+    // [From, to]
+    From,To []byte
+    // Persisted redo locations
+    RedoLocs []*Location
+    HotRedo *TableEntry
+
+    Redo *TableEntry
+}
+```
