@@ -12,42 +12,42 @@
 
 ### Catalog Checkpoints
 ```
-  10/$ckpTs
+  10/$shard/$ckpTs
 ```
 ### Catalog Commands
 ```
-  11/$ckpTs/$startTs_$endTs
+  11/$shard/$ckpTs/$startTs_$endTs
 ```
 ### Metadata Checkpoints
 ```
-  20/$ckpTs
+  20/$shard/$ckpTs
 ```
 ### Metadata Commands
 ```
-  21/$ckpTs/$startTs_$endTs
+  21/$shard/$ckpTs/$startTs_$endTs
 ```
 ### Default Data
 ```
-  30/$name
+  30/$shard/$name
 ```
 ## Booting Catalog
 
-1. List `10/`
+1. List shard 1 `10/1`
 ```
-|-- 10/
+|-- 10/1
 |   |-- 1
 |   |-- 30
 |   |-- 60
 
-Max checkpoint is 10/60
+Max checkpoint is 10/1/60
 ```
 
-2. List `11/60`
+2. List `11/1/60`
 ```
-|-- 11/60
+|-- 11/1/60
 |     |-- 61_70
 |     |-- 71_80
 |     |-- 81_90
 
-Max range of commands is 11/60/81_90
+Max range of commands is 11/1/60/81_90
 ```
