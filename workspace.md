@@ -37,7 +37,7 @@ Workspace is created on committing.
        | DB1 |         | DB2 |         | DB3 |
        +--+--+         +-----+         +-----+
 ```
-2. Check unique constraints base on catalog the snapshot. Return duplicated error if violiated.
+2. Check unique constraints base on the catalog snapshot. Return duplicated error if violiated.
 3. Fetch a unique database id and create a database entry
 ```go
 type DBEntry struct {
