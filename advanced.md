@@ -29,7 +29,7 @@
    - Query `DN` to collect the table's log tail from `TS1+1` to `TS2`
    - Try update cache with collected `Delta(TS1, TS2]`
 
-## Global Checkpoint History
+## Global Checkpoint History In CN
 
 Each `CN` maintains visible checkpoint timestamps
    ```
@@ -39,6 +39,30 @@ Each `CN` maintains visible checkpoint timestamps
 
    [Shard2] --------- [TS15]-->[TS8]-->[TS1]
    ```
+
+## Log Tail In DN
+
+```
+Checkpoint TS0
+  Table[ID=1]
+    [TS1][Commands]
+    [TS2][Commands]
+    [TS3][Commands]
+    [TS4][Commands]
+  Table[ID=2]
+    [TS1][Commands]
+    [TS4][Commands]
+  Table[ID=3]
+    [TS3][Commands]
+Checkpoint TS5
+  Table[ID=1]
+    [TS10][Commands]
+  Table[ID=6]
+    [TS6][Commands]
+  Table[ID=8]
+    [TS12][Commands]
+```
+
 ## Protocol
 
 1. Fetch a checkpoint timestamp
