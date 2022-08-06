@@ -406,6 +406,27 @@ type RangeRequest struct {
    Working Ranges:            {}
    Commands:                  [142-150]
    ```
+### Workspace
+Workspace is only created on committing.
+1. `PrePrepareCommit`: try push changes to statemachine
+   - Any error, go to `PrepareRollback`
+   - Else, go to `PrepareCommit`
+2. `PrepareCommit`
+   - Bind prepare timestamp
+   - Confliction check. Any error, go to `PrepareRollback`
+   - Build WAL entry
+   - Append to WAL
+   - Enqueue flush waiting queue
+3. `PrepareRollback`
+   - Notify coordinator aborted
+   - Enqueue commit waiting queue
+4. Wait WAL
+   - Notify coordinator prepared
+   - Enqueue commit waiting queue
+5. Wait Committed|Aborted
+   - `ApplyCommit` if committed
+   - `ApplyRollback` if aborted
+
 ## CN Engine
 
 ### Shard Checkpoints
@@ -472,9 +493,9 @@ Database name is `DBA`, Table name is `TBLA`. Snapshot is `100`, which is of `PK
    CacheObject:   Buffer Object
    Current Range: [81,90]
    ```
-3. Range read [91,100] `DN` to collect the log tail
+3. Range read [91,100] to `DN` to collect the log tail
 
-   Refer to [Range Read]() for details.
+   Refer to [Range Read](#range-read) for details.
    ```
    Range Read Response[91,100]:
 
@@ -490,7 +511,7 @@ Database name is `DBA`, Table name is `TBLA`. Snapshot is `100`, which is of `PK
    ```
 5. Scan on the `$shard:CKP:80` cache item
 
-   Refer [metadata]() for details.
+   Refer [metadata](#metadata) for details.
    Metadata Snapshot
    ```
    +----------------------------------------------------------------------+
