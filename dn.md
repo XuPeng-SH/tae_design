@@ -33,13 +33,13 @@
    ```
 3. Components in a buffer
    ```
-              [MutableBuffer]
+              [MutableBuffer|ImutableBuffer]
                     |
                     |
        +------------+---------------+
        |            |               |
    +---+-----+ +----------+   +-----+-----------+
-   |   Cmds  | |  ABlock  |   | PerBlk DelNodes |
+   |  Cmds   | |  ABlock  |   | PerBlk DelNodes |
    +---+-----+ +----+-----+   +-----+-----------+
        |            |
    +-------+     +--+-----+-------+
@@ -134,7 +134,7 @@
    [MutableBuffer[161-170]] --> [ImmutableBuffer[141-160]]
    Working Buffers: [141-160]
 
-   Collect tail from 141 to 150 as MemBuffer[141-150]
+   Collect tail from 141 to 150 as MemBuffer[141-150]. Expensitive!
    ```
    - Return
    ```
@@ -142,4 +142,36 @@
    Working Checkpint:  [130]
    Working Ranges:     {[131-140]}, MaxRange=140
    MemBuffer:          [141-150]
+   ```
+## Range Read
+```go
+type RangeRequest struct {
+    Snapshot Timestamp
+    FromTS   Timestamp
+}
+```
+1. If the snapshot is less than the checkpointed `MaxRange`
+   ```
+   Working Checkpint:         [90]
+   Working Ranges Candidates: {[91-110],[111-130]}, MaxRange=130
+
+   Request:                   Snapshot=120,FromTs=100
+   Working Ranges:            {[91-110],[111-130]}
+
+   Request:                   Snapshot=120,FromTs=115
+   Working Ranges:            {[111-130]}
+   ```
+2. If the snapshot is large than the checkpointed
+   ```
+   Working Checkpint:         [130]
+   Working Ranges Candidates: {[131-140]}, MaxRange=140
+   MemBuffer Candidates:      [141-150]
+
+   Request:                   Snapshot=150,FromTs=132
+   Working Ranges:            {[131-140]}
+   MemBuffer:                 [141-150]
+
+   Request:                   Snapshot=150,FromTs=142
+   Working Ranges:            {}
+   MemBuffer:                 [142-150]
    ```
