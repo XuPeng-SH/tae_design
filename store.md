@@ -4,9 +4,8 @@
 
 - `10`: Catalog checkpoints prefix
 - `11`: Catalog commands prefix
-- `20`: Metadata checkpoints prefix
-- `21`: Metadata commands prefix
-- `30`: Default data prefix
+- `20`: Table checkpoint prefix
+- `21`: Table data range prefix
 
 ## Key Encoding
 
@@ -18,17 +17,13 @@
 ```
   11/$shard/$ckpTs/$startTs_$endTs
 ```
-### Metadata Checkpoints
+### Table Checkpoint
 ```
-  20/$shard/$ckpTs
+  20/$shard/$tableId/$ckpTs
 ```
-### Metadata Commands
+### Table Data Range
 ```
-  21/$shard/$ckpTs/$startTs_$endTs
-```
-### Default Data
-```
-  30/$shard/$name
+  21/$shard/$tableId/$startTs_$endTs
 ```
 ## Booting Catalog
 
