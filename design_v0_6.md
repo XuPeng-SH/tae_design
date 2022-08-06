@@ -427,6 +427,24 @@ Workspace is only created on committing.
    - `ApplyCommit` if committed
    - `ApplyRollback` if aborted
 
+### Logstore
+
+Integrate log service as one of the underlying driver for LogStore. In the current implementation, the driver layer has not been abstracted, and the original internal logic of the driver is coupled with a lot of unrelated business logic.
+```
+  <LogEntry>
+      |<---------------------------------------+
+     \|/                                       |
++-----------+                                  |
+|  Receiver |                                  |
++-----+-----+                                  |<Checkpoint LogEntry>
+      |                                        |
+      |------------------------+               |
+     \|/                      \|/              |
++--------------+     +--------------------+    |
+|    Driver    |     | Fuzzy Checkpointer |----+
++--------------+     +--------------------+
+```
+
 ## CN Engine
 
 ### Shard Checkpoints
@@ -768,3 +786,6 @@ Database name is "DBA", table name is "TBLA".
    |    Tid+1    |----------> | DelMask |
    +-------------+            +---------+
    ```
+
+## BufferObject
+**TODO**
