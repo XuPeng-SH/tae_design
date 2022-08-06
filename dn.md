@@ -1,39 +1,25 @@
 # DN Engine
 
-## Catalog
-1. Keep the latest catalog in memory
-2. Collect changes from last checkpoint and persists to object store
-   ```
-   11/$shard/$ckpTs/$starts_$endTs
-   ```
-3. Checkpoint to object store
-   ```
-   10/$shard/$ckpTs
-   ```
-## Metadata
-1. Keep the latest metadata in memory
-2. Collect changes from last checkpoint and persists to object store
-   ```
-   21/$shard/$ckpTs/$starts_$endTs
-   ```
-3. Checkpoint to object store
-   ```
-   20/$shard/$ckpTs
-   ```
 ## Mutable Buffer
-1. Per-table mutable buffer
+A buffer is a representation of a range of the log. Imutable buffer is a frozen mutable buffer
+```
+                       <Freeze>
+[MutableBuffer[0,10]] ---------> [ImmutableBuffer[10,10]]
+
+```
+1. At most one mutable buffer and all buffers are orgnized into a sorted list
    ```
-   [TableA] ---- [MutableBuffer]
+   [MutableBuffer[100,110]]
+         |
+        \|/
+   [ImmutableBuffer[60,99]]
+         |
+        \|/
+   [ImmutableBuffer[30,59]]
    ```
-2. A representation of the log tail of a table
+2. Components in a buffer
    ```
-                                         EndTs is mutable
-                                          |
-   [TableA] ---- [MutableBuffer[StartTs, EndTs]]
-   ```
-3. Components in a buffer
-   ```
-              [MutableBuffer|ImutableBuffer]
+      [MutableBuffer|ImutableBuffer]
                     |
                     |
        +------------+---------------+
@@ -48,25 +34,29 @@
    |Pointer| |Command| |ANodes| |Index|
    +-------+ +-------+ +------+ +-----+
    ```
-
-## Immutable Buffer
-1. Per-table immutable buffer
-2. A immutable buffer is a frozen mutable buffer and orgnized in a list
-   ```
-   [TableA] ---- [MutableBuffer[100, 110]]
-                     |
-                    \|/
-                 [ImmutableBuffer[60, 99]]
-                     |
-                    \|/
-                 [ImmutableBuffer[30, 59]]
-   ```
 3. The immutable buffer will be enqueued to the checkpoint queue
+   ```
+   [MutableBuffer[100,110]]
+         |
+        \|/
+   [ImmutableBuffer[60,99]]
+         |
+        \|/                     ------------
+   [ImmutableBuffer[30,59]] -> ( )  queue   )
+                                ------------
+   ```
 4. If a immutable buffer is checkpointed, delete the buffer from the buffer list
-
+   ```
+   [MutableBuffer[100,110]]
+         |
+        \|/
+   [ImmutableBuffer[60,99]]
+         |
+         x
+   ```
 ## Buffer Checkpoint
 1. Prepare object contents
-   - Merge sort all appendable blocks into some new blocks (same segment)
+   - Merge sort all appendable blocks into some new blocks per table
    - Marshal all block deletes
      ```
      [Block-1 ] --- [Delete Buffer]
@@ -74,26 +64,27 @@
      [Block-10] --- [Delete Buffer]
      ```
    - Marshal commands
-2. Push the prepared object as the table range to the store
+2. Push the prepared object as a range object to the store
    ```
-   21/$shard/$tableId/30_59
+   20/$shard/30_59
    ```
 3. Commit
 4. Checkpoint relevant LSNs
 
-## Table Checkpoint
-1. Select a existed buffer checkpoint `[100, 130]`
-2. Prepare a table checkpoint object
+## Checkpoint
+1. Select a existed buffer checkpoint `[100,130]`
+2. Prepare a checkpoint object
+   - Catalog and metadata snapshot
 3. Push to the store
    ```
-   20/$shard/$tableId/130
+   10/$shard/130
    ```
-4. Update the local table checkpoint list
+4. Update the local checkpoint list
    ```
    [130] --> [90] --> [20]
    ```
-## Snapshot Table Read
-1. Find the closest table checkpoint to the snapshot timestamp
+## Snapshot Read
+1. Find the closest checkpoint to the snapshot timestamp
    ```
    Checkpoints:        [130] --> [90] --> [20]
 
@@ -103,7 +94,7 @@
    Snapshot:           150
    Working Checkpoint: [130]
    ```
-2. Collect the checkpointed log tail
+2. Collect the checkpointed ranges
    ```
    Checkpoints:        [130] --> [90] --> [20]
    Ranges:             [131-140] --> [111-130] --> [91-110] --> [51-90] --> [31-50] --> [21-30]
@@ -134,14 +125,14 @@
    [MutableBuffer[161-170]] --> [ImmutableBuffer[141-160]]
    Working Buffers: [141-160]
 
-   Collect tail from 141 to 150 as MemBuffer[141-150]. Expensitive!
+   Collect tail from 141 to 150 as Commands[141-150]. Expensitive operation!
    ```
    - Return
    ```
    Snapshot:           150
    Working Checkpint:  [130]
    Working Ranges:     {[131-140]}, MaxRange=140
-   MemBuffer:          [141-150]
+   Commands:           [141-150]
    ```
 ## Range Read
 ```go
@@ -161,17 +152,17 @@ type RangeRequest struct {
    Request:                   Snapshot=120,FromTs=115
    Working Ranges:            {[111-130]}
    ```
-2. If the snapshot is large than the checkpointed
+2. If the snapshot is larger than the checkpointed
    ```
    Working Checkpint:         [130]
    Working Ranges Candidates: {[131-140]}, MaxRange=140
-   MemBuffer Candidates:      [141-150]
+   Commands Candidates:       [141-150]
 
    Request:                   Snapshot=150,FromTs=132
    Working Ranges:            {[131-140]}
-   MemBuffer:                 [141-150]
+   Commands:                  [141-150]
 
    Request:                   Snapshot=150,FromTs=142
    Working Ranges:            {}
-   MemBuffer:                 [142-150]
+   Commands:                  [142-150]
    ```
