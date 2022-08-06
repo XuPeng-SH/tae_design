@@ -9,7 +9,7 @@
 3. Checkpoint to object store
    ```
    10/$shard/$ckpTs
-```
+   ```
 ## Metadata
 1. Keep the latest metadata in memory
 2. Collect changes from last checkpoint and persists to object store
@@ -47,7 +47,7 @@
    +---+---+ +---+---+ +--+---+ +-+---+
    |Pointer| |Command| |ANodes| |Index|
    +-------+ +-------+ +------+ +-----+
-```
+   ```
 
 ## Immutable Buffer
 1. Per-table immutable buffer
