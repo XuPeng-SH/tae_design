@@ -789,3 +789,35 @@ Database name is "DBA", table name is "TBLA".
 
 ## BufferObject
 **TODO**
+
+## Open Questions
+
+### CN sync the log tail at table granularity?
+
+#### Pros
+1. Less data to sync
+2. Avoid some unnecessary blocking waiting
+   ```
+   DN:
+   TableA ------ [Txn100 Preparing] --> [Txn90 Committed] --> [Txn75 Committed] --> [Txn60 Aborted]
+   TableB ------ [Txn93 Committed]  --> [Txn55 Committed] --> [Txn30 Aborted]   --> [Txn10 Committed]
+
+   // Return immediately if only read TableB
+   Range Read:         Snapshot=120, FromTs=95, Tables=[TableB]
+   Commands:           []
+
+   // Wait Txn100 committed|aborted if read all
+   Range Read:         Snapshot=120, FromTs=95, Tables=[*]
+   Commands:           [?]
+   ```
+#### Cons
+1. Need fine-grained checkpoint cache implemetation in `CN`
+   ```
+   BufferObject[Ckp=80]
+   Catalog                [0, 120]
+   TableA                 [0,  90]
+   TableB                 [0, 120]
+   TableC                 [0, 110]
+   ```
+2. Multiple interactions are required between `CN` and `DN`
+   - Bind different tables during the execution of statements
