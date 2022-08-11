@@ -57,11 +57,11 @@ Metadata records fragmentation information of table data
 ### Detailed Metadata
 
 ```
- +-------------------------------------------------------------------------------+
- |                                  BlockMeta                                    |
- +---------------+-----------------+---------------+------------+---+------------+
- |TableId(uint64)|SegmentId(uint64)|BlockId(uint64)|<ColumnMeta>|...|<ColumnMeta>|
- +---------------+-----------------+---------------+------+-----+---+------------+
+ +-----------------------------------------------------------------------------------------------------------------------------------------------+
+ |                                                             BlockMeta                                                                         |
+ +---------------+-----------------+---------------+------------+---+------------+--------------+-----------------+-----------------+------------+
+ |TableId(uint64)|SegmentId(uint64)|BlockId(uint64)|<ColumnMeta>|...|<ColumnMeta>|RowCnt(uint32)|MinTS(ColumnMeta)|MaxTS(ColumnMeta)|Dead([]byte)|
+ +---------------+-----------------+---------------+------+-----+---+------------+--------------+-----------------+-----------------+------------+
                                                           |
                                                           |   +---------------------------------------------------------------+
                                                           |   |                       SegmentMeta                             |
@@ -79,16 +79,19 @@ Metadata records fragmentation information of table data
                       |Idx(uint16)|DataLoc(Location)|Min([32]byte)|Max([32]byte)|BFLoc(Location)|
                       +-----------+-----------------+-------------+-------------+---------------+
 
-BlockMeta: Block data meta info
+BlockMeta:    Block data meta info
+MinTS       = Row created timestamp
+MaxTS       = Row deleted timestamp
+Dead        = Dead rows
 
-SegmentMeta: Segment data meta info
+SegmentMeta:  Segment data meta info
 
-ColumnMeta: Column data meta info
-Idx = Column index
-DataLoc = Column data location
-Min = Column min value
-Max = Column max value
-BFLoc = Bloomfilter data location
+ColumnMeta:   Column data meta info
+Idx         = Column index
+DataLoc     = Column data location
+Min         = Column min value
+Max         = Column max value
+BFLoc       = Bloomfilter data location
 ```
 
 ### Shared Metadata
@@ -191,14 +194,14 @@ Metadata snapshot is a collection of meta info of data fragmentations. It mainly
 
 ### Key Prefix
 
-- `10`: Checkpoint prefix
-- `20`: Data range prefix
+- `CKP`: Checkpoint prefix
+- `MCK`: Data range prefix
 
 ### Key Encoding
 
 #### Checkpoint
 ```
-  10/$shard/$ckpTs
+  CKP/$shard/$ckpTs
   |   |      |
   |   |      +---- Checkpoint timestamp
   |   +----------- Shard id
@@ -206,7 +209,7 @@ Metadata snapshot is a collection of meta info of data fragmentations. It mainly
 ```
 #### Data Range
 ```
-  20/$shard/$ckpTs/$startTs_$endTs
+  MCK/$shard/$ckpTs/$startTs_$endTs
   |   |       |      |        |
   |   |       |      |        +------- Range end timestamp
   |   |       |      +---------------- Range start timestamp
@@ -216,25 +219,25 @@ Metadata snapshot is a collection of meta info of data fragmentations. It mainly
 ```
 ### Booting
 
-1. List all checkpoints of shard 1 `10/1`
+1. List all checkpoints of shard 1 `CKP/1`
 ```
-|-- 10/1
+|-- CKP/1
 |    |-- 1
 |    |-- 30
 |    |-- 60
 
-Max checkpoint is 10/1/60
+Max checkpoint is CKP/1/60
 ```
-2. List `11/1/60`
+2. List `MCK/1/60`
 ```
-|-- 11/1/60
+|-- MCK/1/60
 |      |-- 61_70
 |      |-- 71_80
 |      |-- 81_90
 
-Max range is 11/1/60/81_90
+Max range is MCK/1/60/81_90
 ```
-3. Load checkpoint `11/1/60` and relevant ranges
+3. Load checkpoint `MCK/1/60` and relevant ranges
 4. Apply all catalog and metadata related changes from the ranges to the checkpoint
 5. Start replay from WAL
 
@@ -306,7 +309,7 @@ A buffer is a representation of a range of the log. Imutable buffer is a frozen 
    - Marshal commands
 2. Push the prepared object as a range object to the store
    ```
-   20/$shard/30_59
+   MCK/$shard/30_59
    ```
 3. Commit
 4. Checkpoint relevant LSNs
@@ -317,7 +320,7 @@ A buffer is a representation of a range of the log. Imutable buffer is a frozen 
    - Catalog and metadata snapshot
 3. Push to the store
    ```
-   10/$shard/130
+   CKP/$shard/130
    ```
 4. Update the local checkpoint list
    ```
@@ -462,7 +465,7 @@ One cache item per checkpoint timestamp:
 CackeKey: $shard/CKP/$timestamp
 CacheObject: Buffer Object
 ```
-A checkpoint cache item is first inited with checkpoint data from `10/$shard/$timestamp`
+A checkpoint cache item is first inited with checkpoint data from `CKP/$shard/$timestamp`
 ```
 BufferObject [$startTs,$endTs]
    |            |        |
