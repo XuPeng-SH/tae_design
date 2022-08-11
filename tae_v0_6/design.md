@@ -228,6 +228,26 @@ Metadata snapshot is a collection of meta info of data fragmentations. It mainly
 
 Max checkpoint is CKP/1/60
 ```
+A checkpoint object maintains the latest and all previous non-pruned checkpoints metadata.
+
+```
+CKP/1/1:
+        1  | IOEntry Location
+CKP/1/10:
+        1  | IOEntry Location
+        10 | IOEntry Location
+CKP/1/30:
+        1  | IOEntry Location
+        10 | IOEntry Location
+        30 | IOEntry Location
+
+Prune Checkpoints <= 10
+
+CkP/1/60:
+        30 | IOEntry Location
+        60 | IOEntry Location
+```
+
 2. List `MCK/1/60`
 ```
 |-- MCK/1/60
