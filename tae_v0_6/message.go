@@ -52,7 +52,7 @@ type SnapshotSyncResp struct {
 	// Snapshot timestamp
 	SnapshotTS Timestamp
 
-	// Checkpoint timestamp in request
+	// Checkpoint timestamp
 	CheckpointTS Timestamp
 
 	// New checkpoints found in DN
@@ -65,7 +65,7 @@ type SnapshotSyncResp struct {
 	TableCmds map[TableID]*BatchCommands
 }
 
-type SnapshotCommitReq struct {
+type SnapshotCommitMsg struct {
 	SnapshotTS Timestamp
 	Command    ITxnCmd
 }

@@ -49,7 +49,6 @@ type BlockMetaObj struct {
 	Header *BlockHeader
 }
 
-// Cache item
 type BlockDataObj struct {
 	// Block metadata
 	Entry *BlockEntry
@@ -76,8 +75,8 @@ type TableDataObj struct {
 	// Table metadata tree
 	Entry *TableEntry
 
-	// Block metadata cache keys
-	BlockKeys map[uint64]string
+	// Imutable Blocks
+	Blocks map[uint64]*BlockDataObj
 
 	// Block data synced from DN
 	Mutation *MutableNode
