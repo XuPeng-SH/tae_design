@@ -25,7 +25,7 @@ type Iterator interface {
 
 type CmdType int16
 
-type ITxnCmd interface {
+type ICommand interface {
 	WriteTo(io.Writer) error
 	ReadFrom(io.Reader) error
 	Marshal() ([]byte, error)

@@ -26,46 +26,78 @@ type RangeDesc struct {
 	To   Timestamp
 }
 
-type BatchCommands struct {
-	// Commands description
-	Desc RangeDesc
-	// A slice of []byte, each is a serialized ITxnCmd
-	Serialized   [][]byte
-	Deserialized []ITxnCmd
+type ScopeDesc struct {
+	// True indicates all tables
+	// False indicates the specified tables
+	All bool
+
+	// Indicates the specified tables when All is false
+	Tables []TableID
 }
 
-type SnapshotSyncReq struct {
+type BatchCommands struct {
+	// Range description
+	Desc RangeDesc
+	// Scope description
+	Scope ScopeDesc
+
+	Commands []ICommand
+}
+
+type SyncLogTailReq struct {
 	// Most suitable visible checkpoint timestamp
 	CheckpointTS Timestamp
-	// [FromTS, SnapshotTS]
-	SnapshotTS Timestamp
-	FromTS     Timestamp
+
+	// [FromTS, ToTS]
+	Range RangeDesc
 
 	// Table ids to read
 	Tables []TableID
+
 	// If true, read all tables
 	// Else, read the specified tables
 	All bool
 }
 
-type SnapshotSyncResp struct {
-	// Snapshot timestamp
-	SnapshotTS Timestamp
-
-	// Checkpoint timestamp
+type SyncLogTailResp struct {
+	// Actual checkpoint timestamp
 	CheckpointTS Timestamp
 
 	// New checkpoints found in DN
 	NewCheckpoints []Timestamp
 
-	// Catalog commands
-	CatalogCmds *BatchCommands
-
-	// Table Commands
-	TableCmds map[TableID]*BatchCommands
+	// Tail commands
+	Commands *BatchCommands
 }
 
-type SnapshotCommitMsg struct {
+type PreCommitWriteMsg struct {
 	SnapshotTS Timestamp
-	Command    ITxnCmd
+	// --[DB1]
+	//      |--<CreateDB>           [1-0]
+	//      |--[Table1-1]
+	//      |      |--<CreateTable> [1-1]
+	//      |      |--<AppendData>  [1-2]
+	//      |      |--<DeleteData>  [1-3]
+	//      |      |--<AddBlock>    [1-4]
+	//      |      |--<DeleteBlock> [1-5]
+	//      |      |--<DropTable>   [1-6]
+	//      |
+	//      |--[Table1-2]
+	//      |      |--<CreateTable> [1-7]
+	//      |      |--<AppendData>  [1-8]
+	//      |      |--<DeleteData>  [1-9]
+	//      |      |--<AddBlock>    [1-10]
+	//      |      |--<DeleteBlock> [1-11]
+	//      |      |--<DropTable>   [1-12]
+	//      |
+	//      |--<DropDB>             [1-13]
+	//
+	// --[DB2]
+	//      |--<DropDB>             [1-14]
+	//
+	// --[DB3]
+	//      |--<CreateDB>           [1-15]
+	//
+	// The above message contains total 16 subcommands, which must remain in order
+	Command ITxnCmd
 }
