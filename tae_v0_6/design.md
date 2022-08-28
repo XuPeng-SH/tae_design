@@ -843,3 +843,62 @@ Database name is "DBA", table name is "TBLA".
    - Bind different tables during the execution of statements
 
 5. Pigie back log tail during `Commit`
+
+## Collaboration Diagram
+
+1. Sync catalog tail
+   ```
+   +-----+                 +-----+
+   | CN  |                 | DN  |
+   +--+--+                 +--+--+
+      |                       |
+      |   <SyncLogTailReq>    |
+      |   (scope=catalog)     |
+      |   (range=[from,to])   |
+      |---------------------->|
+      |                       |
+      |   <SyncLogTailResp>   |
+      |<----------------------|
+      |                       |
+      |--+                    |
+      |  |ApplyResp           |
+      |<-+                    |
+      |                       |
+   ```
+
+2. Sync table tail
+   ```
+   +-----+                 +-----+
+   | CN  |                 | DN  |
+   +--+--+                 +--+--+
+      |                       |
+      |   <SyncLogTailReq>    |
+      |   (scope=table_ids)   |
+      |   (range=[from,to])   |
+      |---------------------->|
+      |                       |
+      |   <SyncLogTailResp>   |
+      |<----------------------|
+      |                       |
+      |--+                    |
+      |  |ApplyResp           |
+      |<-+                    |
+      |                       |
+   ```
+
+3. PrecommitWrite
+   ```
+   +-----+                 +-----+
+   | CN  |                 | DN  |
+   +--+--+                 +--+--+
+      |                       |
+      |  <PrecommitWriteReq>  |
+      |  (txnMeta,batchCmds)  |
+      |---------------------->|
+      |                       |
+      |<----------------------|
+      |                       |
+      |     <Commit>          |
+      |---------------------->|
+      |                       |
+   ```
