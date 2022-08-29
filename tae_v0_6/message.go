@@ -99,5 +99,5 @@ type PreCommitWriteMsg struct {
 	//      |--<CreateDB>           [1-15]
 	//
 	// The above message contains total 16 subcommands, which must remain in order
-	Command ITxnCmd
+	Command ICommand
 }
