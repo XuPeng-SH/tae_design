@@ -397,38 +397,34 @@ A buffer is a representation of a range of the log. Imutable buffer is a frozen 
    Working Ranges:     {[131-140]}, MaxRange=140
    Commands:           [141-150]
    ```
-### Range Read
+### Sync LogTail
+
 ```go
-type RangeRequest struct {
-    Snapshot Timestamp
-    FromTS   Timestamp
+type SyncLogTailReq struct {
+	// Most suitable visible checkpoint timestamp
+	CheckpointTS Timestamp
+
+	// [FromTS, ToTS]
+	Range RangeDesc
+
+	// Table ids to read
+	Tables []TableID
+
+	// If true, read all tables
+	// Else, read the specified tables
+	All bool
 }
 ```
-1. If the snapshot is less than the checkpointed `MaxRange`
-   ```
-   Working Checkpint:         [90]
-   Working Ranges Candidates: {[91-110],[111-130]}, MaxRange=130
-
-   Request:                   Snapshot=120,FromTs=100
-   Working Ranges:            {[91-110],[111-130]}
-
-   Request:                   Snapshot=120,FromTs=115
-   Working Ranges:            {[111-130]}
-   ```
-2. If the snapshot is larger than the checkpointed
-   ```
+```
    Working Checkpint:         [130]
-   Working Ranges Candidates: {[131-140]}, MaxRange=140
-   Commands Candidates:       [141-150]
 
-   Request:                   Snapshot=150,FromTs=132
-   Working Ranges:            {[131-140]}
-   Commands:                  [141-150]
+   Request:                   FromTs=132,ToTS=150
+   Commands:                  [132-150]
 
-   Request:                   Snapshot=150,FromTs=142
-   Working Ranges:            {}
+   Request:                   FromTs=142,ToTS=150
    Commands:                  [142-150]
-   ```
+```
+
 ### Workspace
 Workspace is only created on committing.
 1. `PrePrepareCommit`: try push changes to statemachine
@@ -483,7 +479,11 @@ Once a transaction see a checkpoint timestamp larger than the max timestamp, ins
 One cache item per checkpoint timestamp:
 ```
 CackeKey: $shard/CKP/$timestamp
-CacheObject: Buffer Object
+Buffer Object[$startTs,$endTs] -- Catalog
+Buffer Object[$startTs,$endTs] -- Metadata[Table 1]
+Buffer Object[$startTs,$endTs] -- Metadata[Table 2]
+Buffer Object[$startTs,$endTs] -- Metadata[Table 3]
+...
 ```
 A checkpoint cache item is first inited with checkpoint data from `CKP/$shard/$timestamp`
 ```
@@ -534,23 +534,22 @@ Database name is `DBA`, Table name is `TBLA`. Snapshot is `100`, which is of `PK
    CacheObject:   Buffer Object
    Current Range: [81,90]
    ```
-3. Range read [91,100] to `DN` to collect the log tail
+3. Sync logtail of range [91,100] of a table with the relevant `DN`
 
-   Refer to [Range Read](#range-read) for details.
+   Refer to [Sync LogTail](#sync-logtail) for details.
    ```
-   Range Read Response[91,100]:
+   Sync LogTail Response[91,100]:
 
    Working Checkpoint: [80]
-   Working Ranges:     [91-95]
-   Commands:           [96,100]
+   TableIDs:           [1000]
+   Commands:           [91,100]
    ```
-4. Get the range read response `[91,100]` and try to update the cache item `$shard:CKP:80`
+4. Get the sync logtail response `[91,100]` and try to apply commands to the cached table data
    ```
-   1. Get commands[91-95] from checkpinted ranges [91-95]
-   2. Apply commands[91,95] to the cache item
-   3. Apply commands[96,100] in the range read response to the cache item
+   1. Apply commands[91,100] to the cached table data
+   2. Update the cached table data max timestamp from 90 to 100
    ```
-5. Scan on the `$shard:CKP:80` cache item
+5. Scan on the cached table data
 
    Refer [metadata](#metadata) for details.
    Metadata Snapshot
@@ -830,11 +829,11 @@ Database name is "DBA", table name is "TBLA".
      TableB ------ [Txn93 Committed]  --> [Txn55 Committed] --> [Txn30 Aborted]   --> [Txn10 Committed]
 
      // Return immediately if only read TableB
-     Range Read:         Snapshot=120, FromTs=95, Tables=[TableB]
+     Sync LogTail:       Snapshot=120, FromTs=95, Tables=[TableB]
      Commands:           []
 
      // Wait Txn100 committed|aborted if read all
-     Range Read:         Snapshot=120, FromTs=95, Tables=[*]
+     Sync LogTail:       Snapshot=120, FromTs=95, Tables=[*]
      Commands:           [?]
    ```
 3. `DN` provides efficient log tail query based on table granularity
