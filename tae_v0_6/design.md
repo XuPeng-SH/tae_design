@@ -203,7 +203,7 @@ Most of the objects are table data.
     |     |    |    |
     |     |    |    +--- Checkpoint timestamp
     |     |    +-------- Checkpoint date
-    |     +------------- Checkpoint prefix
+    |     +------------- Specify checkpoint data
     +------------------- Data node id
 ```
 #### Incremental Checkpoint
@@ -213,7 +213,7 @@ Most of the objects are table data.
     |     |     |      |       +------ End timestamp
     |     |     |      +-------------- Start timestamp
     |     |     +--------------------- Start date
-    |     +--------------------------- Incremental checkpoint prefix
+    |     +--------------------------- Specify incremental checkpoint
     +--------------------------------- Data node id
 ```
 #### Table Data
@@ -222,7 +222,7 @@ Most of the objects are table data.
      |    |     |     |
      |    |     |     +----------- UUID
      |    |     +----------------- Create Date
-     |    +----------------------- Table data prefix
+     |    +----------------------- Specify table data
      +---------------------------- Data node id
 ```
 ### Booting
