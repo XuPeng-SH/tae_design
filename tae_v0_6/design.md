@@ -192,30 +192,38 @@ Metadata snapshot is a collection of meta info of data fragmentations. It mainly
 
 ## Object Key
 
-### Key Prefix
-
-- `CKP`: Checkpoint prefix
-- `MCK`: Data range prefix
-
 ### Key Encoding
+
+Checkpoint and incremental checkpoint objects are generated periodically and will be gc periodically, so there will not be many objects.
+Most of the objects are table data.
 
 #### Checkpoint
 ```
-  CKP/$shard/$ckpTs
-  |   |      |
-  |   |      +---- Checkpoint timestamp
-  |   +----------- Shard id
-  +--------------- Prefix
+  $shard/ckp/$date/$ckpTs
+    |     |    |    |
+    |     |    |    +--- Checkpoint timestamp
+    |     |    +-------- Checkpoint date
+    |     +------------- Checkpoint prefix
+    +------------------- Data node id
 ```
-#### Data Range
+#### Incremental Checkpoint
 ```
-  MCK/$shard/$ckpTs/$startTs_$endTs
-  |   |       |      |        |
-  |   |       |      |        +------- Range end timestamp
-  |   |       |      +---------------- Range start timestamp
-  |   |       +----------------------- Last checkpoint timestamp
-  |   +------------------------------- Shard id
-  +----------------------------------- Prefix
+  $shard/ickp/$date/$startTs_$endTs
+    |     |     |      |       |
+    |     |     |      |       +------ End timestamp
+    |     |     |      +-------------- Start timestamp
+    |     |     +--------------------- Start date
+    |     +--------------------------- Incremental checkpoint prefix
+    +--------------------------------- Data node id
+```
+#### Table Data
+```
+  $shard/data/$date/$uuid
+     |    |     |     |
+     |    |     |     +----------- UUID
+     |    |     +----------------- Create Date
+     |    +----------------------- Table data prefix
+     +---------------------------- Data node id
 ```
 ### Booting
 
