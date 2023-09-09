@@ -468,12 +468,6 @@ type ObjectEntry struct {
 
 ## Advanced
 
-### Secondary key index
-**TODO**
-
-### Checkpoint
-**TODO**
-
 ### Logtail Protocol Extension
 
 #### Rows
@@ -574,10 +568,117 @@ Main Target of Storage Optimization:
 ```
 
 ### Table Data Management
+
+```
+Table Data = Table Checkpoint + Tail
+```
+
 #### Checkpoint
 
+```go
+// schema of row and tombstone objects
+type Object struct {
+    // specify the create ts of the object
+    created_at types.TS
+
+    // specify the soft delete ts of the object
+    // if it was not deleted, keep it as the max value. This only means there is no soft
+    // deletion in the checkpoint, but it does not mean that there is no soft deletion in the tail.
+    deleted_at types.TS
+
+    // specify the location of the row or tombstone object
+    location objectio.Location
+
+    // pk_zonemap and rowid_zonemap are used for performance optimization
+    pk_zonemap objectio.Zonemap
+    rowid_zonemap objectio.Zonemap
+
+    // hint to specify whether the object has related tombstones in the checkpoint
+    has_tombstone bool
+}
+
+type TableCheckpoint struct {
+    table_id uint64
+
+    // row_locations specify all persisted blocks holding the row object information
+    // the block schema is as defined above
+    row_locations []objectio.Location
+
+    // tombstone_locations specify all persisted blocks holding the tombstone row object information
+    // the block schema is as defined above
+    tombstone_locations []objectio.Location
+
+    // Each bloomfilter combines data from multiple objects
+    bloom_filter_locations []objectio.Location
+    // Each zonemap combines data from multiple objects
+    zonemap_locations []objectio.Location
+}
+```
+
 #### Tail
+```
+In-memory Rows
+In-memory Tombstones
+Object Tombstones
+Row Objects
+Tombstone Objects
+```
 
-#### Logtail
+#### Table Readers
 
-#### Reader
+```
+    1 +----> | Determine data to read |
+      |                /
+      |               /
+      |        1. Select objects from tail in-memory rows and row objects with PK.
+      |           var objs []objectio.Location
+      |           for $obj in tail row objects {
+      |                 if !obj.IsVisible($timestamp) {
+      |                     continue
+      |                 }
+      |
+      |                 if there is object tombstone for $obj and it is visible to $timestamp
+      |                     continue
+      |
+      |                 $metadata = LoadMetadata($obj)
+      |                 if !EvalFilterExpr($obj, $metadata) {
+      |                      continue
+      |                 }
+      |
+      |                 $objs = append($objs, $obj)
+      |           }
+      |        2. Select objects from checkpoint
+      |           for $location in range row_locations {
+      |               info_bat := LoadObjectInfo($location)
+      |               location_col := info_bat["location"]
+      |               for $row_object_loc in range location_col {
+      |                  if there is object tombstone for $obj and it is visible to $timestamp
+      |                     continue
+      |                  $metadata = LoadMetadata($row_object_loc)
+      |                  if !EvalFilterExpr($obj, $metadata) {
+      |                     continue
+      |                  }
+      |
+      |                  $objs = append($objs, $obj)
+      |               }
+      |           }
+      |
+      |
+     \|/  (object_list, in-memory-rows, in-memory-row-tombstones)
+    2 +----> | Reader Orchestration |
+                    |
+         check the object list length
+                   / \_____________________________
+                  /                                 \
+         object list is short                     object list is long
+                 |                                          |
+         create reader in the current compute node      shuffle objects and collect related in-memory-rows and in-memory
+                                                \       row tombstones of the specified object
+                                                 \       /
+                                                  \     /
+                                            ($object_list, in-memory rows, in-memory row tombstones) => Create Reader
+```
+
+
+### Secondary key index
+**TODO**
