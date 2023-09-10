@@ -699,10 +699,14 @@ Tombstone Objects
 ```go
 // index defintion
 type IndexDef struct {
+    // index unique id
     id uint32
+    // index type
     index_type uint32
+    // index-related columns
     columns []uint16
-    desc string
+    // index params
+    params []byte
 }
 ```
 
