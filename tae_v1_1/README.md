@@ -7,7 +7,7 @@
 # Summary
 
 Transactional Analytic Engine is designed for hybrid transactional analytical query workloads, which can be used as the underlying storage engine of dat
-abase management system (DBMS) for online analytical processing of queries (HTAP). Compared with the previous version, the new design incorporates our experience in cloud-native data processing, making the whole design more suitable for cloud-native architecture. There will be some major changes involved here. There are many basic concepts, such as descriptions related to transaction timestamps. You need to refer to the design documents of previous versions.
+abase management system (DBMS) for online analytical processing of queries (HTAP). Compared with the previous version, the new design incorporates our experience in cloud-native data processing, making the whole design more suitable for cloud-native architecture. There will be some major changes involved here. There are many basic concepts, such as descriptions related to transaction timestamps. You need to refer to the design documents of [the previous version](https://github.com/matrixorigin/matrixone/blob/main/docs/rfcs/20220503_tae_design.md).
 
 # Guide-level design
 
@@ -61,22 +61,34 @@ A collection of objects of the row tombstones. The row timbstones are persisted 
 ```go
 // Schema Of Uncommitted Tomestones
 type TombstoneSchema1 struct {
+    // the rowid of the tombstone
     row_id types.Rowid
+
+    // the primary key of the tombstone
     primary_key any
 }
 
 // Schema Of Committed Tomestones
 type TombstoneSchema2 struct {
+    // the rowid of the tomestone
     row_id types.Rowid
+
+    // the commit time of the tombstone
     commit_time types.TS
+
+    // the primary key of the tombstone
     primary_key any
+
+    // whether it is aborted
     aborted bool
 }
 ```
 Any object with uncommitted tomestone schema, all the `commit_time` of row tomestones in the object are the same with the object entry `CreatedAt`. And all the `aborted` of row tomestones in the object are `false`.
 
 The row tombstone object visibility rule maybe very special. We can add a `min_commit_ts` for row tombstone object.
+
 ```go
+// A ObjectEntry represents a real object file
 type ObjectEntry struct {
     CreatedAt types.TS    // Specify the object create timestamp
     DeletedAt types.TS    // Specify the object tombstone timestamp
@@ -112,11 +124,12 @@ func (e *ObjectEntry) IsVisible(ts types.TS) bool {
 }
 ```
 
-Or, we can create object first and then apply changes to the object. This way, we can avoid some special visibility rules. This will be covered in detail in the tombstone chapter.
+Or, we can create object first and then apply changes to the object. This way, we can avoid some special visibility rules. This will be covered in detail in the [tombstone](#delete-rows) chapter.
 
 #### In-memory Rows
-All row data that are not persisted will be stored in the memory store.
+All rows that are not persisted will be stored in the memory store at first.
 ```go
+// RowEntry represent a row record
 type RowEntry struct {
     CreatedAt types.TS
     DeletedAt types.TS
@@ -125,15 +138,17 @@ type RowEntry struct {
     values []byte
 }
 
-type InMemoryDataStoreIterator interface {
+// in-memory rows iterator
+type InMemoryRowsInterator interface {
     HasNext() bool
     Next() *RowEntry
 }
 
-type InMemoryDataStore inteface {
+// the store of in-memory rows
+type InMemoryRows interface {
     SelectByPK(ts types.TS, pk any) *RowEntry
     SelectByRowid(ts types.TS, id types.Rowid) *RowEntry
-    Iter(types.TS, object.ObjectName) InMemoryDataStoreIterator
+    Iter(types.TS, object.ObjectName) InMemoryRowsInterator
 }
 ```
 
@@ -150,15 +165,15 @@ type RowTombstoneEntry struct {
 }
 
 
-type InMemoryTombstoneStoreIterator interface {
+type InMemoryTombstonesIterator interface {
     HasNext() bool
     Next() *RowTombstoneEntry
 }
 
-type InMemoryTombstoneStore interface {
+type InMemoryTombstones interface {
     SelectByPK(ts types.TS, pk any) *RowTombstoneEntry
     SelectByRowid(ts types.TS,id types.Rowid) *RowTombstoneEntry
-    Iter(types.TS,object.ObjectName) InMemoryTombstoneStoreIterator
+    Iter(types.TS,object.ObjectName) InMemoryTombstonesIterator
 }
 ```
 
@@ -221,9 +236,9 @@ type Reader struct {
     // Persisted object list to read
     object_list []objectio.Location
     // in-memory rows
-    rows InMemoryDataStore
+    rows InMemoryRows
     // in-memory row tombstones
-    tombstones InMemoryTombstoneStore
+    tombstones InMemoryTombstones
 }
 ```
 
