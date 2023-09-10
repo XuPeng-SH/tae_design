@@ -681,4 +681,189 @@ Tombstone Objects
 
 
 ### Secondary key index
-**TODO**
+
+```go
+type IndexDef struct {
+    id uint32
+    index_type uint32
+    columns []uint16
+    desc string
+}
+```
+
+```
+                Flush                 Build Async
+In-memory Rows --------> Row Object --------------> Index Object
+               Merge                    Build Async
+Row Objects  ------------> Row Objects ------------> Index Objects
+
+1. Not to create in-memory secondary index for in-memory rows.
+2. Index object naming rule:
+   [Target-Object-Name].[index_id]
+3. Index object can be created together with row object with existed index defs
+4. Index object can be create async
+5. Not all row object have index objects.
+
+For example:
+
+2 index are defined: IDX=1 and IDX=2
+5 row objects: Object-1, Object-2, Object-3, Object-4, Object-5
+4 index objects:
+  IDX=1: Object-1, Object-2, Object-3
+  IDX=2: Object-1
+
+
+    |------------------- Row Objects ----------------------|
+    +----------+----------+----------+----------+----------+
+    | Object-1 | Object-2 | Object-3 | Object-4 | Object-5 |
+    +----------+----------+----------+----------+----------+
+
+
+    |--------------- Index Objects -------------|
+    +----------+----------+----------+----------+
+    | Object-1 | Object-1 | Object-2 | Object-3 |
+    | IDX=1    | IDX=2    | IDX=1    | IDX=1    |
+    +----------+----------+----------+----------+
+
+
+```
+
+```go
+type IndexObject struct {
+    Object
+    idx uint32
+}
+
+// IndexStore is used to fetch the specified index object
+type IndexStore interface {
+    GetIndex(name objectio.ObjectNameShort, idx uint32) *IndexObject
+}
+
+/*
+There is an in-memory IndexStore in the tail to maintain newly-added index objects.
+At the same time, we design an area in the checkpoint of each table. Based on this area,
+we can abstract an IndexStore to facilitate Index query.
+*/
+
+// index data schema in the checkpoint
+// {object_name}{idx} is the composite primary key
+type index_data_schema struct {
+    // object_name specify the short object name of the row object
+    // idx specify the index unique id
+    object_name objectio.ObjectNameShort
+    idx uint32
+
+    // specify the metadata metadata extent
+    index_extent objectio.Extent
+}
+
+/*
+The index data will be saved in the form of blocks of the schema `index_data_schema`.
+ row object name and index idx
+ the block is sorted by this column
+             |                          ------------- index object metadata extent.
+             |                         /              the index object name is: `row-object-name` + '.' + idx
+    {object_name}{idx}   |          extent
+    ---------------------+--------------------------
+    {xx1}{1}             |    [1,100,200000,4000000]
+    ---------------------+--------------------------
+    {xx2}{1}             |    [1,100,230000,4300000]
+    ---------------------+--------------------------
+    {xx1}{2}             |    [1,100,183000,3800000]
+    ---------------------+--------------------------
+*/
+
+type IndexMetadata struct {
+    metadata objectio.ObjectMetadata
+}
+
+func (e *IndexMetadata) Contains(key []byte) bool {
+    return e.metadata.ColumnMeta(0).Zonemap().Contains(key)
+}
+func (e *IndexMetadata) GetIndexObject(key []byte) *IndexObject {
+    // fast check with zonemap
+    if !e.Contains(key) {
+        return nil
+    }
+    // load the index info data
+    vecs := LoadColumnWithMeta({0,1}, e.metadata)
+    off :=  vector.FindFirstIndexInSortedVarlenVector(vec[0], key)
+    if off == -1 {
+        return nil
+    }
+    bs := vecs[1].GetBytesAt(off)
+    ret := new(IndexObject)
+    ret.UnmarshalBinary(bs)
+    return ret
+}
+
+type TableCheckpoint struct {
+    // defined above
+
+    index_entries []IndexMetadata
+}
+
+func (ckp *TableCheckpoint) GetIndex(name objectio.ObjectNameShort, idx uint32) *IndexObject {
+    key := BuildIndexKey(name, idx)
+    for _, entry := range ckp.index_entries {
+        idx_object := entry.GetIndexObject(key)
+        if idx_object == nil {
+            continue
+        }
+        return idx_object
+    }
+    return nil
+}
+```
+
+```
+    |------------------------ Row Objects ---------------------------|
+    +------------+------------+------------+------------+------------+
+    | Object-100 | Object-101 | Object-102 | Object-103 | Object-104 |    __
+    +------------+------------+------------+------------+------------+       \
+                                                                              | --- TAIL
+    |------------- In-memory index objects ------------|                     /
+    +-----------+------------+------------+------------+                    /
+    | Object-80 | Object-100 | Object-101 | Object-102 | ------------------
+    | IDX=1     | IDX=2      | IDX=1      | IDX=1      |
+    +-----------+------------+------------+------------+
+    In-memory index objects includes index objects of all the row objects in the tail and
+    also some row objects in the checkpoint
+
+
+    ================================= Checkpoint ================================================================
+
+    |------------------------ Row Objects ---------------------------|
+    +------------+------------+------------+------------+------------+
+    | Object-0   | Object-1   | Object-2   |  .....     | Object-99  |
+    +------------+------------+------------+------------+------------+
+
+
+    In-memory index metadata
+    [Index-Metadata-0] ---- Each metadata is the copy of the object
+           |                metadata of the index info object in
+           |                the checkpoint. It is in-memory
+            \
+             \
+              \
+               \/
+     +----------------------------------------------+
+     |                IndexInfoObject               |
+     +----------------------------------------------+
+       {object_name}{idx} |      extent
+     ---------------------+--------------------------
+       {Object-0}{1}      |    [1,100,200000,4000000] ---------------------------------------------+
+     ---------------------+--------------------------                                              |
+       {Object-0}{2}      |    [1,100,320000,4800000] --------------------------------+            |
+     ---------------------+--------------------------                                 |            |
+       {Object-1}{1}      |    [1,100,120000,3000000] -------------------+            |            |
+     ---------------------+--------------------------                    |            |            |
+       {Object-2}{1}      |    [1,100,180000,3800000] ------+            |            |            |
+     ---------------------+--------------------------       |            |            |            |
+                                                            |            |            |            |
+                                                            |/           |/           |/           |/
+                                                        +-----------+------------+------------+------------+
+                                                        | Object-2  | Object-1   | Object-0   | Object-0   |
+                                                        | IDX=1     | IDX=1      | IDX=2      | IDX=1      |
+                                                        +-----------+------------+------------+------------+
+```
