@@ -3,7 +3,6 @@
 - Start Date: 2023-09-04
 - Authors: Xu Peng
 - Implementation PR:
-- Issue for this RFC:
 
 # Summary
 
@@ -37,7 +36,7 @@ As mentioned before, the persisted table data is in the form of objects. We will
 ### Table Data Management
 Table data is composed of persisted object list and memtable in memory.
 ```
-Data Objects:             Object-data1, Object-data2, Object-data3, ..... Object-dataM    [ M Objects ] \
+Row Objects:              Object-data1, Object-data2, Object-data3, ..... Object-dataM    [ M Objects ] \
                                                                                                          | => PERSISTED
 Row Tombstone Objects:    Object-ts1, Object-ts2, Object-ts3, ... Object-tsN              [ N Objects ] /
 
@@ -46,7 +45,7 @@ In-memory Row Tombstones:    [Memory Store] // In-memory store   | ==> In-memory
 In-memory Object Tombstones: [Memory Store] // In-memory store   /
 ```
 
-#### Data Objects
+#### Row Objects
 A collection of objects of table data in the form of blocks.
 ```go
 type ObjectEntry struct {
