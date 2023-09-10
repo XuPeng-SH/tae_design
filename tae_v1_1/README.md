@@ -683,6 +683,7 @@ Tombstone Objects
 ### Secondary key index
 
 ```go
+// index defintion
 type IndexDef struct {
     id uint32
     index_type uint32
@@ -697,18 +698,18 @@ In-memory Rows --------> Row Object --------------> Index Object
                Merge                    Build Async
 Row Objects  ------------> Row Objects ------------> Index Objects
 
-1. Not to create in-memory secondary index for in-memory rows.
+1. Not to create the in-memory secondary index for in-memory rows.
 2. Index object naming rule:
    [Target-Object-Name].[index_id]
 3. Index object can be created together with row object with existed index defs
-4. Index object can be create async
+4. Index object can be created async
 5. Not all row object have index objects.
 
 For example:
 
-2 index are defined: IDX=1 and IDX=2
-5 row objects: Object-1, Object-2, Object-3, Object-4, Object-5
-4 index objects:
+Two index are defined: IDX=1 and IDX=2
+Five row objects: Object-1, Object-2, Object-3, Object-4, Object-5
+Four index objects:
   IDX=1: Object-1, Object-2, Object-3
   IDX=2: Object-1
 
@@ -724,8 +725,6 @@ For example:
     | Object-1 | Object-1 | Object-2 | Object-3 |
     | IDX=1    | IDX=2    | IDX=1    | IDX=1    |
     +----------+----------+----------+----------+
-
-
 ```
 
 ```go
@@ -741,8 +740,8 @@ type IndexStore interface {
 
 /*
 There is an in-memory IndexStore in the tail to maintain newly-added index objects.
-At the same time, we design an area in the checkpoint of each table. Based on this area,
-we can abstract an IndexStore to facilitate Index query.
+At the same time, we design an index info area in the checkpoint. Based on this info area,
+we can abstract an IndexStore to facilitate Index query on the checkpoint.
 */
 
 // index data schema in the checkpoint
@@ -759,9 +758,9 @@ type index_data_schema struct {
 
 /*
 The index data will be saved in the form of blocks of the schema `index_data_schema`.
- row object name and index idx
- the block is sorted by this column
-             |                          ------------- index object metadata extent.
+     row object name and index idx
+     the block is sorted by this column
+             |                          ------------- the metadata extent of the index object.
              |                         /              the index object name is: `row-object-name` + '.' + idx
     {object_name}{idx}   |          extent
     ---------------------+--------------------------
@@ -785,12 +784,16 @@ func (e *IndexMetadata) GetIndexObject(key []byte) *IndexObject {
     if !e.Contains(key) {
         return nil
     }
-    // load the index info data
+    // load the index info data as vecs
     vecs := LoadColumnWithMeta({0,1}, e.metadata)
+
+    // binary search the first column by key
     off :=  vector.FindFirstIndexInSortedVarlenVector(vec[0], key)
     if off == -1 {
         return nil
     }
+
+    // get the index object info at the specified offset
     bs := vecs[1].GetBytesAt(off)
     ret := new(IndexObject)
     ret.UnmarshalBinary(bs)
@@ -800,12 +803,16 @@ func (e *IndexMetadata) GetIndexObject(key []byte) *IndexObject {
 type TableCheckpoint struct {
     // defined above
 
-    index_entries []IndexMetadata
+    index_metadata []IndexMetadata
 }
 
 func (ckp *TableCheckpoint) GetIndex(name objectio.ObjectNameShort, idx uint32) *IndexObject {
+    // build index key
     key := BuildIndexKey(name, idx)
-    for _, entry := range ckp.index_entries {
+
+    // loop checkpoint index_metadata
+    for _, entry := range ckp.index_metadata {
+        // try to get index object by quering the index metadata
         idx_object := entry.GetIndexObject(key)
         if idx_object == nil {
             continue
@@ -822,7 +829,7 @@ func (ckp *TableCheckpoint) GetIndex(name objectio.ObjectNameShort, idx uint32) 
     | Object-100 | Object-101 | Object-102 | Object-103 | Object-104 |    __
     +------------+------------+------------+------------+------------+       \
                                                                               | --- TAIL
-    |------------- In-memory index objects ------------|                     /
+    |------------- In-memory Index Objects ------------|                     /
     +-----------+------------+------------+------------+                    /
     | Object-80 | Object-100 | Object-101 | Object-102 | ------------------
     | IDX=1     | IDX=2      | IDX=1      | IDX=1      |
@@ -833,7 +840,7 @@ func (ckp *TableCheckpoint) GetIndex(name objectio.ObjectNameShort, idx uint32) 
 
     ================================= Checkpoint ================================================================
 
-    |------------------------ Row Objects ---------------------------|
+    |----------------- Row Objects in the Checkpoint-----------------|
     +------------+------------+------------+------------+------------+
     | Object-0   | Object-1   | Object-2   |  .....     | Object-99  |
     +------------+------------+------------+------------+------------+
@@ -848,7 +855,7 @@ func (ckp *TableCheckpoint) GetIndex(name objectio.ObjectNameShort, idx uint32) 
               \
                \/
      +----------------------------------------------+
-     |                IndexInfoObject               |
+     |     Index Info Object in the Checkpoint      |
      +----------------------------------------------+
        {object_name}{idx} |      extent
      ---------------------+--------------------------
@@ -865,5 +872,7 @@ func (ckp *TableCheckpoint) GetIndex(name objectio.ObjectNameShort, idx uint32) 
                                                         +-----------+------------+------------+------------+
                                                         | Object-2  | Object-1   | Object-0   | Object-0   |
                                                         | IDX=1     | IDX=1      | IDX=2      | IDX=1      |
+                                                        +-----------+------------+------------+------------+
+                                                        |         Index Objects in the Checkpoint          |
                                                         +-----------+------------+------------+------------+
 ```
