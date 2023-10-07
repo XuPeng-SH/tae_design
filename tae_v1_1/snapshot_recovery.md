@@ -7,9 +7,7 @@
 
 ## 租户快照
 
-### 方式一: mo_snapshots
-- 每个租户加一张快照表 `mo_snapshots`(Q: 可能view更好，需要确认一下view的细节)
-  (Q: 如果回滚到一个历史版本，那还能看到基于这个版本之前的快照吗?)
+- 每个租户加一张快照表 `mo_snapshots`
   ```go
   type Schema struct {
     timestamp types.TS // primary key
@@ -20,55 +18,34 @@
 - 删除快照就是 `delete`
 
 ```
-(Q: 对一些特殊的表，DML 时可以做一些特殊的检查吗？比如不能 `update`, 不能创建未来的快照，不能创建特别久远的快照)
-可不可以不通过普通的DML修改该表，DQL 没有问题。DML 需要通过特殊语法的 SQL:
+DQL 没有问题。DML 需要通过特殊语法的 SQL:
 增加快照:
 create snapshot;
 删除快照:
 drop snapshot {Filter Expr}
 ```
 
-### 方式二: command 方式
-- 系统内部对于快照的管理不对外暴露细节，不会以表的形式对外提供 `DML` 和 `DQL` 服务
-- 快照工具或者命令(Q: 是什么)
-
-
 ## 租户快照数据在线恢复
-
-> 阻塞或者停止该租户所有操作
 
 ### 逻辑恢复方式
 
 > 具体细节参考前端设计文档
 
-- 选择快照并基于该快照时间 `dump` 该租户所有的 `databases` (Q: 如何区分租户的？)
+- 选择快照并基于该快照时间 `dump` 该租户所有的 `databases`
 - 创建新租户，并将之前导出的数据导入到新的租户
 - 删除老租户
 
-### 物理恢复方式
+### 物理恢复方式(是逻辑恢复方式的优化路径)
 
 > 具体细节参考前端设计文档
 
-- 选择快照并基于该快照 `dump` 该租户的所有 `DDL` (Q: 可以吗？如何实现？)
+- 选择快照并基于该快照 `dump` 该租户的所有 `DDL`
 - 创建新租户，并导入所有 `DDL`
-- 备份工具选择物理备份所有表数据
+- 将原快照所有表的数据以 `S3 Object` 的形式加入到事务的 `workspace`
 - 删除老租户
+- 提交事务
 
 ## 技术细节
-
-### 快照
-
-> mo_snapshots 方式存储不需要额外的工作量, 这里讲 commands 的方式
-
-1. 定义一张内部的表，内部可见，管理所有租户的 `snapshots`
-   ```go
-   type Schema struct {
-        account_id int32
-        account_name string
-        timestamp types.TS
-   }
-   ```
-2. 租户创建，删除，查询快照相关的信息，都基于这张内部表
 
 ### 逻辑恢复之基于快照的 `dump`
 
