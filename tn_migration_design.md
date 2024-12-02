@@ -42,6 +42,33 @@ This document describes the design of the **TN** migration feature in the **Matr
 
 ## Migration Process
 
+### Definitions
+
+#### What is write mode?
+1. It receives WriteRequest from **CN** and commit the transaction
+2. It writes **LogEntry** to the **LogService**
+3. It flushes the memory table to the disk
+4. It receives table subscription from **CN** and push the logtail to **CN**
+5. It runs the **Checkpoint** periodically
+6. It runs merge manager
+7. It runs disk cleaner periodically
+8. It replays checkpoint files and **LogEntry** from the **LogService** at startup
+
+#### What is read-only mode?
+1. It replays checkpoint files at the startup
+2. It replays **LogEntry** from the **LogService** all the time
+3. It can not receive WriteRequest from **CN** if there is no forward tunnel. If it has a forward tunnel, it forwards the WriteRequest to the **TN** in write mode
+4. It can not commit the transaction
+5. It can not write **LogEntry** to the **LogService**
+6. It can not handle table subscription from **CN** if there is no forward tunnel. If it has a forward tunnel, it forwards the table subscription to the **TN** in write mode
+7. It can not push the logtail to **CN** without a forward tunnel
+8. It can not run the **Checkpoint**
+9. It can not run merge manager but can run merge tasks
+10. It can not run disk cleaner
+11. It can not flush the memory table to the disk
+
+### Main Steps
+
 1. Given one running **TN** to be migrated as **TN0**
 ```
 +-----------------+     Write        +-----------------+
@@ -116,6 +143,29 @@ This document describes the design of the **TN** migration feature in the **Matr
 8. Migrate the TN0 subscription table to TN1
 9. TN0 shutdown
 ```
+
+### Switch Steps
+
+#### Write-To-Read with Forward Tunnel
+
+1. Build a forward tunnel from current **TN** to the new **TN**
+2. Stop the Merge|DiskCleaner|Checkpointer
+3. Freeze the WriteRequest Queue
+4. Freeze the Commit Queue
+5. Flush the Commit Queue
+6. Send a Change-Config LogEntry to the **LogService** to switch the writer to the new **TN**
+7. Freeze the logtail
+8. Unfreeze the WriteRequest queue and forward the WriteRequest to the new **TN**
+9. Replay the logEntry from the **LogService**
+
+#### Read-To-Write
+
+1. When it receives the Change-Config LogEntry, switch to Write Mode
+2. Stop replaying the **LogEntry** from the **LogService**
+3. Start receiving WriteRequest from **CN**
+4. Start receiving table subscription from **CN**
+5. Start commit queue
+6. Start Flusher|Merge Manager|Disk Cleaner|Checkpointer
 
 ### Subtasks
 
