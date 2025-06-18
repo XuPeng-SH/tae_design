@@ -67,8 +67,9 @@ CREATE TABLE mo_async_index_iterations (
 - It's better to avoid transferring the diff data to SQL.
 - At the end of the iteration, a record will be inserted into `mo_async_index_iterations` for the iteration.
 
-5. The task periodically handle the `GC` of the `mo_async_index_log` table.
+5. The task periodically handle the `GC` of the `mo_async_index_log` table and `mo_async_index_iterations` table.
 - It will clean up the `mo_async_index_log` table for the tables that with `drop_at` is not empty and one day has passed.
+- It will clean up the `mo_async_index_iterations` table for the iterations with smaller `end_at` of a account.
 - It could be very low frequency.
 
 
