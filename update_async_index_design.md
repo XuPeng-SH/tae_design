@@ -59,7 +59,6 @@ CREATE TABLE mo_async_index_iterations (
     end_at VARCHAR(32) NOT NULL,
     err_code INT NOT NULL,
     error_msg VARCHAR(255) NOT NULL,
-    info VARCHAR(255) NOT NULL,
 );
 ```
 - If the list of tables is too large, it will be executed in multiple executors.
