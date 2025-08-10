@@ -238,7 +238,7 @@ graph TD
     classDef version fill:#f1f1f1,stroke:#888,stroke-width:2px;
     classDef branch fill:#d9f7be,stroke:#a6e639,stroke-width:2px;
 ```
-2. **恢复窗口(Recovery Window):** 幻觉的不可预测性，备份窗口很难确定。一般而言，备份窗口越长，恢复时间越长或成本越高。想要修复幻觉后果，需要支持很长的备份窗口，同时要支持秒级回滚。在保障这两个需求的前提下，控制成本。
+2. **恢复窗口(Recovery Window):** 幻觉的不可预测性，恢复窗口很难确定。一般而言，恢复窗口越长，恢复时间越长或成本越高。想要修复幻觉后果，需要支持很长的恢复窗口，同时要支持秒级恢复。在保障这两个需求的前提下，控制成本。
 3. **数据快照(Snapshot):** 支持创建数据快照，可以方便地进行数据版本管理。
 ```sql
 CREATE SNAPSHOT db1_ss_v1 FOR DATABASE db1;
@@ -355,7 +355,7 @@ graph TD
     %% 版本与文件关联关系
     A --> E & F & C & D
     B --> E & F & G & H
-    
+
     %% 分支与文件关联关系
     I --> E & F & G & H
     J --> G & H & L[Data File 7]:::file & M[Data File 8]:::file
