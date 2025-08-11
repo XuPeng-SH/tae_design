@@ -3,7 +3,7 @@
 当你的 **AI Agent** 突然清空核心数据库，或是悄悄注入虚假数据时，传统的数据恢复手段往往耗时费力。而 **Git for Data** 带来的变革，能让这一切像回滚代码提交一样简单。
 
 ```sql
-DATA-CTL REVERT DATABASE `agent1_db` TO TIMESTAMP 2025-08-01 12:00:00.123456;
+DATA-CTL RESET DATABASE `agent1_db` TO TIMESTAMP 2025-08-01 12:00:00.123456;
 ```
 瞬间数据回滚到指定时间点。这就是 **Git for Data** 的魔力 -- 版本控制, 快速回滚, 分支, 合并, 追踪变更, **AI** 时代的数据管理新范式。
 ```mermaid
@@ -13,7 +13,7 @@ graph LR
     B --> C[!数据灾难!]
 
     %% Git式数据恢复
-    D[管理员] -->|"DATA-CTL REVERT"| E[数据版本库]
+    D[管理员] -->|"DATA-CTL RESET"| E[数据版本库]
     E --> F[精确恢复至<br/>2025-08-01 12:00:00.123456]
     F --> G[✔️数据完好如初]
 
@@ -370,9 +370,9 @@ graph TD
 6. **数据回滚(Reset):** 支持数据回滚，方便快速地进行数据回滚。
 ```sql
 RESTORE DATABASE `db1` FROM SNAPSHOT `db1_ss_v1`;
-DATA-CTL REVERT DATABASE `db1` TO TIMESTAMP 2025-08-01 12:00:00.123456;
-DATA-CTL REVERT TABLE `db1.table1` TO TIMESTAMP 2025-08-01 12:00:00.123456;
-DATA-CTL REVERT BRANCH `db1_dev` TO TIMESTAMP 2025-08-01 12:00:00.123456;
+DATA-CTL RESET DATABASE `db1` TO TIMESTAMP 2025-08-01 12:00:00.123456;
+DATA-CTL RESET TABLE `db1.table1` TO TIMESTAMP 2025-08-01 12:00:00.123456;
+DATA-CTL RESET BRANCH `db1_dev` TO TIMESTAMP 2025-08-01 12:00:00.123456;
 ```
 7. **分支 Rebase:** 支持分支 Rebase，方便快速合并分支。基于 `Diff` 能力。
 8. **数据合并(Merge):** 支持数据合并，方便快速合并数据。基于 `Diff` 能力。
