@@ -381,7 +381,7 @@ DATA-CTL REVERT BRANCH `db1_dev` TO TIMESTAMP 2025-08-01 12:00:00.123456;
 ```mermaid
 graph TD
     %% 权限控制
-    subgraph "细粒度权限控制 (Granular Permissions)"
+    subgraph "细粒度权限控制"
         A[Agent User]:::agent
         B[TABLE Version 1]:::table
         C[TABLE Version 2]:::table
@@ -404,7 +404,7 @@ graph TD
 ```mermaid
 graph TD
     %% 跨租户权限控制
-    subgraph "跨租户权限控制 (Cross-Tenant Permissions)"
+    subgraph "跨租户权限控制"
         A[acc1 Tenant]:::tenant
         B[acc2 Tenant]:::tenant
     end
@@ -470,9 +470,9 @@ graph TD
     %% ========== 存储影响 ==========
     subgraph "存储成本"
         F[("总数据量：
-        原始数据 + 各版本增量 + LSM-Tree 合并成本")]:::storage
+        原始+各版本增量+LSM-Tree合并成本")]:::storage
         G[("冗余数据：
-        LSM-Tree 写放大+增删操作历史数据")]:::waste
+        LSM-Tree 写放大+操作历史数据")]:::waste
         H[("元数据开销：
         版本指针/索引")]:::metadata
     end
