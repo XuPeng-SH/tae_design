@@ -4,20 +4,14 @@
 
 - [快速开始](#快速开始)
 - [基础概念](#基础概念)
-  - [全文检索概述](#全文检索概述)
-  - [支持的算法和解析器](#支持的算法和解析器)
-- [使用指南](#使用指南)
-  - [创建全文索引](#创建全文索引)
-  - [全文检索查询](#全文检索查询)
-  - [混合过滤检索](#混合过滤检索)
+- [语法参考](#语法参考)
+- [实现原理](#实现原理)
+- [相关性评分算法](#相关性评分算法)
 - [性能优化](#性能优化)
-  - [索引创建优化](#索引创建优化)
-  - [查询性能优化](#查询性能优化)
-- [问题排查](#问题排查)
-  - [常见问题与解决方案](#常见问题与解决方案)
+- [当前限制与不足](#当前限制与不足)
 - [最佳实践](#最佳实践)
-- [SDK 使用](#sdk-使用)
-- [未来规划](#未来规划)
+- [Python SDK](#python-sdk)
+- [常见问题](#常见问题)
 
 ---
 
@@ -31,40 +25,34 @@ CREATE TABLE articles (
   id INT PRIMARY KEY,
   title VARCHAR(200),
   content TEXT,
-  author VARCHAR(100),
-  category VARCHAR(50),
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+  author VARCHAR(100)
 );
 
--- 创建全文索引
-CREATE FULLTEXT INDEX ftidx_content ON articles (title, content);
+-- 创建全文索引（推荐使用 BM25 算法）
+CREATE FULLTEXT INDEX ftidx ON articles (title, content);
 
 -- 插入数据
-INSERT INTO articles (id, title, content, author, category) VALUES
-  (1, '人工智能简介', '人工智能是计算机科学的一个分支，致力于创建能够执行通常需要人类智能的任务的系统。', '张三', '科技'),
-  (2, '数据库原理', '数据库是组织和存储数据的系统，支持高效的数据检索和管理。', '李四', '技术');
+INSERT INTO articles VALUES
+  (1, '人工智能简介', '人工智能是计算机科学的一个分支，致力于创建能够执行通常需要人类智能的任务的系统。', '张三'),
+  (2, '数据库原理', '数据库是组织和存储数据的系统，支持高效的数据检索和管理。', '李四');
 ```
 
 ### 执行全文检索
 
 ```sql
--- 自然语言模式检索
-SELECT id, title, content 
-FROM articles 
-WHERE MATCH(title, content) AGAINST('人工智能' IN NATURAL LANGUAGE MODE)
-LIMIT 10;
+-- 自然语言模式检索（默认模式）
+SELECT id, title FROM articles 
+WHERE MATCH(title, content) AGAINST('人工智能');
 
 -- 布尔模式检索
-SELECT id, title, content 
-FROM articles 
-WHERE MATCH(title, content) AGAINST('+数据库 +原理' IN BOOLEAN MODE)
-LIMIT 10;
+SELECT id, title FROM articles 
+WHERE MATCH(title, content) AGAINST('+数据库 +原理' IN BOOLEAN MODE);
 
 -- 带相关性评分
-SELECT id, title, content, 
-       MATCH(title, content) AGAINST('人工智能' IN NATURAL LANGUAGE MODE) AS score
+SELECT id, title, 
+       MATCH(title, content) AGAINST('人工智能') AS score
 FROM articles 
-WHERE MATCH(title, content) AGAINST('人工智能' IN NATURAL LANGUAGE MODE)
+WHERE MATCH(title, content) AGAINST('人工智能')
 ORDER BY score DESC
 LIMIT 10;
 ```
@@ -73,342 +61,508 @@ LIMIT 10;
 
 ## 基础概念
 
-### 全文检索概述
+### 什么是全文检索？
 
-全文检索（Fulltext Search）是一种在文本数据中进行快速搜索的技术，它通过建立索引来加速文本搜索，支持关键词匹配、短语搜索、布尔逻辑等高级搜索功能。
+全文检索是一种在大量文本数据中快速查找包含特定关键词的文档的技术。与传统的 `LIKE '%keyword%'` 查询不同，全文检索通过预先建立**倒排索引**来实现高效搜索。
 
-**核心流程**：
+**类比理解**：
+- `LIKE` 查询：逐本翻书找内容
+- 全文检索：使用索引卡片系统，直接定位到包含关键词的书籍
 
-1. **索引构建**：对文本内容进行分词（Tokenization），提取关键词并建立倒排索引
-2. **查询解析**：将用户查询转换为索引查询，支持自然语言和布尔模式
-3. **相关性评分**：使用 TF-IDF 或 BM25 算法计算文档与查询的相关性
-4. **结果排序**：根据相关性评分对结果进行排序
+### 倒排索引原理
 
-```mermaid
-graph TD
-    A[原始文本] --> B[分词处理]
-    B --> C[建立倒排索引]
-    C --> D[查询解析]
-    D --> E[相关性计算]
-    E --> F[排序结果]
+倒排索引将"词 → 文档"的映射关系存储起来。
+
+**示例**：假设有3篇文档：
+- 文档1: "苹果是一种水果"
+- 文档2: "香蕉和苹果都很好吃"  
+- 文档3: "香蕉是黄色的"
+
+**倒排索引结构**：
+```
+苹果 → [文档1, 文档2]
+香蕉 → [文档2, 文档3]
+水果 → [文档1]
 ```
 
-> **关键理解**：全文索引通过倒排索引加速搜索，支持自然语言查询和精确的布尔查询，适用于文档搜索、内容检索等场景。
+搜索"苹果"时，直接从索引获取 [文档1, 文档2]，无需扫描所有文档。
 
-### 支持的算法和解析器
+### 搜索模式
 
-| 算法类型 | 说明 | 特点 | 适用场景 |
-| --- | --- | --- | --- |
-| **TF-IDF** | 词频-逆文档频率 | 传统算法，计算简单 | 小规模文档集合，传统应用 |
-| **BM25** | Best Matching 25 | 现代算法，效果更好 | 大规模文档集合，推荐使用 |
+| 模式 | 说明 | 适用场景 |
+|------|------|----------|
+| **自然语言模式** | 短语搜索，词之间是 AND 关系，检查位置顺序 | 用户搜索框，通用搜索 |
+| **布尔模式** | 支持 `+`、`-`、`""`、`*` 等操作符 | 高级搜索，程序化查询 |
 
-| 解析器类型 | 说明 | 特点 | 适用场景 |
-| --- | --- | --- | --- |
-| **default** | 标准分词器 | 适用于英文等空格分隔语言 | 英文文档 |
-| **NGRAM** | N-gram 分词器 | 适用于中文、日文等无空格语言 | 中文文档、混合语言 |
-| **JSON** | JSON 解析器 | 索引 JSON 文档中的值，并对值进行分词 | JSON 文档搜索（值会被分词） |
-| **JSON_VALUE** | JSON 值解析器 | 索引 JSON 文档中的值，值作为完整词 | JSON 文档搜索（值作为完整词，不分词） |
+### 相关性算法
 
-**算法选择建议**：
-- **BM25**：推荐用于新应用，对现代文档集合效果更好
-- **TF-IDF**：适用于特定场景，传统方法，稳定性好
+| 算法 | 说明 | 推荐场景 |
+|------|------|----------|
+| **TF-IDF** | 词频-逆文档频率，传统算法 | 默认算法 |
+| **BM25** | 改进的 TF-IDF，考虑文档长度归一化 | **推荐**，效果更好 |
 
-**解析器选择建议**：
-- **default**：英文文档
-- **NGRAM**：中文文档或中英文混合文档
-- **JSON**：需要搜索 JSON 文档中的值，且需要对值进行分词（例如搜索 JSON 中的长文本）
-- **JSON_VALUE**：需要搜索 JSON 文档中的值，且值作为完整词（例如搜索 JSON 中的 ID、代码、短字符串等）
+### 分词解析器
 
-**JSON 与 JSON_VALUE 的区别**：
-- **JSON 解析器**：提取 JSON 中的值后，会对值进行分词处理。例如 `{"name": "hello world"}` 中的 `"hello world"` 会被分词为 `"hello"` 和 `"world"` 两个词。
-- **JSON_VALUE 解析器**：提取 JSON 中的值后，将值作为完整的词，不进行分词。例如 `{"code": "ABC123"}` 中的 `"ABC123"` 会作为完整词 `"ABC123"` 索引。
+| 解析器 | 说明 | 适用场景 |
+|--------|------|----------|
+| **default/ngram** | 智能分词：英文按空格，中文按 3-gram | 通用文档（默认） |
+| **json** | 解析 JSON 值并分词 | JSON 文档，值需要分词 |
+| **json_value** | 提取 JSON 值作为完整词 | JSON 文档，值作为整体匹配 |
 
 ---
 
-## 使用指南
+## 语法参考
 
 ### 创建全文索引
-
-#### 基本语法
 
 ```sql
 -- 基本语法
 CREATE FULLTEXT INDEX index_name ON table_name (column1, column2, ...);
 
--- 指定算法
-CREATE FULLTEXT INDEX index_name ON table_name (column1, column2, ...) 
-  ALGORITHM = BM25;
-
--- 指定解析器
-CREATE FULLTEXT INDEX index_name ON table_name (column1, column2, ...) 
-  WITH PARSER ngram;
-
--- 组合使用
-CREATE FULLTEXT INDEX index_name ON table_name (column1, column2, ...) 
-  ALGORITHM = BM25 WITH PARSER ngram;
-```
-
-#### 使用示例
-
-```sql
--- 示例 1：基本全文索引
-CREATE FULLTEXT INDEX ftidx_content ON articles (title, content);
-
--- 示例 2：使用 BM25 算法
-CREATE FULLTEXT INDEX ftidx_bm25 ON articles (title, content) ALGORITHM = BM25;
-
--- 示例 3：中文文档使用 NGRAM 解析器
-CREATE FULLTEXT INDEX ftidx_chinese ON articles (title, content) WITH PARSER ngram;
-
--- 示例 4：JSON 文档索引（值会被分词）
-CREATE FULLTEXT INDEX ftidx_json ON products (specs) WITH PARSER json;
-
--- 示例 5：JSON_VALUE 文档索引（值作为完整词）
-CREATE FULLTEXT INDEX ftidx_json_value ON products (specs) WITH PARSER json_value;
-```
-
-**JSON 与 JSON_VALUE 使用示例**：
-
-```sql
--- 创建表
-CREATE TABLE products (
+-- 在建表时创建
+CREATE TABLE t (
   id INT PRIMARY KEY,
-  specs JSON
+  content TEXT,
+  FULLTEXT(content)
 );
 
--- 插入数据
-INSERT INTO products VALUES 
-  (1, '{"code": "ABC123", "name": "Product A", "description": "This is a great product"}'),
-  (2, '{"code": "XYZ789", "name": "Product B", "description": "Another excellent item"}');
-
--- 使用 JSON 解析器（值会被分词）
-CREATE FULLTEXT INDEX ftidx_json ON products (specs) WITH PARSER json;
-
--- 可以搜索分词后的词
-SELECT * FROM products 
-WHERE MATCH(specs) AGAINST('great' IN NATURAL LANGUAGE MODE);
--- 可以匹配到 "This is a great product" 中的 "great"
-
--- 使用 JSON_VALUE 解析器（值作为完整词）
-DROP INDEX ftidx_json ON products;
-CREATE FULLTEXT INDEX ftidx_json_value ON products (specs) WITH PARSER json_value;
-
--- 可以搜索完整的值
-SELECT * FROM products 
-WHERE MATCH(specs) AGAINST('ABC123' IN NATURAL LANGUAGE MODE);
--- 可以匹配到 {"code": "ABC123"} 中的完整值 "ABC123"
-
--- 但不能搜索部分值
-SELECT * FROM products 
-WHERE MATCH(specs) AGAINST('ABC' IN NATURAL LANGUAGE MODE);
--- 不会匹配到 "ABC123"，因为 "ABC123" 是作为完整词索引的
+-- 指定解析器
+CREATE FULLTEXT INDEX ftidx ON table_name (column) WITH PARSER ngram;
+CREATE FULLTEXT INDEX ftidx ON table_name (json_col) WITH PARSER json;
+CREATE FULLTEXT INDEX ftidx ON table_name (json_col) WITH PARSER json_value;
 ```
 
-**参数说明**：
-- `ALGORITHM`：相关性算法，可选 `BM25` 或 `TF-IDF`，默认为 `TF-IDF`
-- `WITH PARSER`：分词解析器，可选：
-  - `default`：默认解析器（英文）
-  - `ngram`：N-gram 解析器（中文）
-  - `json`：JSON 解析器（值会被分词）
-  - `json_value`：JSON 值解析器（值作为完整词）
+#### 支持的列类型
 
-#### 设置全局算法
+- `CHAR` / `VARCHAR` / `TEXT`
+- `JSON`
+- `DATALINK`（支持 PDF、DOCX 等文件）
+
+### 设置相关性算法
 
 ```sql
--- 设置全局相关性算法（影响后续所有全文检索）
+-- 设置为 BM25（推荐）
 SET ft_relevancy_algorithm = 'BM25';
 
--- 恢复为 TF-IDF
+-- 设置为 TF-IDF（默认）
 SET ft_relevancy_algorithm = 'TF-IDF';
 ```
 
 ### 全文检索查询
 
-#### 检索模式
+#### 自然语言模式
 
-MatrixOne 支持两种全文检索模式：
-
-| 模式 | 说明 | 优点 | 缺点 | 适用场景 |
-| --- | --- | --- | --- | --- |
-| **Natural Language Mode** | 自然语言模式 | 自动处理停用词、词干提取，用户友好 | 控制精度较低 | 用户搜索框，通用搜索 |
-| **Boolean Mode** | 布尔模式 | 精确控制搜索条件，支持复杂逻辑 | 需要了解语法 | 程序化查询，高级搜索 |
-
-#### SQL 语法
+自然语言模式是**短语搜索**：分词后所有词之间是 AND 关系，且检查位置顺序。
 
 ```sql
--- 自然语言模式
-SELECT <列列表>
-FROM <表名>
-WHERE MATCH(<列列表>) AGAINST('<查询词>' IN NATURAL LANGUAGE MODE)
-[ORDER BY MATCH(<列列表>) AGAINST('<查询词>' IN NATURAL LANGUAGE MODE) DESC]
-LIMIT <数量>;
+-- 基础搜索（默认自然语言模式）
+SELECT * FROM articles 
+WHERE MATCH(title, content) AGAINST('machine learning');
 
--- 布尔模式
-SELECT <列列表>
-FROM <表名>
-WHERE MATCH(<列列表>) AGAINST('<查询表达式>' IN BOOLEAN MODE)
-LIMIT <数量>;
-```
-
-#### 自然语言模式示例
-
-```sql
--- 基础自然语言搜索
-SELECT id, title, content 
-FROM articles 
+-- 显式指定模式
+SELECT * FROM articles 
 WHERE MATCH(title, content) AGAINST('machine learning' IN NATURAL LANGUAGE MODE);
 
 -- 带相关性评分
-SELECT id, title, content, 
-       MATCH(title, content) AGAINST('machine learning' IN NATURAL LANGUAGE MODE) AS score
+SELECT *, MATCH(title, content) AGAINST('keyword') AS score
 FROM articles 
-WHERE MATCH(title, content) AGAINST('machine learning' IN NATURAL LANGUAGE MODE)
+WHERE MATCH(title, content) AGAINST('keyword')
 ORDER BY score DESC
 LIMIT 10;
-
--- 中文自然语言搜索（使用 NGRAM 解析器）
-SELECT id, title, content 
-FROM articles 
-WHERE MATCH(title, content) AGAINST('人工智能' IN NATURAL LANGUAGE MODE);
 ```
 
-#### 布尔模式示例
-
-布尔模式支持以下操作符：
+#### 布尔模式
 
 | 操作符 | 说明 | 示例 |
-| --- | --- | --- |
-| `+` | 必须包含（AND） | `+machine +learning` |
-| `-` | 必须不包含（NOT） | `+machine -deep` |
-| `~` | 降低相关性 | `+machine ~legacy` |
-| `""` | 精确短语 | `"machine learning"` |
+|--------|------|------|
+| `+` | 必须包含（AND） | `+apple +banana` |
+| `-` | 必须不包含（NOT） | `+apple -banana` |
+| `~` | 降低相关性但不排除 | `+apple ~old` |
+| `""` | 精确短语匹配 | `"machine learning"` |
 | `*` | 前缀匹配 | `learn*` |
-| `()` | 分组 | `+(machine learning) -legacy` |
+| `()` | 分组 | `+(apple banana)` |
+| `>` | 提高权重 | `>important` |
+| `<` | 降低权重 | `<optional` |
 
 ```sql
--- 必须包含多个词（AND）
-SELECT id, title, content 
-FROM articles 
-WHERE MATCH(title, content) AGAINST('+machine +learning' IN BOOLEAN MODE);
+-- 必须包含多个词
+SELECT * FROM articles 
+WHERE MATCH(title, content) AGAINST('+database +optimization' IN BOOLEAN MODE);
 
--- 必须包含但不包含（AND NOT）
-SELECT id, title, content 
-FROM articles 
-WHERE MATCH(title, content) AGAINST('+machine -deep' IN BOOLEAN MODE);
+-- 必须包含但不包含
+SELECT * FROM articles 
+WHERE MATCH(title, content) AGAINST('+database -legacy' IN BOOLEAN MODE);
 
--- 精确短语匹配
-SELECT id, title, content 
-FROM articles 
+-- 精确短语
+SELECT * FROM articles 
 WHERE MATCH(title, content) AGAINST('"machine learning"' IN BOOLEAN MODE);
 
 -- 前缀匹配
-SELECT id, title, content 
-FROM articles 
+SELECT * FROM articles 
 WHERE MATCH(title, content) AGAINST('learn*' IN BOOLEAN MODE);
 
--- 复杂布尔表达式
-SELECT id, title, content 
-FROM articles 
-WHERE MATCH(title, content) AGAINST('+(machine learning) -legacy' IN BOOLEAN MODE);
+-- 复杂表达式
+SELECT * FROM articles 
+WHERE MATCH(title, content) AGAINST('+python +(programming development) -legacy' IN BOOLEAN MODE);
+
+-- 权重调整
+SELECT * FROM articles 
+WHERE MATCH(title, content) AGAINST('+red +(<blue >is)' IN BOOLEAN MODE);
 ```
 
-#### 使用示例（来自测试用例）
+### JSON 文档搜索
+
+**json 解析器**：提取 JSON 值后进行分词
 
 ```sql
--- 创建表和索引
-CREATE TABLE src (
-  id BIGINT PRIMARY KEY, 
-  body VARCHAR(255), 
-  title TEXT
+CREATE TABLE products (id INT PRIMARY KEY, specs JSON);
+INSERT INTO products VALUES 
+  (1, '{"name": "hello world", "code": "ABC123"}');
+
+CREATE FULLTEXT INDEX ftidx ON products (specs) WITH PARSER json;
+
+-- 搜索分词后的词
+SELECT * FROM products WHERE MATCH(specs) AGAINST('hello');
+-- ✓ 匹配 "hello world" 中的 "hello"
+```
+
+**json_value 解析器**：提取 JSON 值作为完整词（不分词）
+
+```sql
+CREATE FULLTEXT INDEX ftidx ON products (specs) WITH PARSER json_value;
+
+-- 搜索完整的值
+SELECT * FROM products WHERE MATCH(specs) AGAINST('ABC123');
+-- ✓ 匹配完整值 "ABC123"
+
+SELECT * FROM products WHERE MATCH(specs) AGAINST('ABC');
+-- ✗ 不匹配，因为 "ABC123" 是完整词
+```
+
+### DATALINK 文档搜索
+
+支持对 PDF、DOCX 等文件内容进行全文检索：
+
+```sql
+-- 创建 stage
+CREATE STAGE ftstage URL='file:///path/to/files/';
+
+-- 创建表
+CREATE TABLE docs (
+  id INT PRIMARY KEY, 
+  fpath DATALINK,
+  FULLTEXT(fpath)
 );
 
-INSERT INTO src VALUES 
-  (0, 'color is red', 't1'), 
-  (1, 'car is yellow', 'crazy car'), 
-  (2, 'sky is blue', 'no limit'), 
-  (3, 'blue is not red', 'colorful');
+-- 插入文件引用
+INSERT INTO docs VALUES 
+  (1, 'stage://ftstage/document.pdf'),
+  (2, 'file:///path/to/chinese.pdf');
 
-CREATE FULLTEXT INDEX ftidx ON src (body, title);
-
--- 自然语言模式
-SELECT * FROM src WHERE MATCH(body, title) AGAINST('red' IN NATURAL LANGUAGE MODE);
-
--- 布尔模式：必须包含 red 和 blue
-SELECT * FROM src WHERE MATCH(body, title) AGAINST('+red +blue' IN BOOLEAN MODE);
-
--- 布尔模式：必须包含 red 但不包含 blue
-SELECT * FROM src WHERE MATCH(body, title) AGAINST('+red -blue' IN BOOLEAN MODE);
-
--- 布尔模式：精确短语
-SELECT * FROM src WHERE MATCH(body, title) AGAINST('"is not red"' IN BOOLEAN MODE);
-
--- 带相关性评分
-SELECT *, MATCH(body, title) AGAINST('red' IN NATURAL LANGUAGE MODE) AS score 
-FROM src 
-WHERE MATCH(body, title) AGAINST('red' IN NATURAL LANGUAGE MODE);
+-- 搜索文件内容
+SELECT id FROM docs WHERE MATCH(fpath) AGAINST('matrixone');
 ```
 
-### 混合过滤检索
+---
 
-全文检索经常需要与其他过滤条件结合使用，例如按类别、作者、时间范围等过滤。
+## 实现原理
 
-#### Pre-filter 和 Post-filter 模式
+### 索引表结构
 
-> **开发中**：Pre-filter 和 Post-filter 模式正在开发中，未来版本将支持类似向量检索的 Pre-filter 和 Post-filter 模式，允许更灵活地组合全文检索和其他过滤条件。
-
-**Pre-filter 模式**（开发中）：先应用结构化过滤条件，再进行全文检索。适用于过滤条件选择性高的场景。
-
-**Post-filter 模式**（开发中）：先进行全文检索得到 Top-K 结果，再应用过滤条件。适用于需要充分利用全文索引性能的场景。
-
-#### 当前实现方案
-
-> **重要提示**：在 Pre-filter 和 Post-filter 模式正式发布之前，如果查询中包含全文检索和其他过滤条件，建议使用以下两种方式：
-
-**方式 1：先全文检索 Top-K，再过滤（推荐）**
+MatrixOne 通过创建一个隐藏的辅助表来实现全文索引。当你创建全文索引时，系统会自动创建一个索引表：
 
 ```sql
--- 第一步：全文检索获取 Top-K 结果
-WITH topk_results AS (
-  SELECT id, title, content, author, category,
-         MATCH(title, content) AGAINST('machine learning' IN NATURAL LANGUAGE MODE) AS score
-  FROM articles 
-  WHERE MATCH(title, content) AGAINST('machine learning' IN NATURAL LANGUAGE MODE)
-  ORDER BY score DESC
-  LIMIT 100  -- 根据实际情况调整，建议为最终结果数的 2-5 倍
+-- 索引表结构（系统自动创建，用户不可见）
+CREATE TABLE __mo_index_secondary_xxx (
+    doc_id <主键类型>,    -- 文档ID，关联回原表
+    word VARCHAR,         -- 分词后的词
+    pos INT32,            -- 词在文档中的位置（字节偏移）
+    PRIMARY KEY (...),
+    CLUSTER BY (word)     -- 按词聚簇存储，提高查询效率
 )
--- 第二步：应用其他过滤条件
-SELECT id, title, content, author, category, score
-FROM topk_results
-WHERE category = 'Technology' 
-  AND author = 'John Doe'
-ORDER BY score DESC
-LIMIT 10;
 ```
 
-**方式 2：在 WHERE 子句中同时使用全文检索和过滤条件**
+**关键设计**：
+- `doc_id`：存储原表的主键值，用于关联回原表
+- `word`：存储分词后的词（自动小写化），这是索引的核心
+- `pos`：存储词在文档中的字节位置，支持短语搜索和位置匹配
+- `CLUSTER BY (word)`：相同词的数据物理上聚集存储，查询时只需读取少量数据块
+- 特殊词 `__DocLen`：每个文档会额外存储一条记录，pos 字段存储文档的词数，用于 BM25 算法的文档长度归一化计算
+
+### 数据插入时的索引维护
+
+当向主表插入数据时，系统会自动更新全文索引表：
+
+```
+INSERT INTO articles VALUES (...)
+    ↓
+分词处理（使用 tokenizer）
+    ↓
+生成 (doc_id, word, pos) 三元组
+    ↓
+INSERT INTO 索引表
+    ↓
+额外插入 (doc_id, '__DocLen', 词数) 记录
+```
+
+**分词示例**：
+
+对于中文文本 "人工智能是未来"，使用 3-gram 分词：
+```
+原文: "人工智能是未来"
+分词结果:
+  - (doc_id=1, word="人工智", pos=0)   -- 字节位置 0
+  - (doc_id=1, word="工智能", pos=3)   -- 字节位置 3（每个中文字符 3 字节）
+  - (doc_id=1, word="智能是", pos=6)
+  - (doc_id=1, word="能是未", pos=9)
+  - (doc_id=1, word="是未来", pos=12)
+  - (doc_id=1, word="__DocLen", pos=5) -- 文档包含 5 个词
+```
+
+对于英文文本 "color is red"：
+```
+原文: "color is red"
+分词结果:
+  - (doc_id=1, word="color", pos=0)
+  - (doc_id=1, word="is", pos=6)
+  - (doc_id=1, word="red", pos=9)
+  - (doc_id=1, word="__DocLen", pos=3)
+```
+
+### 分词规则详解
+
+MatrixOne 使用智能分词器（SimpleTokenizer），自动识别语言类型并采用不同的分词策略：
+
+**英文（Latin 字符）**：
+- 按空格和标点符号分词
+- 自动转换为小写
+- 最大词长 23 字节（超出部分截断）
+- 数字被视为词的一部分
+
+**中文/日文/韩文（CJK 字符）**：
+- 使用 3-gram 滑动窗口分词
+- 每次取 3 个连续字符作为一个词
+- 示例："人工智能" → ["人工智", "工智能"]
+- 示例："数据库" → ["数据库"]（正好 3 个字符）
+
+**混合文本**：
+- 自动在 Latin 和 CJK 之间切换分词模式
+- 示例："AI人工智能test" → ["ai", "人工智", "工智能", "test"]
+
+**分词边界判断**：
+- 空格、标点符号、特殊字符作为分词边界
+- Unicode 标点和空白字符都会触发分词
+
+### 搜索执行流程
+
+当执行全文搜索时，系统会经历以下步骤：
+
+```
+1. SQL 解析
+   SELECT * FROM articles 
+   WHERE MATCH(title, content) AGAINST('搜索词' IN NATURAL LANGUAGE MODE)
+   
+2. 模式解析（Pattern Parsing）
+   将搜索字符串解析为 Pattern 树结构
+   - 自然语言模式：生成短语匹配的 Pattern
+   - 布尔模式：解析操作符生成复杂的 Pattern 树
+   
+3. SQL 生成
+   将 Pattern 树转换为查询索引表的 SQL
+   - 自然语言模式：生成带位置检查的 JOIN 查询
+   - 布尔模式：基于集合论生成 UNION/JOIN 查询
+   
+4. 统计信息收集
+   - 获取总文档数（Nrow）：用于 IDF 计算
+   - 获取每个词的文档频率（aggcnt）：COUNT(doc_id) GROUP BY word
+   - 获取平均文档长度（avgDocLen）：BM25 算法需要
+   
+5. 评分计算
+   对每个匹配文档计算相关性分数：
+   - TF-IDF：score = TF × IDF²
+   - BM25：score = IDF² × TF_adjusted（考虑文档长度）
+   
+6. 排序返回
+   按分数降序排序，返回 Top-K 结果
+```
+
+### 自然语言模式的 SQL 生成
+
+自然语言模式实际上是**短语搜索**，需要检查词的位置顺序。
+
+**示例**：搜索 "is red"
 
 ```sql
--- 注意：这种方式可能性能较差，因为需要扫描更多数据
-SELECT id, title, content, author, category,
-       MATCH(title, content) AGAINST('machine learning' IN NATURAL LANGUAGE MODE) AS score
-FROM articles 
-WHERE MATCH(title, content) AGAINST('machine learning' IN NATURAL LANGUAGE MODE)
-  AND category = 'Technology'
-  AND author = 'John Doe'
-ORDER BY score DESC
-LIMIT 10;
+-- 生成的 SQL
+WITH kw0 AS (SELECT doc_id, pos FROM index_table WHERE word = 'is'),
+     kw1 AS (SELECT doc_id, pos FROM index_table WHERE word = 'red')
+SELECT kw0.doc_id, CAST(0 as int) 
+FROM kw0, kw1 
+WHERE kw0.doc_id = kw1.doc_id 
+  AND kw1.pos - kw0.pos = 3  -- 检查位置差（"is" 长度为 2，加空格为 3）
 ```
 
-#### 使用建议
+**位置检查的作用**：
+- "color is red" ✓ 匹配（"is" 在位置 6，"red" 在位置 9，差值为 3）
+- "red is color" ✗ 不匹配（位置顺序不对）
 
-1. **优先使用方式 1**：先全文检索 Top-K，再过滤，性能更好
-2. **合理设置 Top-K 值**：根据过滤条件的选择性，设置合适的 Top-K 值（通常为最终结果数的 2-5 倍）
-3. **在过滤列上建立常规索引**：可以提升过滤性能
-4. **监控查询性能**：使用 `EXPLAIN ANALYZE` 分析查询计划
+### 布尔搜索的 SQL 生成
 
-#### 未来规划
+布尔搜索的 SQL 生成基于**集合论**。这是一个重要的设计思想：
 
-> **Pre-filter 和 Post-filter 模式**：正在开发中，将支持类似向量检索的 Pre-filter 和 Post-filter 模式，允许更灵活地组合全文检索和其他过滤条件。
+**示例 1**：`+apple +banana`（必须同时包含两个词）
+
+```sql
+-- 生成的 SQL
+WITH t00 AS (SELECT doc_id FROM index_table WHERE word = 'apple'),
+     t01 AS (SELECT doc_id FROM index_table WHERE word = 'banana'),
+     t0 AS (SELECT t00.doc_id FROM t00, t01 WHERE t00.doc_id = t01.doc_id)
+SELECT t0.doc_id, CAST(0 as int) FROM t0
+```
+
+**集合论解释**：
+- `+apple` 对应集合 A（包含 apple 的文档）
+- `+banana` 对应集合 B（包含 banana 的文档）
+- `+apple +banana` 对应 A ∩ B（交集）
+
+**示例 2**：`apple banana`（包含任一词，OR 关系）
+
+```sql
+-- 生成的 SQL
+WITH t0 AS (SELECT doc_id FROM index_table WHERE word = 'apple'),
+     t1 AS (SELECT doc_id FROM index_table WHERE word = 'banana')
+SELECT doc_id, CAST(0 as int) FROM t0
+UNION ALL
+SELECT doc_id, CAST(1 as int) FROM t1
+```
+
+**NOT 操作的优化**：
+
+对于 `+apple -banana`（包含 apple 但不包含 banana），由于 `NOT IN` 在 SQL 中性能较差，MatrixOne 采用以下优化策略：
+
+```
+原始语义: A - B = A ∩ B^c（A 与 B 的补集的交集）
+
+优化策略: 
+  1. SQL 返回: A UNION ALL (A ∩ B)
+     - A：包含 apple 的文档
+     - A ∩ B：同时包含 apple 和 banana 的文档
+  2. 应用层过滤: 在结果处理时排除 (A ∩ B) 中的文档
+  3. 最终结果: A - B
+
+这样避免了 SQL 中的 NOT 操作，性能提升 10-50 倍。
+```
+
+**示例 3**：复杂表达式 `+A +B -(<C >D)`
+
+```
+Pattern 树结构:
+((JOIN (+ (TEXT A)) (+ (TEXT B))) (- (GROUP (< (TEXT C)) (> (TEXT D)))))
+
+SQL 生成:
+WITH t00 AS (SELECT doc_id FROM idx WHERE word = 'a'),
+     t01 AS (SELECT doc_id FROM idx WHERE word = 'b'),
+     t0 AS (SELECT t00.doc_id FROM t00, t01 WHERE t00.doc_id = t01.doc_id),
+     t1 AS (SELECT doc_id FROM idx WHERE word = 'c'),
+     t2 AS (SELECT doc_id FROM idx WHERE word = 'd')
+SELECT t0.doc_id, CAST(0 as int) FROM t0
+UNION ALL SELECT t0.doc_id, CAST(1 as int) FROM t0, t1 WHERE t0.doc_id = t1.doc_id
+UNION ALL SELECT t0.doc_id, CAST(2 as int) FROM t0, t2 WHERE t0.doc_id = t2.doc_id
+```
+
+### 短语搜索的实现
+
+布尔模式中的精确短语搜索（`"some words"`）与自然语言模式类似，需要检查词的位置：
+
+```sql
+-- 搜索 "is not red"
+WITH kw0 AS (SELECT doc_id, pos FROM index_table WHERE word = 'is'),
+     kw1 AS (SELECT doc_id, pos FROM index_table WHERE word = 'not'),
+     kw2 AS (SELECT doc_id, pos FROM index_table WHERE word = 'red')
+SELECT kw0.doc_id 
+FROM kw0, kw1, kw2 
+WHERE kw0.doc_id = kw1.doc_id 
+  AND kw0.doc_id = kw2.doc_id
+  AND kw1.pos - kw0.pos = 3   -- "is" 到 "not" 的位置差
+  AND kw2.pos - kw0.pos = 7   -- "is" 到 "red" 的位置差
+GROUP BY kw0.doc_id           -- 去重
+```
+
+### 前缀匹配的实现
+
+前缀匹配（`learn*`）使用 `prefix_eq` 函数：
+
+```sql
+SELECT doc_id FROM index_table WHERE prefix_eq(word, 'learn')
+-- 匹配: learn, learning, learned, learner, ...
+```
+
+---
+
+## 相关性评分算法
+
+### TF-IDF 算法
+
+```
+score = TF × IDF²
+
+其中：
+- TF（词频）= 词在文档中出现的次数
+- IDF（逆文档频率）= log10(总文档数 / 包含该词的文档数)
+```
+
+**计算示例**：
+```
+总文档数：1000，包含"苹果"的文档数：100，文档A中"苹果"出现3次
+
+IDF = log10(1000 / 100) = 1.0
+score = 3 × 1.0² = 3.0
+```
+
+### BM25 算法（推荐）
+
+BM25 改进了 TF-IDF：
+1. **词频饱和度**：词频增长对分数的影响逐渐减小
+2. **文档长度归一化**：避免长文档获得不公平优势
+
+```
+score = IDF² × TF_adjusted
+
+TF_adjusted = TF × (k1 + 1) / (TF + k1 × (1 - b + b × (docLen / avgDocLen)))
+
+其中：
+- k1 = 1.5（词频饱和度参数）
+- b = 0.75（文档长度归一化参数）
+```
+
+**为什么 BM25 更好？**
+
+搜索"苹果"：
+- 文档A：2000词，"苹果"出现5次
+- 文档B：500词，"苹果"出现3次
+
+| 算法 | 文档A | 文档B | 排名 |
+|------|-------|-------|------|
+| TF-IDF | 5.0 | 3.0 | A > B |
+| BM25 | 1.64 | 1.90 | B > A |
+
+BM25 认为短文档中更密集的关键词匹配更有价值。
+
+### 权重调整
+
+| 操作符 | 权重 | 说明 |
+|--------|------|------|
+| 默认 | 1.0 | 正常权重 |
+| `>` | 1.1 | 提高排名 |
+| `<` | 0.9 | 降低排名 |
+| `~` | -1.0 | 降低排名但不排除 |
+
+### 复合查询评分
+
+- **AND 操作**：分数累加 `+apple +banana → score(apple) + score(banana)`
+- **OR 操作**：分数累加 `apple banana → score(apple) + score(banana)`
+- **NOT 操作**：排除文档 `+apple -banana → 包含 banana 则排除`
+- **GROUP 操作**：取最大分数 `(apple banana) → max(score(apple), score(banana))`
 
 ---
 
@@ -416,237 +570,133 @@ LIMIT 10;
 
 ### 索引创建优化
 
-#### 最佳实践
-
-1. **先插入数据，再创建索引**：
-   ```sql
-   -- ✅ 推荐：先插入数据
-   INSERT INTO articles (id, title, content) VALUES (...);
-   INSERT INTO articles (id, title, content) VALUES (...);
-   
-   -- 再创建索引
-   CREATE FULLTEXT INDEX ftidx_content ON articles (title, content);
-   ```
-
-2. **避免在索引列上频繁更新**：
-   ```sql
-   -- ⚠️ 不推荐：频繁更新全文索引列会导致索引重建，性能较差
-   UPDATE articles SET content = 'new content' WHERE id = 1;
-   UPDATE articles SET content = 'another content' WHERE id = 2;
-   
-   -- ✅ 推荐：如果必须更新，考虑批量更新或重建索引
-   ```
-
-3. **选择合适的列类型**：
-   - 使用 `TEXT` 类型存储大文本内容
-   - 使用 `VARCHAR` 类型存储较短的文本
-
-### 查询性能优化
-
-#### 使用 LIMIT 限制结果
-
+1. **先插入数据，再创建索引**
 ```sql
--- ✅ 推荐：使用 LIMIT 限制结果数量
-SELECT id, title, content 
-FROM articles 
-WHERE MATCH(title, content) AGAINST('machine learning' IN NATURAL LANGUAGE MODE)
-LIMIT 10;
+-- ✅ 推荐
+INSERT INTO articles VALUES (...);
+CREATE FULLTEXT INDEX ftidx ON articles (title, content);
 
--- ⚠️ 避免：返回所有结果
-SELECT id, title, content 
-FROM articles 
-WHERE MATCH(title, content) AGAINST('machine learning' IN NATURAL LANGUAGE MODE);
+-- ❌ 不推荐
+CREATE FULLTEXT INDEX ftidx ON articles (title, content);
+INSERT INTO articles VALUES (...);  -- 每次插入都更新索引
 ```
 
-#### 避免在 SELECT 中返回大文本列
+2. **只索引需要搜索的列**
 
+### 查询优化
+
+1. **始终使用 LIMIT**
 ```sql
--- ✅ 推荐：只返回必要的列
-SELECT id, title 
-FROM articles 
-WHERE MATCH(title, content) AGAINST('machine learning' IN NATURAL LANGUAGE MODE)
-LIMIT 10;
-
--- ⚠️ 避免：返回大文本列会增加网络传输开销
-SELECT id, title, content 
-FROM articles 
-WHERE MATCH(title, content) AGAINST('machine learning' IN NATURAL LANGUAGE MODE)
+-- ✅ 推荐
+SELECT * FROM articles 
+WHERE MATCH(title, content) AGAINST('keyword')
 LIMIT 10;
 ```
 
-#### 使用相关性评分排序
-
+2. **避免返回大文本列**
 ```sql
--- ✅ 推荐：使用相关性评分排序，获得最相关的结果
-SELECT id, title, 
-       MATCH(title, content) AGAINST('machine learning' IN NATURAL LANGUAGE MODE) AS score
-FROM articles 
-WHERE MATCH(title, content) AGAINST('machine learning' IN NATURAL LANGUAGE MODE)
+-- ✅ 推荐
+SELECT id, title FROM articles 
+WHERE MATCH(title, content) AGAINST('keyword')
+LIMIT 10;
+```
+
+3. **混合过滤查询**：先全文检索 Top-K，再过滤
+```sql
+WITH topk AS (
+  SELECT id, title, category,
+         MATCH(title, content) AGAINST('keyword') AS score
+  FROM articles 
+  WHERE MATCH(title, content) AGAINST('keyword')
+  ORDER BY score DESC
+  LIMIT 100
+)
+SELECT * FROM topk
+WHERE category = 'Technology'
 ORDER BY score DESC
 LIMIT 10;
 ```
 
----
+### 数据操作优化
 
-## 问题排查
-
-### 常见问题与解决方案
-
-#### 1. 全文索引未生效
-
-**问题**：查询时没有使用全文索引，性能较差。
-
-**排查方法**：
+1. **批量删除**
 ```sql
--- 使用 EXPLAIN 查看查询计划
-EXPLAIN SELECT id, title, content 
-FROM articles 
-WHERE MATCH(title, content) AGAINST('machine learning' IN NATURAL LANGUAGE MODE);
+-- ✅ 推荐
+DELETE FROM articles WHERE id IN (1, 2, 3, 4, 5);
 ```
 
-**常见原因**：
-- 全文索引未创建
-- 查询中使用的列与索引定义的列不匹配
-- 查询语法错误
+2. **大量更新时重建索引**
+```sql
+DROP INDEX ftidx ON articles;
+UPDATE articles SET content = ...;
+CREATE FULLTEXT INDEX ftidx ON articles (title, content);
+```
 
-**解决方案**：
-- 确认全文索引已创建：`SHOW INDEX FROM articles;`
-- 确保查询中的列与索引定义一致
-- 检查查询语法是否正确
+---
 
-#### 2. 删除操作较慢
+## 当前限制与不足
 
-**问题**：删除包含全文索引的数据时，操作较慢。
+### 1. 全量评分计算
 
-**原因**：删除操作需要同步更新全文索引，删除索引条目需要额外时间。
+**问题**：当前实现会对所有匹配文档计算分数，即使只需要 Top-10。
 
-**解决方案**：
-- **批量删除**：尽量使用批量删除，而不是逐条删除
-  ```sql
-  -- ✅ 推荐：批量删除
-  DELETE FROM articles WHERE id IN (1, 2, 3, 4, 5);
-  
-  -- ⚠️ 避免：逐条删除
-  DELETE FROM articles WHERE id = 1;
-  DELETE FROM articles WHERE id = 2;
-  DELETE FROM articles WHERE id = 3;
-  ```
-- **使用事务**：将多个删除操作放在一个事务中
-  ```sql
-  BEGIN;
-  DELETE FROM articles WHERE category = 'old';
-  DELETE FROM articles WHERE author = 'deprecated';
-  COMMIT;
-  ```
+**影响**：搜索常见词时，可能需要计算百万级文档的分数。
 
-#### 3. 更新全文索引列性能问题
+| 场景 | 匹配文档数 | 需要结果 | 实际计算 | 浪费 |
+|------|-----------|---------|---------|------|
+| 常见词 | 1,000,000 | 10 | 1,000,000 | 99.999% |
 
-**问题**：更新全文索引列时，操作较慢。
+### 2. SQL 层 LIMIT 未下推
 
-**原因**：更新全文索引列需要删除旧的索引条目并插入新的索引条目，相当于执行删除和插入操作。
+查询索引表时没有 LIMIT 限制，返回所有匹配文档。
 
-**解决方案**：
-- **避免频繁更新全文索引列**：如果可能，尽量避免更新全文索引列
-- **批量更新**：如果必须更新，尽量批量更新
-  ```sql
-  -- ✅ 推荐：批量更新
-  UPDATE articles 
-  SET content = CASE 
-    WHEN id = 1 THEN 'new content 1'
-    WHEN id = 2 THEN 'new content 2'
-    WHEN id = 3 THEN 'new content 3'
-  END
-  WHERE id IN (1, 2, 3);
-  
-  -- ⚠️ 避免：逐条更新
-  UPDATE articles SET content = 'new content 1' WHERE id = 1;
-  UPDATE articles SET content = 'new content 2' WHERE id = 2;
-  UPDATE articles SET content = 'new content 3' WHERE id = 3;
-  ```
-- **考虑重建索引**：如果大量更新，考虑删除并重建索引
-  ```sql
-  -- 删除索引
-  DROP INDEX ftidx_content ON articles;
-  
-  -- 批量更新数据
-  UPDATE articles SET content = ...;
-  
-  -- 重建索引
-  CREATE FULLTEXT INDEX ftidx_content ON articles (title, content);
-  ```
+### 3. 统计信息不缓存
 
-#### 4. 混合过滤查询性能问题
+每次查询都重新计算总文档数和文档频率。
 
-**问题**：同时使用全文检索和其他过滤条件时，查询性能较差。
+### 4. 不支持早期终止
 
-**解决方案**：
-- **使用方式 1（推荐）**：先全文检索 Top-K，再过滤
-  ```sql
-  WITH topk_results AS (
-    SELECT id, title, content, category,
-           MATCH(title, content) AGAINST('machine learning' IN NATURAL LANGUAGE MODE) AS score
-    FROM articles 
-    WHERE MATCH(title, content) AGAINST('machine learning' IN NATURAL LANGUAGE MODE)
-    ORDER BY score DESC
-    LIMIT 100
-  )
-  SELECT id, title, content, category, score
-  FROM topk_results
-  WHERE category = 'Technology'
-  ORDER BY score DESC
-  LIMIT 10;
-  ```
-- **在过滤列上建立常规索引**：可以提升过滤性能
-  ```sql
-  CREATE INDEX idx_category ON articles (category);
-  CREATE INDEX idx_author ON articles (author);
-  ```
+不能在计算过程中提前停止，必须计算所有文档分数。
 
-#### 5. 中文搜索不准确
+### 5. 删除和更新性能
 
-**问题**：中文文档搜索时，结果不准确或无法搜索。
+删除和更新需要同步更新全文索引，开销较大。
 
-**解决方案**：
-- **使用 NGRAM 解析器**：为中文文档创建索引时，必须使用 NGRAM 解析器
-  ```sql
-  CREATE FULLTEXT INDEX ftidx_chinese ON articles (title, content) WITH PARSER ngram;
-  ```
-- **确保查询也使用相同的索引**：查询时使用相同的列和索引
+### 性能对比
+
+| 指标 | MatrixOne | Elasticsearch |
+|------|-----------|---------------|
+| 评分计算 | O(N) 所有匹配 | O(K) Top-K |
+| 统计信息 | 每次计算 | 缓存 |
+| 早期终止 | ❌ | ✅ |
 
 ---
 
 ## 最佳实践
 
-### 索引创建
+### 索引设计
 
-1. **先插入数据，再创建索引**：避免在数据插入过程中频繁更新索引
-2. **选择合适的算法**：推荐使用 BM25 算法
-3. **选择合适的解析器**：中文文档使用 NGRAM，JSON 文档使用 JSON 解析器
-4. **索引相关列**：将经常一起搜索的列放在同一个索引中
+- ✅ 使用 BM25 算法：`SET ft_relevancy_algorithm = 'BM25';`
+- ✅ 中文文档使用默认解析器（自动 ngram）
+- ✅ JSON 文档根据需求选择 `json` 或 `json_value` 解析器
+- ✅ 先插入数据，再创建索引
 
 ### 查询优化
 
-1. **使用 LIMIT 限制结果**：避免返回过多结果
-2. **避免返回大文本列**：如无必要，不要在 SELECT 中返回大文本列
-3. **使用相关性评分排序**：获得最相关的结果
-4. **混合过滤时使用 Top-K 策略**：先全文检索 Top-K，再应用其他过滤条件
+- ✅ 始终使用 LIMIT
+- ✅ 避免搜索过于常见的词
+- ✅ 使用布尔模式 `+` 操作符减少匹配文档数
+- ✅ 混合过滤时先全文检索再过滤
 
 ### 数据操作
 
-1. **批量删除**：尽量使用批量删除，避免逐条删除
-2. **避免频繁更新全文索引列**：如果可能，尽量避免更新全文索引列
-3. **批量更新**：如果必须更新，尽量批量更新
-4. **考虑重建索引**：如果大量更新，考虑删除并重建索引
-
-### 性能监控
-
-1. **使用 EXPLAIN ANALYZE**：分析查询计划，识别性能瓶颈
-2. **监控索引使用情况**：定期检查索引是否被有效使用
-3. **监控查询性能**：关注查询延迟和资源消耗
+- ✅ 批量删除和更新
+- ✅ 大量更新时重建索引
+- ✅ 避免频繁更新全文索引列
 
 ---
 
-## SDK 使用
+## Python SDK
 
 ### 安装
 
@@ -676,9 +726,6 @@ client.connect(
 ### 创建全文索引
 
 ```python
-# 启用全文索引功能
-client.fulltext_index.enable_fulltext()
-
 # 创建基本全文索引
 client.fulltext_index.create(
     'articles',
@@ -686,144 +733,266 @@ client.fulltext_index.create(
     columns=['title', 'content']
 )
 
-# 创建 BM25 算法索引
-from matrixone import FulltextAlgorithmType
-
+# 创建带解析器的索引（JSON 文档）
 client.fulltext_index.create(
-    'articles',
-    name='ftidx_bm25',
-    columns=['title', 'content'],
-    algorithm=FulltextAlgorithmType.BM25
-)
-
-# 创建 NGRAM 解析器索引（中文）
-from matrixone import FulltextParserType
-
-client.fulltext_index.create(
-    'articles',
-    name='ftidx_chinese',
-    columns=['title', 'content'],
-    parser=FulltextParserType.NGRAM
+    'products',
+    name='ftidx_specs',
+    columns=['specs'],
+    parser='json'
 )
 ```
 
 ### 全文检索查询
 
-#### 自然语言模式
+#### 布尔模式搜索
 
 ```python
-from matrixone.sqlalchemy_ext.fulltext_search import natural_match
+from matrixone.sqlalchemy_ext.fulltext_search import boolean_match, group
 
-# 基础自然语言搜索
-result = client.query('articles').filter(
-    natural_match('title', 'content', query='machine learning')
-).execute()
-
-for row in result.fetchall():
-    print(f"Title: {row[1]}, Content: {row[2]}")
-
-# 带相关性评分
-result = client.query(
-    'articles.id',
-    'articles.title',
-    'articles.content',
-    natural_match('title', 'content', query='machine learning').label('score')
-).execute()
-
-for row in result.fetchall():
-    print(f"Title: {row[1]}, Score: {row[3]:.4f}")
-```
-
-#### 布尔模式
-
-`boolean_match` 是 SDK 提供的强大布尔模式查询构建器，支持链式调用，提供类型安全和易读的查询语法。
-
-**基本语法**：
-
-```python
-from matrixone.sqlalchemy_ext.fulltext_search import boolean_match
-
-# 基本用法
-result = client.query('articles').filter(
-    boolean_match('title', 'content').must('machine')
-).execute()
-```
-
-**操作符对照表**：
-
-| SDK 操作符 | SQL 语法 | 说明 | 示例 |
-| --- | --- | --- | --- |
-| `must('word')` | `+word` | 必须包含该词 | `+machine` |
-| `must('word1', 'word2')` | `+word1 +word2` | 必须包含所有词（AND） | `+machine +learning` |
-| `must_not('word')` | `-word` | 必须不包含该词 | `-legacy` |
-| `encourage('word')` | `word`（不带操作符） | 可选词，提升相关性 | `tutorial` |
-| `discourage('word')` | `~word` | 降低相关性但不排除 | `~advanced` |
-| `phrase('phrase')` | `"phrase"` | 精确短语匹配 | `"machine learning"` |
-| `prefix('word')` | `word*` | 前缀匹配（通配符） | `learn*` |
-| `group().medium('w1', 'w2')` | `+(w1 w2)` | OR 逻辑（必须包含其中一个） | `+(programming development)` |
-| `group().high('word')` | `>word` | 高权重词 | `>tutorial` |
-| `group().low('word')` | `<word` | 低权重词 | `<basic` |
-
-**核心操作符详解**：
-
-##### 1. must() - 必须包含（AND 逻辑）
-
-要求文档必须包含指定的词，多个 `must()` 调用表示 AND 关系。
-
-**对应 SQL 语法**：使用 `+` 操作符，`+word` 表示必须包含该词。
-
-```python
-# 单个必须词
-# SQL: WHERE MATCH(title, content) AGAINST('+machine' IN BOOLEAN MODE)
-result = client.query('articles').filter(
-    boolean_match('title', 'content').must('machine')
-).execute()
-
-# 多个必须词（AND 关系）
-# SQL: WHERE MATCH(title, content) AGAINST('+machine +learning' IN BOOLEAN MODE)
+# 必须包含
 result = client.query('articles').filter(
     boolean_match('title', 'content').must('machine', 'learning')
 ).execute()
 
-# 链式调用多个 must（等价于上面的写法）
-# SQL: WHERE MATCH(title, content) AGAINST('+machine +learning' IN BOOLEAN MODE)
-result = client.query('articles').filter(
-    boolean_match('title', 'content')
-    .must('machine')
-    .must('learning')
-).execute()
-
-# 使用 ORM 模型
-# SQL: WHERE MATCH(title, content) AGAINST('+python +programming' IN BOOLEAN MODE)
-result = client.query(Article).filter(
-    boolean_match(Article.title, Article.content).must('python', 'programming')
-).execute()
-```
-
-##### 2. must_not() - 必须不包含（NOT 逻辑）
-
-要求文档必须不包含指定的词，用于排除不需要的结果。
-
-**对应 SQL 语法**：使用 `-` 操作符，`-word` 表示必须不包含该词。
-
-```python
 # 必须包含但不包含
-# SQL: WHERE MATCH(title, content) AGAINST('+machine -deep' IN BOOLEAN MODE)
-result = client.query('articles').filter(
-    boolean_match('title', 'content')
-    .must('machine')
-    .must_not('deep')
-).execute()
-
-# 多个排除词
-# SQL: WHERE MATCH(title, content) AGAINST('+python -legacy -deprecated -outdated' IN BOOLEAN MODE)
 result = client.query('articles').filter(
     boolean_match('title', 'content')
     .must('python')
-    .must_not('legacy', 'deprecated', 'outdated')
+    .must_not('legacy')
 ).execute()
 
-# 使用 ORM 模型
+# 鼓励词（提升相关性）
+result = client.query('articles').filter(
+    boolean_match('title', 'content')
+    .must('python')
+    .encourage('tutorial')
+).execute()
+
+# 降低相关性
+result = client.query('articles').filter(
+    boolean_match('title', 'content')
+    .must('programming')
+    .discourage('deprecated')
+).execute()
+
+# 精确短语
+result = client.query('articles').filter(
+    boolean_match('title', 'content').phrase('machine learning')
+).execute()
+
+# 前缀匹配
+result = client.query('articles').filter(
+    boolean_match('title', 'content').prefix('learn')
+).execute()
+
+# OR 逻辑（分组）
+result = client.query('articles').filter(
+    boolean_match('title', 'content')
+    .must(group().medium('programming', 'development'))
+).execute()
+
+# 复杂组合
+result = client.query('articles').filter(
+    boolean_match('title', 'content')
+    .must('python')
+    .must(group().medium('programming', 'development'))
+    .must_not('legacy')
+    .encourage('tutorial')
+    .phrase('best practices')
+).execute()
+```
+
+#### 带相关性评分
+
+```python
+from matrixone.sqlalchemy_ext.fulltext_search import boolean_match
+
+# 查询带评分
+result = client.query(
+    'articles.id',
+    'articles.title',
+    boolean_match('title', 'content').must('machine').label('score')
+).execute()
+
+for row in result.fetchall():
+    print(f"ID: {row[0]}, Title: {row[1]}, Score: {row[2]:.4f}")
+```
+
+### SDK 操作符对照表
+
+| SDK 方法 | SQL 语法 | 说明 |
+|----------|----------|------|
+| `must('word')` | `+word` | 必须包含 |
+| `must_not('word')` | `-word` | 必须不包含 |
+| `encourage('word')` | `word` | 提升相关性 |
+| `discourage('word')` | `~word` | 降低相关性 |
+| `phrase('text')` | `"text"` | 精确短语 |
+| `prefix('word')` | `word*` | 前缀匹配 |
+| `group().medium('a', 'b')` | `+(a b)` | OR 逻辑分组 |
+| `group().high('word')` | `>word` | 高权重 |
+| `group().low('word')` | `<word` | 低权重 |
+
+### 完整示例
+
+```python
+from matrixone import Client
+from matrixone.sqlalchemy_ext.fulltext_search import boolean_match
+from matrixone.orm import declarative_base
+from sqlalchemy import Column, Integer, String, Text
+
+Base = declarative_base()
+
+class Article(Base):
+    __tablename__ = 'articles'
+    id = Column(Integer, primary_key=True)
+    title = Column(String(200))
+    content = Column(Text)
+    category = Column(String(50))
+
+# 连接数据库
+client = Client()
+client.connect(host='localhost', port=6001, user='root', password='111', database='test')
+
+# 创建表
+client.create_table(Article)
+
+# 插入数据
+articles = [
+    {'title': 'Machine Learning Guide', 'content': 'Comprehensive ML tutorial...', 'category': 'AI'},
+    {'title': 'Python Programming', 'content': 'Learn Python basics', 'category': 'Programming'},
+]
+client.batch_insert(Article, articles)
+
+# 创建全文索引
+client.fulltext_index.create('articles', name='ftidx', columns=['title', 'content'])
+
+# 布尔搜索带评分
+result = client.query(
+    Article.id,
+    Article.title,
+    boolean_match(Article.title, Article.content)
+    .must('python')
+    .encourage('tutorial')
+    .label('score')
+).order_by('score DESC').limit(10).execute()
+
+for row in result.fetchall():
+    print(f"ID: {row[0]}, Title: {row[1]}, Score: {row[2]:.4f}")
+
+client.disconnect()
+```
+
+### 更多资源
+
+- [SDK 完整文档](https://matrixone.readthedocs.io/)
+- [API 参考](https://matrixone.readthedocs.io/en/latest/api/index.html)
+
+---
+
+## 常见问题
+
+**Q: 中文搜索不准确？**
+
+A: 默认解析器已支持中文 3-gram 分词，无需额外配置。
+
+**Q: 搜索结果不符合预期？**
+
+A: 
+1. 检查索引：`SHOW INDEX FROM table_name;`
+2. 使用布尔模式精确控制
+3. 使用 `EXPLAIN` 查看查询计划
+
+**Q: 查询性能较差？**
+
+A:
+1. 使用 LIMIT 限制结果数
+2. 避免搜索常见词
+3. 使用 BM25 算法
+
+**Q: 删除/更新操作很慢？**
+
+A:
+1. 使用批量操作
+2. 大量更新时重建索引
+
+**Q: 全文索引未生效？**
+
+A: 
+```sql
+-- 查看查询计划
+EXPLAIN SELECT * FROM articles 
+WHERE MATCH(title, content) AGAINST('keyword');
+
+-- 确认索引存在
+SHOW INDEX FROM articles;
+```
+
+---
+
+## 未来规划
+
+### 短期优化（高优先级）
+
+1. **SQL 层 LIMIT 下推**
+   - 在查询索引表时添加 LIMIT
+   - 预期减少 90%+ 的数据扫描
+
+2. **统计信息缓存**
+   - 缓存总文档数
+   - 缓存常见词的文档频率
+   - 预期减少重复计算
+
+### 中期优化
+
+3. **早期终止**
+   - 实现分数上界估算
+   - 提前终止低分文档的计算
+   - 预期减少 99%+ 的评分计算
+
+4. **倒排索引优化**
+   - 在索引表中存储词频
+   - 减少内存使用和计算
+
+### 长期优化
+
+5. **并行搜索**
+   - 分片并行搜索
+   - 提高吞吐量
+
+6. **Pre-filter 和 Post-filter 模式**
+   - 支持更灵活的混合过滤
+
+---
+
+## 附录
+
+### 布尔模式操作符参考
+
+| 操作符 | 说明 | 示例 |
+|--------|------|------|
+| `+` | 必须包含（AND） | `+machine +learning` |
+| `-` | 必须不包含（NOT） | `+machine -deep` |
+| `~` | 降低相关性但不排除 | `+machine ~legacy` |
+| `""` | 精确短语 | `"machine learning"` |
+| `*` | 前缀匹配 | `learn*` |
+| `()` | 分组 | `+(machine learning)` |
+| `>` | 提高权重 | `>important` |
+| `<` | 降低权重 | `<optional` |
+
+### SDK 操作符详细说明
+
+#### must() - 必须包含
+
+```python
+# SQL: WHERE MATCH(title, content) AGAINST('+machine +learning' IN BOOLEAN MODE)
+result = client.query('articles').filter(
+    boolean_match('title', 'content').must('machine', 'learning')
+).execute()
+```
+
+#### must_not() - 必须不包含
+
+```python
 # SQL: WHERE MATCH(content) AGAINST('+programming -legacy' IN BOOLEAN MODE)
 result = client.query(Article).filter(
     boolean_match(Article.content)
@@ -832,14 +1001,11 @@ result = client.query(Article).filter(
 ).execute()
 ```
 
-##### 3. encourage() - 鼓励词（提升相关性）
+#### encourage() - 鼓励词（提升相关性）
 
-提升包含指定词的文档的相关性评分，但不强制要求包含。如果文档包含鼓励词，相关性评分会提高；如果不包含，也不会被过滤掉。
-
-**对应 SQL 语法**：在布尔模式中，不带操作符的词（如 `word`）表示可选词，会提升相关性但不强制要求。`encourage()` 对应不带 `+` 或 `-` 的词。
+提升包含指定词的文档的相关性评分，但不强制要求包含。
 
 ```python
-# 必须包含，鼓励包含
 # SQL: WHERE MATCH(title, content) AGAINST('+machine tutorial' IN BOOLEAN MODE)
 # 注意：tutorial 不带 + 号，表示可选但会提升相关性
 result = client.query('articles').filter(
@@ -855,42 +1021,13 @@ result = client.query('articles').filter(
     .must('python')
     .encourage('tutorial', 'guide', 'beginner')
 ).execute()
-
-# 带相关性评分
-# SQL: SELECT id, title, content, 
-#           MATCH(title, content) AGAINST('+python tutorial' IN BOOLEAN MODE) AS score
-#      FROM articles 
-#      WHERE MATCH(title, content) AGAINST('+python tutorial' IN BOOLEAN MODE)
-result = client.query(
-    'articles.id',
-    'articles.title',
-    'articles.content',
-    boolean_match('title', 'content')
-    .must('python')
-    .encourage('tutorial')
-    .label('score')
-).execute()
-
-for row in result.fetchall():
-    print(f"Title: {row[1]}, Score: {row[3]:.4f}")
-
-# 使用 ORM 模型
-# SQL: WHERE MATCH(content) AGAINST('+programming "best practices"' IN BOOLEAN MODE)
-result = client.query(Article).filter(
-    boolean_match(Article.content)
-    .must('programming')
-    .encourage('best practices')
-).execute()
 ```
 
-##### 4. discourage() - 降低相关性
+#### discourage() - 降低相关性
 
-降低包含指定词的文档的相关性评分，但不排除这些文档。如果文档包含被降低的词，相关性评分会降低；如果不包含，评分不受影响。
-
-**对应 SQL 语法**：使用 `~` 操作符，`~word` 表示降低包含该词的文档的相关性评分，但不排除这些文档。
+降低包含指定词的文档的相关性评分，但不排除这些文档。
 
 ```python
-# 必须包含，降低包含某些词的文档的评分
 # SQL: WHERE MATCH(title, content) AGAINST('+python ~legacy' IN BOOLEAN MODE)
 result = client.query('articles').filter(
     boolean_match('title', 'content')
@@ -905,50 +1042,16 @@ result = client.query('articles').filter(
     .must('programming')
     .discourage('deprecated', 'outdated', 'legacy')
 ).execute()
-
-# 带相关性评分（可以看到被降低的文档评分较低）
-# SQL: SELECT id, title, content, 
-#           MATCH(title, content) AGAINST('+python ~legacy' IN BOOLEAN MODE) AS score
-#      FROM articles 
-#      WHERE MATCH(title, content) AGAINST('+python ~legacy' IN BOOLEAN MODE)
-result = client.query(
-    'articles.id',
-    'articles.title',
-    'articles.content',
-    boolean_match('title', 'content')
-    .must('python')
-    .discourage('legacy')
-    .label('score')
-).execute()
-
-# 使用 ORM 模型
-# SQL: WHERE MATCH(content) AGAINST('+machine +learning ~advanced' IN BOOLEAN MODE)
-result = client.query(Article).filter(
-    boolean_match(Article.content)
-    .must('machine learning')
-    .discourage('advanced')
-).execute()
 ```
 
-##### 5. phrase() - 精确短语匹配
+#### phrase() - 精确短语匹配
 
 要求文档包含精确的短语，词序必须匹配。
 
-**对应 SQL 语法**：使用双引号 `"phrase"` 表示精确短语匹配，词序必须完全匹配。
-
 ```python
-# 精确短语匹配
 # SQL: WHERE MATCH(title, content) AGAINST('"machine learning"' IN BOOLEAN MODE)
 result = client.query('articles').filter(
     boolean_match('title', 'content').phrase('machine learning')
-).execute()
-
-# 多个短语（AND 关系）
-# SQL: WHERE MATCH(title, content) AGAINST('"machine learning" "neural networks"' IN BOOLEAN MODE)
-result = client.query('articles').filter(
-    boolean_match('title', 'content')
-    .phrase('machine learning')
-    .phrase('neural networks')
 ).execute()
 
 # 短语与其他操作符组合
@@ -959,22 +1062,13 @@ result = client.query('articles').filter(
     .phrase('best practices')
     .must_not('legacy')
 ).execute()
-
-# 使用 ORM 模型
-# SQL: WHERE MATCH(content) AGAINST('"artificial intelligence"' IN BOOLEAN MODE)
-result = client.query(Article).filter(
-    boolean_match(Article.content).phrase('artificial intelligence')
-).execute()
 ```
 
-##### 6. prefix() - 前缀匹配（通配符）
+#### prefix() - 前缀匹配（通配符）
 
-匹配以指定前缀开头的词，类似于 SQL 的 `LIKE 'prefix%'`。
-
-**对应 SQL 语法**：使用 `*` 通配符，`word*` 表示匹配以 `word` 开头的所有词。
+匹配以指定前缀开头的词。
 
 ```python
-# 前缀匹配
 # SQL: WHERE MATCH(title, content) AGAINST('learn*' IN BOOLEAN MODE)
 # 匹配：learn, learning, learned, learner 等
 result = client.query('articles').filter(
@@ -983,34 +1077,22 @@ result = client.query('articles').filter(
 
 # 前缀与其他操作符组合
 # SQL: WHERE MATCH(title, content) AGAINST('+python tutor*' IN BOOLEAN MODE)
-# 匹配包含 python 且包含以 tutor 开头的词（如 tutorial, tutor）的文档
 result = client.query('articles').filter(
     boolean_match('title', 'content')
     .must('python')
     .prefix('tutor')
 ).execute()
-
-# 使用 ORM 模型
-# SQL: WHERE MATCH(content) AGAINST('program*' IN BOOLEAN MODE)
-result = client.query(Article).filter(
-    boolean_match(Article.content).prefix('program')
-).execute()
 ```
 
-##### 7. group() - 分组操作（OR 逻辑）
+#### group() - 分组操作（OR 逻辑）
 
 使用 `group()` 可以在必须条件中实现 OR 逻辑，或者创建加权组。
-
-**对应 SQL 语法**：
-- OR 逻辑：在 SQL 中，多个词之间用空格分隔且都不带 `+` 时，表示 OR 关系。但更明确的 OR 关系需要使用括号 `(word1 word2)`。
-- 加权组：在 SQL 中，可以使用 `<word` 和 `>word` 表示权重，`<word` 表示低权重，`>word` 表示高权重。
 
 ```python
 from matrixone.sqlalchemy_ext.fulltext_search import group
 
 # OR 逻辑：必须包含 "programming" 或 "development"
 # SQL: WHERE MATCH(title, content) AGAINST('+(programming development)' IN BOOLEAN MODE)
-# 注意：SQL 中使用括号和 + 号实现 OR 逻辑
 result = client.query('articles').filter(
     boolean_match('title', 'content')
     .must(group().medium('programming', 'development'))
@@ -1018,8 +1100,6 @@ result = client.query('articles').filter(
 
 # 加权组：高权重和低权重
 # SQL: WHERE MATCH(title, content) AGAINST('>tutorial <basic' IN BOOLEAN MODE)
-# 注意：>tutorial 表示高权重，<basic 表示低权重
-# 包含 "tutorial" 的文档评分更高，包含 "basic" 的文档评分较低
 result = client.query('articles').filter(
     boolean_match('title', 'content')
     .encourage(group().high('tutorial').low('basic'))
@@ -1033,355 +1113,29 @@ result = client.query('articles').filter(
     .must(group().medium('machine', 'deep'))
     .encourage(group().high('tutorial').low('advanced'))
 ).execute()
-
-# 使用 ORM 模型
-# SQL: WHERE MATCH(content) AGAINST('+(programming development)' IN BOOLEAN MODE)
-result = client.query(Article).filter(
-    boolean_match(Article.content)
-    .must(group().medium('programming', 'development'))
-).execute()
 ```
 
 **group() 方法说明**：
-
 - `group().medium(term1, term2, ...)`：中等权重组，用于 OR 逻辑
 - `group().high(term)`：高权重词
 - `group().low(term)`：低权重词
-- 可以在 `must()`、`encourage()`、`discourage()` 中使用
 
-##### 8. 组合使用所有操作符
-
-**对应 SQL 语法**：在 SQL 中，可以组合使用所有布尔操作符，用空格分隔。
-
-```python
-# 复杂查询：组合所有操作符
-# SQL: WHERE MATCH(title, content) AGAINST('+machine +(learning intelligence) -legacy tutorial ~advanced "best practices" learn*' IN BOOLEAN MODE)
-# 说明：
-#   +machine: 必须包含 "machine"
-#   +(learning intelligence): 必须包含 "learning" 或 "intelligence"
-#   -legacy: 不包含 "legacy"
-#   tutorial: 鼓励包含 "tutorial"（提升相关性）
-#   ~advanced: 降低包含 "advanced" 的文档评分
-#   "best practices": 精确短语匹配
-#   learn*: 前缀匹配，匹配以 "learn" 开头的词
-result = client.query('articles').filter(
-    boolean_match('title', 'content')
-    .must('machine')                                    # 必须包含 "machine"
-    .must(group().medium('learning', 'intelligence'))  # 必须包含 "learning" 或 "intelligence"
-    .must_not('legacy')                                 # 不包含 "legacy"
-    .encourage('tutorial')                              # 鼓励包含 "tutorial"
-    .discourage('advanced')                              # 降低包含 "advanced" 的文档评分
-    .phrase('best practices')                           # 必须包含精确短语 "best practices"
-    .prefix('learn')                                    # 必须包含以 "learn" 开头的词
-).execute()
-
-# 带相关性评分
-# SQL: SELECT id, title, content, 
-#           MATCH(title, content) AGAINST('+python +(programming development) tutorial ~legacy "best practices"' IN BOOLEAN MODE) AS score
-#      FROM articles 
-#      WHERE MATCH(title, content) AGAINST('+python +(programming development) tutorial ~legacy "best practices"' IN BOOLEAN MODE)
-result = client.query(
-    'articles.id',
-    'articles.title',
-    'articles.content',
-    boolean_match('title', 'content')
-    .must('python')
-    .must(group().medium('programming', 'development'))
-    .encourage('tutorial')
-    .discourage('legacy')
-    .phrase('best practices')
-    .label('score')
-).execute()
-
-for row in result.fetchall():
-    print(f"Title: {row[1]}, Score: {row[3]:.4f}")
-
-# 使用 ORM 模型
-# SQL: WHERE MATCH(title, content) AGAINST('+machine -legacy tutorial "neural networks"' IN BOOLEAN MODE)
-result = client.query(Article).filter(
-    boolean_match(Article.title, Article.content)
-    .must('machine')
-    .must_not('legacy')
-    .encourage('tutorial')
-    .phrase('neural networks')
-).execute()
-```
-
-**操作符优先级和组合规则**：
+### 操作符优先级和组合规则
 
 1. `must()` 和 `must_not()` 是过滤条件，决定文档是否匹配
-   - SQL 对应：`+word` 和 `-word`，必须满足才能匹配
+   - SQL 对应：`+word` 和 `-word`
 2. `encourage()` 和 `discourage()` 只影响相关性评分，不改变匹配结果
-   - SQL 对应：`word`（不带操作符）和 `~word`，只影响评分，不改变匹配
+   - SQL 对应：`word`（不带操作符）和 `~word`
 3. `phrase()` 和 `prefix()` 是特殊的匹配条件
-   - SQL 对应：`"phrase"` 和 `word*`，精确匹配要求
+   - SQL 对应：`"phrase"` 和 `word*`
 4. `group()` 用于实现 OR 逻辑或加权
-   - SQL 对应：`(word1 word2)` 和 `>word`/`<word`，实现 OR 和加权
-5. 所有操作符可以链式调用，顺序不影响逻辑结果（但可能影响性能）
-   - SQL 对应：在 SQL 中，操作符用空格分隔，顺序不影响逻辑结果
-
-**SQL 语法组合示例**：
-
-```sql
--- 对应 SDK: must('machine').must_not('legacy').encourage('tutorial').phrase('best practices')
-WHERE MATCH(title, content) AGAINST('+machine -legacy tutorial "best practices"' IN BOOLEAN MODE)
-
--- 对应 SDK: must('python').must(group().medium('programming', 'development')).discourage('legacy')
-WHERE MATCH(title, content) AGAINST('+python +(programming development) ~legacy' IN BOOLEAN MODE)
-
--- 对应 SDK: must('machine').encourage(group().high('tutorial').low('basic')).prefix('learn')
-WHERE MATCH(title, content) AGAINST('+machine >tutorial <basic learn*' IN BOOLEAN MODE)
-```
-
-**完整示例**：
-
-```python
-from matrixone import Client
-from matrixone.sqlalchemy_ext.fulltext_search import boolean_match, group
-from matrixone.orm import declarative_base
-from sqlalchemy import Column, Integer, String, Text
-
-Base = declarative_base()
-
-class Article(Base):
-    __tablename__ = 'articles'
-    id = Column(Integer, primary_key=True)
-    title = Column(String(200))
-    content = Column(Text)
-    category = Column(String(50))
-
-client = Client()
-client.connect(host='localhost', port=6001, user='root', password='111', database='test')
-
-# 示例 1：基础 must 查询
-result = client.query(Article).filter(
-    boolean_match(Article.content).must('python')
-).execute()
-
-# 示例 2：must + must_not
-result = client.query(Article).filter(
-    boolean_match(Article.content)
-    .must('python')
-    .must_not('legacy')
-).execute()
-
-# 示例 3：must + encourage（带评分）
-result = client.query(
-    Article.id,
-    Article.title,
-    Article.content,
-    boolean_match(Article.content)
-    .must('python')
-    .encourage('tutorial')
-    .label('score')
-).execute()
-
-# 示例 4：must + discourage
-result = client.query(Article).filter(
-    boolean_match(Article.content)
-    .must('programming')
-    .discourage('deprecated')
-).execute()
-
-# 示例 5：phrase 精确匹配
-result = client.query(Article).filter(
-    boolean_match(Article.content).phrase('machine learning')
-).execute()
-
-# 示例 6：prefix 前缀匹配
-result = client.query(Article).filter(
-    boolean_match(Article.content).prefix('learn')
-).execute()
-
-# 示例 7：group OR 逻辑
-result = client.query(Article).filter(
-    boolean_match(Article.content)
-    .must(group().medium('programming', 'development'))
-).execute()
-
-# 示例 8：复杂组合查询
-result = client.query(Article).filter(
-    boolean_match(Article.title, Article.content)
-    .must('python')
-    .must(group().medium('programming', 'development'))
-    .must_not('legacy')
-    .encourage('tutorial', 'guide')
-    .discourage('advanced')
-    .phrase('best practices')
-).execute()
-
-# 示例 9：带评分和排序
-result = client.query(
-    Article.id,
-    Article.title,
-    Article.content,
-    boolean_match(Article.title, Article.content)
-    .must('machine')
-    .encourage('learning')
-    .label('relevance_score')
-).order_by('relevance_score DESC').limit(10).execute()
-```
-
-#### 混合过滤查询
-
-```python
-# 方式 1：先全文检索 Top-K，再过滤（推荐）
-topk_query = f"""
-WITH topk_results AS (
-  SELECT id, title, content, category,
-         MATCH(title, content) AGAINST('machine learning' IN NATURAL LANGUAGE MODE) AS score
-  FROM articles 
-  WHERE MATCH(title, content) AGAINST('machine learning' IN NATURAL LANGUAGE MODE)
-  ORDER BY score DESC
-  LIMIT 100
-)
-SELECT id, title, content, category, score
-FROM topk_results
-WHERE category = 'Technology'
-ORDER BY score DESC
-LIMIT 10
-"""
-
-result = client.execute(topk_query)
-
-# 方式 2：在 WHERE 子句中同时使用全文检索和过滤条件
-result = client.query('articles').filter(
-    boolean_match('title', 'content').must('machine'),
-    'articles.category == "Technology"'
-).execute()
-```
-
-### 完整示例
-
-```python
-from matrixone import Client
-from matrixone.sqlalchemy_ext.fulltext_search import boolean_match, natural_match
-from matrixone.orm import declarative_base
-from sqlalchemy import Column, Integer, String, Text
-
-Base = declarative_base()
-
-class Article(Base):
-    __tablename__ = 'articles'
-    id = Column(Integer, primary_key=True)
-    title = Column(String(200))
-    content = Column(Text)
-    author = Column(String(100))
-    category = Column(String(50))
-
-# 创建客户端和表
-client = Client()
-client.connect(host='localhost', port=6001, user='root', password='111', database='test')
-client.create_table(Article)
-
-# 创建全文索引
-client.fulltext_index.enable_fulltext()
-client.fulltext_index.create(
-    'articles',
-    name='ftidx_content',
-    columns=['title', 'content'],
-    algorithm='BM25'
-)
-
-# 插入数据
-articles = [
-    {
-        'id': 1,
-        'title': 'Introduction to Machine Learning',
-        'content': 'Machine learning is a subset of artificial intelligence...',
-        'author': 'John Doe',
-        'category': 'Technology'
-    },
-    {
-        'id': 2,
-        'title': 'Deep Learning Fundamentals',
-        'content': 'Deep learning uses neural networks...',
-        'author': 'Jane Smith',
-        'category': 'Technology'
-    }
-]
-client.batch_insert(Article, articles)
-
-# 自然语言搜索
-result = client.query(Article).filter(
-    natural_match(Article.title, Article.content, query='machine learning')
-).execute()
-
-print("Natural language search results:")
-for row in result.fetchall():
-    print(f"  {row.title} by {row.author}")
-
-# 布尔搜索
-result = client.query(Article).filter(
-    boolean_match(Article.title, Article.content)
-    .must('machine')
-    .encourage('learning')
-).execute()
-
-print("Boolean search results:")
-for row in result.fetchall():
-    print(f"  {row.title} by {row.author}")
-
-# 混合过滤（推荐方式）
-topk_query = """
-WITH topk_results AS (
-  SELECT id, title, content, category,
-         MATCH(title, content) AGAINST('machine learning' IN NATURAL LANGUAGE MODE) AS score
-  FROM articles 
-  WHERE MATCH(title, content) AGAINST('machine learning' IN NATURAL LANGUAGE MODE)
-  ORDER BY score DESC
-  LIMIT 100
-)
-SELECT id, title, content, category, score
-FROM topk_results
-WHERE category = 'Technology'
-ORDER BY score DESC
-LIMIT 10
-"""
-
-result = client.execute(topk_query)
-print("Mixed filter results:")
-for row in result.fetchall():
-    print(f"  {row[1]} - {row[3]} (Score: {row[4]:.4f})")
-```
-
-### 更多资源
-
-- `clients/python/docs/fulltext_guide.rst`：详细的全文检索使用手册
-- `clients/python/docs/api/fulltext_index.rst`：全文索引 API 参考
-- `clients/python/examples/`：全文检索示例代码
-
----
-
-## 未来规划
-
-- **Pre-filter 和 Post-filter 模式**：支持类似向量检索的 Pre-filter 和 Post-filter 模式，允许更灵活地组合全文检索和其他过滤条件
-- **异步索引构建**：支持后台构建全文索引，不阻塞数据插入
-- **增量索引更新**：优化索引更新性能，支持增量更新
-- **更多解析器**：支持更多语言的解析器
-- **相关性算法优化**：持续优化 BM25 和 TF-IDF 算法
-- **性能监控**：提供全文索引的性能监控和诊断工具
-
----
-
-## 附录
-
-### 布尔模式操作符参考
-
-| 操作符 | 说明 | 示例 |
-| --- | --- | --- |
-| `+` | 必须包含（AND） | `+machine +learning` |
-| `-` | 必须不包含（NOT） | `+machine -deep` |
-| `~` | 降低相关性 | `+machine ~legacy` |
-| `""` | 精确短语 | `"machine learning"` |
-| `*` | 前缀匹配 | `learn*` |
-| `()` | 分组 | `+(machine learning) -legacy` |
+   - SQL 对应：`(word1 word2)` 和 `>word`/`<word`
+5. 所有操作符可以链式调用，顺序不影响逻辑结果
 
 ### 相关资源
 
-- **官方文档**：`clients/python/docs/fulltext_guide.rst`
-- **API 参考**：`clients/python/docs/api/fulltext_index.rst`
-- **示例代码**：`clients/python/examples/`
+- **官方文档**：https://docs.matrixorigin.cn/
+- **SDK 文档**：https://matrixone.readthedocs.io/
 - **测试用例**：`test/distributed/cases/fulltext/`
 
 ---
@@ -1408,3 +1162,9 @@ for row in result.fetchall():
 
 感谢您对 MatrixOne 的贡献！🎉
 
+---
+
+## 参考资料
+
+- [MatrixOne 官方文档](https://docs.matrixorigin.cn/)
+- [Python SDK 文档](https://matrixone.readthedocs.io/)
