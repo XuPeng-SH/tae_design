@@ -850,6 +850,162 @@ SELECT * FROM products WHERE MATCH(info) AGAINST('PROD');
 -- ✗ 不匹配（因为"PROD-001"是完整词，不会被拆分）
 ```
 
+---
+
+#### 未来提案：增强 JSON 搜索能力（类似 MongoDB）
+
+**当前限制**：
+- 现有解析器只能搜索 JSON 中的所有值，无法针对特定字段搜索
+- 无法搜索嵌套路径（如 `user.profile.name`）
+- 无法区分不同字段的值（如同时搜索 `name` 和 `description` 字段）
+
+**提案目标**：
+实现类似 MongoDB 的 JSON 搜索能力，支持：
+1. **字段级搜索**：针对特定 JSON 字段进行搜索
+2. **嵌套路径搜索**：支持搜索嵌套 JSON 结构中的值
+3. **多字段组合搜索**：可以同时搜索多个字段，并指定不同权重
+4. **数组元素搜索**：支持搜索 JSON 数组中的元素
+
+**提案设计**：
+
+**1. 字段路径语法**
+
+```sql
+-- 提案：支持 JSON 路径语法
+CREATE FULLTEXT INDEX ftidx ON products (info) 
+WITH PARSER json_path('name', 'description', 'tags[*]');
+
+-- 搜索特定字段
+SELECT * FROM products 
+WHERE MATCH(info) AGAINST('iPhone' IN JSON_FIELD 'name');
+-- 只在 name 字段中搜索 "iPhone"
+
+-- 搜索嵌套路径
+SELECT * FROM products 
+WHERE MATCH(info) AGAINST('Apple' IN JSON_FIELD 'brand.name');
+-- 搜索 brand.name 字段
+
+-- 搜索数组元素
+SELECT * FROM products 
+WHERE MATCH(info) AGAINST('手机' IN JSON_FIELD 'tags[*]');
+-- 在 tags 数组的所有元素中搜索
+```
+
+**2. 多字段组合搜索**
+
+```sql
+-- 提案：支持多字段搜索，不同字段可以设置不同权重
+CREATE FULLTEXT INDEX ftidx ON products (info) 
+WITH PARSER json_multi(
+  'name' WITH WEIGHT 2.0,      -- name 字段权重更高
+  'description' WITH WEIGHT 1.0,
+  'tags[*]' WITH WEIGHT 0.5
+);
+
+-- 搜索时，name 字段的匹配会获得更高分数
+SELECT id, name, 
+       MATCH(info) AGAINST('iPhone Pro' IN JSON_MULTI) AS score
+FROM products
+ORDER BY score DESC;
+```
+
+**3. 字段值精确匹配**
+
+```sql
+-- 提案：支持字段值的精确匹配（类似 MongoDB 的字段查询）
+SELECT * FROM products 
+WHERE MATCH(info) AGAINST('PROD-001' IN JSON_FIELD 'code' EXACT);
+-- 只在 code 字段中精确匹配 "PROD-001"
+
+-- 支持范围查询
+SELECT * FROM products 
+WHERE MATCH(info) AGAINST('price > 1000' IN JSON_FIELD 'price');
+```
+
+**4. 复杂查询示例**
+
+```sql
+-- 提案：类似 MongoDB 的查询能力
+-- 示例数据
+{
+  "name": "iPhone 15 Pro",
+  "brand": {
+    "name": "Apple",
+    "country": "USA"
+  },
+  "specs": {
+    "cpu": "A17 Pro",
+    "ram": "8GB",
+    "storage": ["128GB", "256GB", "512GB"]
+  },
+  "tags": ["手机", "5G", "苹果"]
+}
+
+-- 搜索品牌名称
+SELECT * FROM products 
+WHERE MATCH(info) AGAINST('Apple' IN JSON_FIELD 'brand.name');
+
+-- 搜索存储容量（数组元素）
+SELECT * FROM products 
+WHERE MATCH(info) AGAINST('256GB' IN JSON_FIELD 'specs.storage[*]');
+
+-- 多字段组合搜索
+SELECT * FROM products 
+WHERE MATCH(info) AGAINST(
+  '+iPhone +Pro' IN JSON_MULTI (
+    'name' WITH WEIGHT 2.0,
+    'description' WITH WEIGHT 1.0
+  )
+);
+```
+
+**5. 实现思路**
+
+**索引结构扩展**：
+```
+当前索引表：
+doc_id | word | pos
+
+提案扩展：
+doc_id | word | pos | json_path | field_weight
+-------|------|-----|-----------|-------------
+1      | iPhone | 0  | name      | 2.0
+1      | Pro    | 7  | name      | 2.0
+1      | 最新款 | 0  | description | 1.0
+```
+
+**查询优化**：
+- 支持路径过滤：`WHERE json_path = 'name'`
+- 支持权重计算：`score = base_score × field_weight`
+- 支持数组展开：`tags[*]` 展开为多个索引项
+
+**6. 与 MongoDB 的对比**
+
+| 功能 | MongoDB | MatrixOne 当前 | MatrixOne 提案 |
+|------|---------|---------------|---------------|
+| 字段级搜索 | ✅ `{"name": "iPhone"}` | ❌ 搜索所有值 | ✅ `IN JSON_FIELD 'name'` |
+| 嵌套路径 | ✅ `{"brand.name": "Apple"}` | ❌ | ✅ `IN JSON_FIELD 'brand.name'` |
+| 数组搜索 | ✅ `{"tags": "手机"}` | ❌ | ✅ `IN JSON_FIELD 'tags[*]'` |
+| 多字段组合 | ✅ `$or`, `$and` | ❌ | ✅ `JSON_MULTI` |
+| 字段权重 | ✅ `$text` with weights | ❌ | ✅ `WITH WEIGHT` |
+| 全文检索 | ✅ `$text` | ✅ `MATCH...AGAINST` | ✅ 增强版 |
+
+**7. 使用场景**
+
+- **电商搜索**：按商品名称、描述、标签分别搜索
+- **用户搜索**：按用户名、邮箱、地址等字段搜索
+- **日志分析**：按不同日志字段（level、message、source）搜索
+- **配置管理**：按配置项的不同路径搜索
+
+**8. 实施优先级**
+
+- **Phase 1**：基础字段路径支持（`IN JSON_FIELD 'path'`）
+- **Phase 2**：嵌套路径和数组支持（`brand.name`, `tags[*]`）
+- **Phase 3**：多字段组合和权重（`JSON_MULTI`）
+- **Phase 4**：复杂查询操作符（范围查询、精确匹配等）
+
+这个提案将大大增强 MatrixOne 的 JSON 搜索能力，使其更接近 MongoDB 的查询灵活性，同时保持全文检索的高性能优势。
+
 ### DATALINK 文档搜索
 
 #### 什么是 DATALINK？
